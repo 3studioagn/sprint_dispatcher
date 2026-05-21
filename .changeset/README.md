@@ -35,9 +35,19 @@ pnpm release            # build + publish (publish só roda em CI com NPM_TOKEN)
 
 ### Pendências para sessões futuras
 
-Os campos `linked` e `ignore` estão **vazios neste momento** porque o Changesets
-se recusa a validar packages que ainda não existem no monorepo (W0 fechou apenas
-o C0 — packages C1, C4, C6 e apps C2, C3 ainda virão).
+Os campos `linked` e `ignore` continuam **vazios neste momento** porque o
+Changesets se recusa a validar packages que ainda não existem no monorepo.
+Estado atual (W0):
+
+- ✅ `@sprint/contracts` — criado em [BL-C1-001] (Sessão 03)
+- ⏸️ `@sprint/fs-adapter` — pendente em BL-C4-001
+- ⏸️ `@sprint/logger` — pendente em BL-C6-001
+- ⏸️ `sprint-leader` — pendente em BL-C2-001
+- ⏸️ `sprint-operator-agent` — pendente em BL-C3-001
+
+Um `linked` array de 1 elemento (`[["@sprint/contracts"]]`) é semanticamente
+nulo — o linking só faz sentido quando há ≥ 2 packages a manter em sincronia.
+Por isso esperamos os outros dois packages internos antes de popular.
 
 Quando os packages forem criados, atualize esta config:
 
@@ -55,9 +65,9 @@ Quando os packages forem criados, atualize esta config:
   `electron-builder` no artefato final (`SprintLeader-Setup-X.Y.Z.exe`), não via
   npm SemVer.
 
-**Itens do backlog que devem atualizar este arquivo:** BL-C1-001 (cria
-`@sprint/contracts`), BL-C4-001 (cria `@sprint/fs-adapter`), BL-C6-001 (cria
-`@sprint/logger`), BL-C2-001 (cria `sprint-leader`), BL-C3-001 (cria
+**Itens do backlog que devem atualizar este arquivo:** ✅ BL-C1-001 (cria
+`@sprint/contracts` — feito), BL-C4-001 (cria `@sprint/fs-adapter`), BL-C6-001
+(cria `@sprint/logger`), BL-C2-001 (cria `sprint-leader`), BL-C3-001 (cria
 `sprint-operator-agent`).
 
 ## Referências

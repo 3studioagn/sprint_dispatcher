@@ -75,6 +75,7 @@ export default tseslint.config(
     files: ['**/*.config.{js,mjs,cjs,ts}', '**/*.cjs'],
     ...tseslint.configs.disableTypeChecked,
     rules: {
+      ...tseslint.configs.disableTypeChecked.rules,
       '@typescript-eslint/no-require-imports': 'off',
     },
   },

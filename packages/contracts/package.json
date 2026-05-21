@@ -1,0 +1,35 @@
+{
+  "name": "@sprint/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Tipos, schemas Zod e helpers compartilhados do Sprint Dispatcher",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "sideEffects": false,
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src",
+    "type-check": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "ulid": "^2.3.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^1.6.0",
+    "vitest": "^1.6.0"
+  }
+}
