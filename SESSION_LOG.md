@@ -66,6 +66,99 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 02 — 2026-05-21 — Auditoria de C0
+
+**Wave atual:** W0 (auditoria, não execução) **Duração estimada:** ~1h **Itens
+trabalhados:** Auditoria de [BL-C0-001..007]
+
+### Objetivo da sessão
+
+Auditoria técnica independente do Componente C0 entregue na Sessão 01, contra
+spec consolidada (CLAUDE.md + Requisitos v1.1 + Stack v1.0 + Backlog v1.0). Por
+instrução de Renan, os 3 docx externos não foram lidos — auditoria opera com
+CLAUDE.md como spec consolidada e diferenças do plano original tratadas como
+desvio explícito.
+
+### O que foi feito
+
+- 6 dimensões auditadas com evidência direta:
+  - **D1 Estrutural** ✅ Pass — todos arquivos raiz, estrutura intacta, hooks no
+    padrão Husky 9 (trampolim em `.husky/_/`)
+  - **D2 Conteúdo** ⚠️ Pass with reservations — 2 Medium documentados
+  - **D3 Funcional** ✅ Pass — 5 scripts agregados exit 0, hooks disparam, Turbo
+    sem warnings de deprecation, YAML válido
+  - **D4 Documental** ✅ Pass — SESSION_LOG, CHANGELOG e ADRs batem com commits
+    reais
+  - **D5 Segurança/Padrões** ✅ Pass — zero secrets, `pnpm audit` zero CVEs
+  - **D6 Reprodutibilidade** ✅ Pass — clone limpo em pasta temp passou todo o
+    pipeline
+- 10 achados consolidados (0 Critical, 0 High, 2 Medium, 3 Low, 5 Info)
+- Relatório integral em
+  [`docs/audits/C0_AUDIT_REPORT_v1.md`](./docs/audits/C0_AUDIT_REPORT_v1.md)
+- Veredito: 🟡 **APROVADO COM RESSALVAS** — liberado para Wave 1 com débitos
+  Medium endereçados no fluxo natural de C1
+
+### Estado atual
+
+- Nenhuma alteração de código ou config (auditor não corrige).
+- `docs/audits/C0_AUDIT_REPORT_v1.md` criado, aguardando review do Renan.
+- Branch dedicada `docs/BL-C0-audit-v1` a ser aberta no fim desta sessão para
+  conter o relatório + esta entrada de log, sem tocar `develop` diretamente.
+
+### Decisões tomadas
+
+Nenhuma decisão arquitetural — auditoria apenas reporta. Decisões sobre
+remediação ficam com Renan a partir do relatório.
+
+### Bloqueios encontrados
+
+Nenhum bloqueio absoluto. Limitações de cobertura registradas no relatório:
+
+- Validação funcional das regras ESLint não foi possível (tsconfig raiz com
+  `include: []` impede lint de arquivos avulsos) — re-validar pós-C1.
+- Documentos externos (Stack v1.0, Backlog v1.0, Requisitos v1.1) não foram
+  lidos por instrução de Renan; ADRs validados por consistência interna +
+  referências declaradas.
+- Execução real do workflow no GitHub Actions não foi disparada por esta sessão;
+  SESSION_LOG da Sessão 01 já afirma "primeiro run rodou verde confirmado pelo
+  Renan" — aceito como evidência indireta.
+
+### Próximo passo
+
+Renan revisa `docs/audits/C0_AUDIT_REPORT_v1.md`. Três caminhos possíveis:
+
+- (a) avanço direto pra Wave 1 — abrir prompt master para C1
+  (`packages/contracts`), instruindo a sessão de C1 a:
+  1. Re-popular `linked`/`ignore` em `.changeset/config.json` no mesmo commit
+     que cria `@sprint/contracts` (FINDING-002).
+  2. Considerar abrir ADR-005 ratificando o baseline de versões da Sessão 01 ou
+     aguardar o Stack externo virar v1.1 (FINDING-001).
+- (b) sessão de remediação dedicada — apenas se Renan quiser fechar Medium/Low
+  antes do C1. Não recomendado, porque ambos Medium se endereçam naturalmente no
+  fluxo de C1.
+- (c) aceite formal dos débitos Low/Medium — registrar em DECISIONS.md (novo
+  ADR) e seguir direto para Wave 1.
+
+### Observações para a próxima sessão
+
+- **Se for sessão de C1**, ler primeiro
+  [`docs/audits/C0_AUDIT_REPORT_v1.md`](./docs/audits/C0_AUDIT_REPORT_v1.md)
+  integralmente. Os FINDING-001 e FINDING-002 viram guard rails no início do
+  trabalho — não esquecer de atualizar `.changeset/config.json` no commit que
+  cria `@sprint/contracts/package.json`.
+- **Se for sessão de remediação**, achados Critical/High não existem, então o
+  fluxo é light. Commits de fix devem referenciar
+  `fix(C0): ... [audit-v1-FINDING-NNN]` no scope/footer pra rastreabilidade.
+- **Padrão de validação para próximas auditorias**: as regras ESLint
+  configuradas (no-console, no-explicit-any, no-floating-promises, etc) só podem
+  ser exercidas com arquivos `.ts` dentro de TS project. Re-validar
+  funcionalmente assim que `packages/contracts/src/*.ts` existir.
+- **Nome do package vs nome do repo**: `sprint-dispatcher` (hífen, no
+  `package.json`) ≠ `sprint_dispatcher` (underscore, no GitHub). Não é
+  bloqueador (FINDING-004), mas vale alinhar quando der.
+
+---
+
 ## Sessão 01 — 2026-05-21
 
 **Wave atual:** W0 **Duração estimada:** ~3h **Itens trabalhados:** [BL-C0-001,
