@@ -1,5 +1,7 @@
 # Sprint Dispatcher
 
+[![CI](https://github.com/3studioagn/sprint_dispatcher/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/3studioagn/sprint_dispatcher/actions/workflows/ci.yml)
+
 Sistema interno de comunicação ativa de metas de produção para a ARTFLEXÍVEIS.
 
 Permite que líderes de setor disparem avisos visuais imediatos (overlay
