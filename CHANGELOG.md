@@ -25,8 +25,41 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - ADR-001..004 em `DECISIONS.md`: monorepo, Electron, pasta compartilhada
   SMB, polling [BL-C0-007]
 - `README.md` "Como rodar localmente" completo + badge CI [BL-C0-007]
+- Package `@sprint/contracts` com schemas Zod e tipos inferidos via
+  `z.infer` [BL-C1-001, BL-C1-002]
+- `generateSprintId()` e `isValidUlid()` com ULID Crockford Base32
+  (defensivo contra entradas não-string) [BL-C1-005]
+- Helpers de filename: `buildPending/Ack/CancelFilename`, `parseFilename`,
+  `safeParseFilename` com `ParsedFilename` discriminated union
+  [BL-C1-003]
+- Constantes compartilhadas: `SCHEMA_VERSION`, `DEFAULT_POLLING_INTERVAL_MS`,
+  `SHARED_DIRS`, `LOCAL_DIRS`, `ALLOWED_HTML_TAGS`,
+  `MAX_DEADLINE_HORIZON_HOURS`, etc [BL-C1-006]
+- `ContractValidationError` (com `cause: ZodError`, `.issues`, `.format()`)
+  e `FilenameParseError` tipados [BL-C1-002, BL-C1-003]
+- Branded types `SprintId` e `UserId` (via `z.brand`) para evitar trocas
+  acidentais entre IDs [BL-C1-002]
+- ADR-005 em `DECISIONS.md`: schema-first com `z.infer<>`
+- ADR-006 em `DECISIONS.md`: filenames com ULID completo (esclarece Anexo A
+  do Requisitos)
+- ADR-007 em `DECISIONS.md`: ratifica baseline de versões instaladas
+  (endereça audit FINDING-M1)
+- README do package `@sprint/contracts` com tabela de API, branded types,
+  cobertura e roadmap
 
 ### Changed
+
+- `eslint.config.mjs`: corrige merge de `rules` no override
+  `disableTypeChecked` (bug latente em C0 exposto pelo primeiro `.ts`
+  lintado em config files — `vitest.config.ts`)
+- `packages/contracts/tsconfig.json`: não exclui `*.test.ts` nem
+  `__fixtures__/**` (projectService da typescript-eslint v8 exige
+  cobertura por tsconfig; type-check de testes captura erros)
+- `package.json` raiz: `esbuild` adicionado a `pnpm.onlyBuiltDependencies`
+  (necessário para Vitest funcionar)
+- `.changeset/README.md`: marca `@sprint/contracts` como criado;
+  `linked`/`ignore` continuam vazios em `config.json` até `fs-adapter` e
+  `logger` existirem (endereçamento parcial de audit FINDING-M2)
 
 ### Fixed
 

@@ -66,6 +66,144 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 03 — 2026-05-21 — Execução de C1 (Shared Contracts) · W0
+
+**Wave atual:** W0 **Duração estimada:** ~4h **Itens trabalhados:** [BL-C1-001,
+BL-C1-002, BL-C1-003, BL-C1-005, BL-C1-006]
+
+### Objetivo da sessão
+
+Executar a totalidade da Wave 0 do Componente C1 (Shared Contracts): scaffold do
+package `@sprint/contracts`, constantes, geração de ULID, schemas Zod com tipos
+inferidos, helpers de filename, public API consolidada e cobertura de testes ≥
+95%. Endereçar em paralelo as ressalvas Medium da auditoria do C0 (Sessão 02),
+conforme path (a) aceito por Renan no início desta sessão.
+
+### O que foi feito
+
+- **F2 (scaffold):**
+  `packages/contracts/{package,tsconfig,vitest.config,README,.gitignore}`
+  - `src/index.ts` placeholder; deps `zod ^3.23`, `ulid ^2.3`, `vitest ^1.6`,
+    `@vitest/coverage-v8 ^1.6`. Commit `d67c296`.
+- **F3 (BL-C1-006):** `src/constants.ts` com 8 constantes públicas
+  (`SCHEMA_VERSION`, `DEFAULT_POLLING_INTERVAL_MS`,
+  `DEFAULT_SHOW_DURATION_SECONDS`, `DEFAULT_SPRINT_TITLE`, `SHARED_DIRS`,
+  `LOCAL_DIRS`, `ALLOWED_HTML_TAGS`, `MAX_DEADLINE_HORIZON_HOURS`) + 8 testes,
+  100% cobertura. Commit `29f7a29`.
+- **F4 (BL-C1-005):** `src/ids.ts` (`generateSprintId`, `isValidUlid`,
+  `ULID_REGEX`) + 12 testes (incluindo `@ts-expect-error` para defesa de
+  runtime). Commit `6460d7a`.
+- **F5 (BL-C1-001 + BL-C1-002):** `src/errors.ts` (`ContractValidationError`),
+  `src/schemas/shared.ts` (branded `SprintId`, `UserId`, `isoDatetimeSchema`,
+  `schemaVersionSchema`), 4 schemas `.strict()` (`sprintPayloadSchema`,
+  `sprintAckSchema`, `sprintCancelSchema`, `agentConfigSchema`) com tipos via
+  `z.infer`/`z.input` e pares `parseXxx`/`safeParseXxx`. Fixtures válidas. 115
+  novos testes (114 unitários + 6 security). Commit `7a73e7d`.
+- **F6 (BL-C1-003):** `src/filenames.ts`
+  (`buildPendingFilename`/`buildAckFilename`/`buildCancelFilename` +
+  `parseFilename`/`safeParseFilename`, `ParsedFilename` discriminated union,
+  `FilenameParseError`) + 29 testes (incluindo round-trip e defesa contra
+  `.tmp`). Commit `0d1a990`.
+- **F7 (BL-C1-001 consolidação):** `src/index.ts` re-escrito com exports
+  nomeados explícitos (sem `export *`), `type` keyword inline para respeitar
+  `verbatimModuleSyntax: true`. README do package expandido com tabela de
+  schemas/parsers, branded types, helpers, constantes, cobertura, roadmap e nota
+  de naming sobre ULID inválido. Commit `557ce59`.
+- **F8 (validação geral):** limpeza de `node_modules` + reinstall com
+  `--frozen-lockfile`, bateria completa exit 0, cobertura `100%` em todos
+  módulos. Auditoria de padrões: zero `console.log`, zero `any`, zero
+  `@ts-ignore`.
+- **F9 (encerramento):** ADR-005, ADR-006, ADR-007 registrados; esta entrada;
+  `CHANGELOG` atualizado; `CLAUDE.md` §12 com novos gotchas.
+
+### Estado atual
+
+- **BL-C1-001:** ✅ concluído (tipos via `z.infer`, public API consolidada)
+- **BL-C1-002:** ✅ concluído (schemas Zod + parsers +
+  `ContractValidationError`)
+- **BL-C1-003:** ✅ concluído (filename helpers)
+- **BL-C1-004:** ⏸️ Wave 1 (sanitizador HTML com DOMPurify)
+- **BL-C1-005:** ✅ concluído (ULID)
+- **BL-C1-006:** ✅ concluído (constantes)
+
+Cobertura final do package: **100%** em stmts/funcs/branches/lines em todos os 9
+módulos. **164 testes** (8 arquivos).
+
+**Gate W0 → W1:** ainda **não atingido**. C0 e C1 fecharam (módulo BL-C1-004).
+Faltam scaffolds dos packages C4 (`fs-adapter`) e C6 (`logger`) e dos apps C2
+(`leader`) e C3 (`operator-agent`).
+
+### Decisões tomadas
+
+- **ADR-005:** schema-first com `z.infer` (formaliza padrão obrigatório do
+  package).
+- **ADR-006:** filenames usam ULID completo (`<sprintId>-<userId>.json`),
+  esclarecendo a ambiguidade do Anexo A do Requisitos v1.1.
+- **ADR-007:** ratifica formalmente o baseline de versões instaladas (endereça
+  **FINDING-M1** da auditoria do C0).
+- Path (a) do audit C0 escolhido por Renan: endereçar Medium no fluxo natural do
+  C1 (sem sessão dedicada de remediação).
+- Branded types (`SprintId`, `UserId`) adotados para evitar trocas acidentais
+  entre IDs.
+- `.strict()` em todos os schemas (rejeita campos extras — defesa contra
+  payloads adulterados e `__proto__` injection).
+- Source-first no monorepo: `main` aponta para `src/index.ts`, sem etapa de
+  `dist/` (apps consomem TS direto via Vite/Electron bundler).
+- Lint do package restrito a `src/` (config files cobertos por Prettier).
+
+### Bloqueios encontrados
+
+Nenhum bloqueador. Algumas decisões pequenas exigiram conversa rápida com Renan
+(path do audit, naming de filename), todas resolvidas via `AskUserQuestion` no
+início.
+
+### Próximo passo
+
+Iniciar **prompt de auditoria de C1** (mesmo padrão da Sessão 02 — auditor
+independente). Após aprovação, próxima sessão lógica é o package que desbloqueia
+o maior número de consumidores: provavelmente `@sprint/fs-adapter` (BL-C4-\*) —
+sem ele, nem o Leader nem o Agent têm como ler/escrever na pasta compartilhada.
+
+### Observações para a próxima sessão
+
+- **ULID canônico inválido.** A string `01HX9K2M4F8N7P2Q5R3S6T7U8V` que circula
+  em prompts, exemplos e issues **não é um ULID válido** — contém um `U` no
+  índice 23, e Crockford Base32 exclui `I, L, O, U`. Use
+  `01HX9K2M4F8N7P2Q5R3S6T7V8W` (sem I/L/O/U). Documentado em CLAUDE §12 G-004 e
+  usado em todas as fixtures/tests do C1.
+- **Bug latente no `eslint.config.mjs`** corrigido em F2: o spread
+  `...tseslint.configs.disableTypeChecked` seguido de `rules: {...}`
+  sobrescrevia o objeto rules do disable, deixando regras type-aware ativas em
+  config files. Era invisível em C0 porque não havia `.ts` lintado. Documentado
+  em CLAUDE §12 G-006.
+- **Desvio do prompt de C1 §5.2:** `tsconfig.json` do package **não exclui**
+  `*.test.ts` e `__fixtures__/**`. Justificativa: `projectService: true` da
+  typescript-eslint v8 exige que arquivos estejam em algum tsconfig; custo de
+  type-check de testes é ~ms e captura erros de tipo em código de teste (Vitest
+  não type-checka por padrão — usa esbuild).
+- **Turbo loga "no output files found"** para `@sprint/contracts#build` —
+  esperado, package usa `tsc --noEmit`. Pode ser silenciado adicionando
+  `packages/contracts/turbo.json` com `outputs: []` em sessão futura.
+  Não-bloqueante.
+- **FINDING-M2 parcialmente endereçado.** `.changeset/README.md` atualizado para
+  marcar `@sprint/contracts` como criado; `config.json` continua com
+  `linked: []` e `ignore: []` porque Changesets exige que todos os packages do
+  array existam. Endereçamento final em BL-C4-001 ou BL-C6-001.
+- **Limite de 2000 chars em `body_html`** é defensável (UI overlay tem espaço
+  finito) mas não tem fonte formal nos Requisitos. Confirmar com Renan ao
+  revisar.
+- **Branded types em forms.** `SprintId`/`UserId` aparecem como
+  `string & { brand }` na inferência. Em UIs com `react-hook-form` pode exigir
+  cast explícito no valor inicial — use o tipo `*Input` no formulário e converta
+  via `sprintIdSchema.parse(value)` no submit. Não validado nesta sessão (sem UI
+  ainda). Gotcha G-005.
+- **Schema NÃO sanitiza HTML.** Documentado em `security.test.ts`. A sanitização
+  de `body_html` é responsabilidade exclusiva de BL-C1-004 (W1) com
+  `isomorphic-dompurify`. Schema aceita qualquer string em `body_html`
+  (verificado com `<script>alert(1)</script>` no test).
+- **Header de commit cap.** commitlint configurado para max 100 chars no header.
+  Mensagens longas devem ir para o body (separado por linha em branco).
+
 ## Sessão 02 — 2026-05-21 — Auditoria de C0
 
 **Wave atual:** W0 (auditoria, não execução) **Duração estimada:** ~1h **Itens

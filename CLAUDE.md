@@ -68,32 +68,32 @@ compartilhada SMB é o único canal de comunicação.
 
 ## 3. Stack Tecnológica
 
-| Categoria          | Tecnologia            | Versão (alvo / instalada)                       |
-| ------------------ | --------------------- | ----------------------------------------------- |
-| Linguagem          | TypeScript            | 5.4+ — instalada **6.0.3**                      |
-| Runtime Node       | Node.js               | engine `>=20.0.0` — `.nvmrc` **24.10.0**        |
-| Runtime Desktop    | Electron              | 30.x — _pendente (C2/C3)_                       |
-| UI Framework       | React                 | 18.3+ — _pendente (C2/C3)_                      |
-| Estado global      | Zustand               | 4.5+ — _pendente (C2/C3)_                       |
-| Styling            | CSS Modules + PostCSS | nativo Vite — _pendente (C2/C3)_                |
-| Forms              | react-hook-form       | 7.51+ — _pendente (C2)_                         |
-| Validation         | Zod                   | 3.23+ — _pendente (C1)_                         |
-| Icons              | lucide-react          | 0.380+ — _pendente (C2/C3)_                     |
-| Date/Time          | date-fns              | 3.6+ — _pendente_                               |
-| IDs                | ulid                  | 2.3+ — _pendente (C1)_                          |
-| HTML Sanitization  | isomorphic-dompurify  | 2.10+ — _pendente (C1)_                         |
-| Logging            | Pino + pino-roll      | 9.x / 1.1+ — _pendente (C6)_                    |
-| Testing (unit)     | Vitest                | 1.6+ — _pendente (C8)_                          |
-| Testing (E2E)      | Playwright (Electron) | 1.44+ — _pendente (C8)_                         |
-| Package Manager    | pnpm                  | engine `>=10.0.0` — instalada **10.18.2**       |
-| Build Orchestrator | Turborepo             | 2.x — instalada **2.9.14**                      |
-| Renderer Bundler   | Vite                  | 5.x — _pendente (C2/C3)_                        |
-| Electron Builder   | electron-builder      | 24+ — _pendente (C5)_                           |
-| Versionamento      | Changesets            | 2.27+ — instalada **2.31.0**                    |
-| Lint               | ESLint                | 9.x (flat) — instalada **10.4.0** (flat nativo) |
-| Format             | Prettier              | 3.x — instalada **3.8.3**                       |
-| Git hooks          | Husky + lint-staged   | 9.x / 15.x — instaladas **9.1.7 / 17.0.5**      |
-| CI                 | GitHub Actions        | configurado em `.github/workflows/ci.yml`       |
+| Categoria          | Tecnologia            | Versão (alvo / instalada)                          |
+| ------------------ | --------------------- | -------------------------------------------------- |
+| Linguagem          | TypeScript            | 5.4+ — instalada **6.0.3**                         |
+| Runtime Node       | Node.js               | engine `>=20.0.0` — `.nvmrc` **24.10.0**           |
+| Runtime Desktop    | Electron              | 30.x — _pendente (C2/C3)_                          |
+| UI Framework       | React                 | 18.3+ — _pendente (C2/C3)_                         |
+| Estado global      | Zustand               | 4.5+ — _pendente (C2/C3)_                          |
+| Styling            | CSS Modules + PostCSS | nativo Vite — _pendente (C2/C3)_                   |
+| Forms              | react-hook-form       | 7.51+ — _pendente (C2)_                            |
+| Validation         | Zod                   | 3.23+ — instalada **3.25.x** (`@sprint/contracts`) |
+| Icons              | lucide-react          | 0.380+ — _pendente (C2/C3)_                        |
+| Date/Time          | date-fns              | 3.6+ — _pendente_                                  |
+| IDs                | ulid                  | 2.3+ — instalada **2.4.x** (`@sprint/contracts`)   |
+| HTML Sanitization  | isomorphic-dompurify  | 2.10+ — _pendente (BL-C1-004, W1)_                 |
+| Logging            | Pino + pino-roll      | 9.x / 1.1+ — _pendente (C6)_                       |
+| Testing (unit)     | Vitest                | 1.6+ — instalada **1.6.1** (`@sprint/contracts`)   |
+| Testing (E2E)      | Playwright (Electron) | 1.44+ — _pendente (C8)_                            |
+| Package Manager    | pnpm                  | engine `>=10.0.0` — instalada **10.18.2**          |
+| Build Orchestrator | Turborepo             | 2.x — instalada **2.9.14**                         |
+| Renderer Bundler   | Vite                  | 5.x — _pendente (C2/C3)_                           |
+| Electron Builder   | electron-builder      | 24+ — _pendente (C5)_                              |
+| Versionamento      | Changesets            | 2.27+ — instalada **2.31.0**                       |
+| Lint               | ESLint                | 9.x (flat) — instalada **10.4.0** (flat nativo)    |
+| Format             | Prettier              | 3.x — instalada **3.8.3**                          |
+| Git hooks          | Husky + lint-staged   | 9.x / 15.x — instaladas **9.1.7 / 17.0.5**         |
+| CI                 | GitHub Actions        | configurado em `.github/workflows/ci.yml`          |
 
 > **Como ler a coluna:** "_pendente (CX)_" significa que a dependência ainda não
 > foi adicionada — entra na sessão do componente indicado. Quando ESLint, TS,
@@ -489,6 +489,63 @@ Descobertas durante o desenvolvimento que economizam tempo da próxima sessão.
   `ignore: ["sprint-leader", "sprint-operator-agent"]`) e aponta os itens BL que
   devem re-popular: BL-C1-001, BL-C4-001, BL-C6-001, BL-C2-001, BL-C3-001.
 - **Descoberto em:** Sessão 01 (2026-05-21), durante BL-C0-006.
+
+### G-004: ULID canônico que circula em prompts/docs é inválido
+
+- **Sintoma:** Regex Crockford Base32 rejeita `01HX9K2M4F8N7P2Q5R3S6T7U8V` (a
+  string "padrão de exemplo" que aparece em vários prompts, snippets e
+  documentação).
+- **Causa:** O índice 23 é `U`. Crockford Base32 **exclui** `I, L, O, U` (para
+  reduzir ambiguidade visual). Strings que terminam em `...T7U8V`, `...T7UOI`,
+  `...T7U8I`, etc, **não são ULIDs válidos**.
+- **Solução:** use `01HX9K2M4F8N7P2Q5R3S6T7V8W` como exemplo canônico em testes,
+  fixtures e documentação. Caracteres válidos: `0-9, A-H, J, K, M, N, P-T, V-Z`
+  (32 chars no total, sem I/L/O/U).
+- **Descoberto em:** Sessão 03 (2026-05-21), durante BL-C1-005 quando o primeiro
+  teste de `isValidUlid` rejeitou a string do prompt.
+
+### G-005: Branded types vs `react-hook-form`
+
+- **Sintoma:** Atribuir uma `string` raw a um campo cujo tipo é `SprintId` (ou
+  `UserId`) gera erro de tipo. Em `react-hook-form`, o `defaultValues` com
+  `id: ''` falha porque `'' as SprintId` é inválido.
+- **Causa:** Zod `.brand<'SprintId'>()` produz tipo
+  `string & { brand: 'SprintId' }` — o brand é uma marca de tipo que só existe
+  após validação. Strings cruas não têm o brand.
+- **Solução:** em formulários, **use o tipo `*Input`**
+  (`z.input<typeof schema>`) em vez de `*` no `Resolver`/`defaultValues`.
+  Converta o valor via `sprintIdSchema.parse(rawString)` no `onSubmit` para
+  obter `SprintId` real.
+- **Descoberto em:** Sessão 03 (2026-05-21), antecipado em BL-C1-002 mas ainda
+  não exercitado em UI real (a validar quando C2 entrar).
+
+### G-006: `tseslint.configs.disableTypeChecked` precisa de merge de rules explícito
+
+- **Sintoma:** ESLint erra
+  `Error while loading rule '@typescript-eslint/await-thenable': You have used a rule which requires type information...`
+  ao lintar config files como `vitest.config.ts`, apesar do flat config ter um
+  override com `...tseslint.configs.disableTypeChecked`.
+- **Causa:** o padrão original do C0:
+  ```js
+  {
+    files: ['**/*.config.{js,mjs,cjs,ts}', '**/*.cjs'],
+    ...tseslint.configs.disableTypeChecked,
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
+  }
+  ```
+  o spread copia `rules` do `disableTypeChecked`, mas a próxima linha
+  `rules: {...}` **substitui** esse objeto inteiro (semântica padrão de objeto
+  JS). Resultado: as rules type-aware ficam ativas para config files. Era
+  invisível em C0 porque nenhum `.ts` era lintado.
+- **Solução:** merge explícito de rules:
+  ```js
+  rules: {
+    ...tseslint.configs.disableTypeChecked.rules,
+    '@typescript-eslint/no-require-imports': 'off',
+  }
+  ```
+- **Descoberto em:** Sessão 03 (2026-05-21), F2 — primeiro arquivo `.ts` lintado
+  em config file expôs o bug latente.
 
 ---
 

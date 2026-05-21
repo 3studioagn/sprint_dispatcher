@@ -64,6 +64,12 @@ entradas em ordem cronológica crescente — mais recente no fim.
   compartilhada SMB como canal de comunicação
 - [ADR-004](#adr-004-polling-como-estrategia-de-deteccao) — Polling como
   estratégia de detecção
+- [ADR-005](#adr-005-schema-first-com-inferencia-de-tipos-via-zinfer) —
+  Schema-first com inferência de tipos via `z.infer`
+- [ADR-006](#adr-006-convencao-de-naming-de-arquivos-com-ulid-completo) —
+  Convenção de naming de arquivos com ULID completo
+- [ADR-007](#adr-007-ratificacao-do-baseline-de-versoes-instaladas-vs-stack-v10)
+  — Ratificação do baseline de versões instaladas vs Stack v1.0
 
 ---
 
@@ -334,3 +340,205 @@ rule a ser adicionada em sessão futura, item BL-C8-005).
   (tráfego de rede)
 - Stack §8.2 (Polling vs Watching)
 - `CLAUDE.md` §2 P-04 (polling deliberado)
+
+---
+
+## ADR-005: Schema-first com inferência de tipos via z.infer
+
+- **Status:** Accepted
+- **Data:** 2026-05-21
+- **Decisores:** Renan (3Studio)
+
+### Contexto
+
+O package `@sprint/contracts` (C1) define tipos TypeScript **E** schemas Zod
+para os 4 contratos JSON (`SprintPayload`, `SprintAck`, `SprintCancel`,
+`AgentConfig`). O Backlog sugere itens BL-C1-001 (tipos TS) antes de BL-C1-002
+(schemas Zod), mas executar nessa ordem cria risco de **drift**: ao longo do
+projeto, alguém edita o schema sem refletir no tipo (ou vice-versa), e a
+divergência só é notada quando dados reais quebram em runtime.
+
+### Decisão
+
+Adotar **schema-first com inferência via `z.infer<typeof schema>`**:
+
+```ts
+export const sprintPayloadSchema = z.object({ ... }).strict();
+export type SprintPayload = z.infer<typeof sprintPayloadSchema>;
+export type SprintPayloadInput = z.input<typeof sprintPayloadSchema>;
+```
+
+Schemas Zod são a única fonte de verdade. Tipos TypeScript são derivados via
+`z.infer` (após defaults aplicados) e `z.input` (antes de defaults — para uso em
+formulários onde campos com default ainda podem estar ausentes).
+
+Toda definição de contrato neste package deve seguir esse padrão. **Declarar
+`interface Foo` em paralelo a `fooSchema` é violação.**
+
+### Alternativas consideradas
+
+1. **Tipo primeiro, schema com `satisfies z.ZodType<T>`:** preserva
+   independência mas exige sincronização manual e ainda permite discrepâncias
+   sutis em campos com defaults.
+2. **Tipo e schema co-mantidos manualmente:** padrão da maioria dos projetos
+   legados. Alto risco de drift; pega bugs só em produção.
+3. **Code-gen de schema a partir de TS via tools tipo `zod-to-ts`:** mais
+   complexidade de build, sem ganho real no nosso escopo.
+
+### Consequências
+
+**Aceitas:**
+
+- Toda mudança em contrato passa pelo schema → impossível drift.
+- Type-checking obriga consistência.
+- Tipos `*Input` separados (`z.input<>`) para uso em formulários onde defaults
+  ainda não foram aplicados.
+
+**Trade-offs:**
+
+- Tipos públicos da library ficam acoplados a Zod (sempre vai precisar importar
+  `@sprint/contracts` que carrega Zod transitivamente).
+- IDE às vezes mostra tipos como `z.infer<typeof xxxSchema>` em vez do nome
+  semântico — solução: `export type Foo = z.infer<typeof fooSchema>` faz o nome
+  aparecer.
+- Branded types (`SprintId`, `UserId`) ficam como `string & { brand }` na
+  inferência. Em UIs com `react-hook-form` pode exigir cast explícito no valor
+  inicial. Documentado em CLAUDE §12 G-005.
+
+### Referências
+
+- Backlog BL-C1-001, BL-C1-002
+- Stack §7.1 (Zod)
+- `packages/contracts/README.md` (uso e exemplos)
+- <https://zod.dev/?id=type-inference>
+
+---
+
+## ADR-006: Convenção de naming de arquivos com ULID completo
+
+- **Status:** Accepted
+- **Data:** 2026-05-21
+- **Decisores:** Renan (3Studio)
+
+### Contexto
+
+O Anexo A do documento de Requisitos exibe arquivos pending como
+`20260521-143210-joao.json` (timestamp humano `YYYYMMDD-HHmmss` + userid). Não
+especifica formalmente se o timestamp é `criado_em`, `issued_at` ou outro —
+ambiguidade. Os schemas Zod, por outro lado, exigem que cada sprint tenha um
+`sprint_id` ULID. Existem dois candidatos óbvios para o nome do arquivo, e a
+divergência entre o nome no filesystem e o `sprint_id` do payload JSON criaria
+fricção de debug e risco de colisão.
+
+### Decisão
+
+Adotar **`<sprintId>-<userId>.json`** (ULID completo + userid) para arquivos
+pending, e equivalentes para ack (`<sprintId>-<userId>.ack.json`) e cancel
+(`cancel-<sprintId>.json`). Formato canônico documentado em
+`packages/contracts/src/filenames.ts`.
+
+### Justificativa
+
+1. **ULID já carrega timestamp ordenável.** A primeira metade (10 chars) do ULID
+   encode timestamp em ms desde epoch, em Base32. Listagem lexicográfica da
+   pasta == listagem cronológica.
+2. **1-to-1 entre `sprint_id` no JSON e nome do arquivo.** Zero ambiguidade
+   sobre qual JSON pertence a qual sprint.
+3. **Sem risco de colisão.** ULIDs são únicos por design; timestamp humano
+   `YYYYMMDD-HHmmss` pode colidir se duas sprints forem disparadas no mesmo
+   segundo (raro mas possível).
+4. **Esclarece spec ambígua.** Anexo A do Requisitos v1.1 deveria ser atualizado
+   para refletir essa decisão — sugerir a Renan em revisão futura.
+
+### Alternativas consideradas
+
+| Alternativa                                 | Por que rejeitada                                         |
+| ------------------------------------------- | --------------------------------------------------------- |
+| Timestamp humano `YYYYMMDD-HHmmss-<userid>` | Risco de colisão, drift contra `sprint_id`, menos preciso |
+| Hash do payload (`sha256-<hash>.json`)      | Opaco para humanos, não ordenável                         |
+| ULID truncado (`<first10ULID>-<userid>`)    | Perde unicidade garantida, não round-trip seguro          |
+
+### Consequências
+
+- Apps (Leader, Agent) rastreiam por nome de arquivo veem ULID em primeiro
+  lugar. Scripts de debug podem decodificar o timestamp dos primeiros 10 chars
+  do ULID se precisarem da hora legível.
+- Requisitos v1.2 (futura) deve atualizar Anexo A para refletir este formato.
+- Helpers `buildPendingFilename`/`buildAckFilename`/`buildCancelFilename` e
+  `parseFilename` em `@sprint/contracts` materializam a convenção e fazem
+  round-trip seguro.
+- Filtros de UI ou logs que esperavam `YYYYMMDD-...` precisarão se adaptar — não
+  há nenhum consumidor ainda (esta sessão é a primeira a tocar nomes).
+
+### Referências
+
+- Backlog BL-C1-003
+- [ADR-005](#adr-005-schema-first-com-inferencia-de-tipos-via-zinfer)
+- Requisitos Anexo A (a atualizar)
+- ULID spec: <https://github.com/ulid/spec>
+
+---
+
+## ADR-007: Ratificação do baseline de versões instaladas vs Stack v1.0
+
+- **Status:** Accepted
+- **Data:** 2026-05-21
+- **Decisores:** Renan (3Studio)
+- **Endereça:** Auditoria de C0 (Sessão 02), FINDING-M1
+
+### Contexto
+
+O documento de Stack v1.0 (externo) define versões-alvo para o tooling do
+monorepo: Node 20 LTS, pnpm 9.x, ESLint 9.x, TypeScript 5.4+, lint-staged 15.x,
+etc. Durante o bootstrap (Sessão 01, BL-C0-004) o ambiente real do Renan
+instalou versões majoritariamente mais recentes:
+
+| Tecnologia  | Stack v1.0  | Instalado          |
+| ----------- | ----------- | ------------------ |
+| Node.js     | `>= 20 LTS` | `24.10.0` (.nvmrc) |
+| pnpm        | `9.x`       | `10.18.2`          |
+| TypeScript  | `5.4+`      | `6.0.3`            |
+| ESLint      | `9.x`       | `10.4.0`           |
+| lint-staged | `15.x`      | `17.0.5`           |
+| Changesets  | `2.27+`     | `2.31.0`           |
+
+Renan aceitou explicitamente durante a Sessão 01 (validado, sem regressão). O
+`CLAUDE.md` §3 foi atualizado para refletir o instalado, mas o desvio nunca foi
+formalmente ratificado em `DECISIONS.md`. A auditoria do C0 (Sessão 02) marcou
+isso como **FINDING-M1 (Medium)** sugerindo um ADR.
+
+### Decisão
+
+**Ratificar o baseline de versões efetivamente instaladas como a verdade
+operacional do projeto.** O Stack v1.0 vira referência histórica; o `CLAUDE.md`
+§3 (mantido com as versões reais) é a fonte de verdade operacional até que Stack
+v1.1 seja produzido externamente.
+
+### Alternativas consideradas
+
+1. **Downgrade forçado para o alvo Stack v1.0.** Custo de tempo, risco de
+   quebrar o lockfile estável, sem ganho funcional.
+2. **Aguardar Stack v1.1 externo antes de prosseguir.** Bloqueia waves
+   subsequentes sem necessidade real.
+3. **Reconhecer `CLAUDE.md` §3 como SoT operacional (esta decisão).** Custo
+   zero. Stack externo é atualizado fora-de-banda.
+
+### Consequências
+
+- `CLAUDE.md` §3 é a fonte de verdade para versões do tooling. Atualizar
+  manualmente quando um package for adicionado/atualizado.
+- Novos devs / CI / ambientes de build devem usar Node 24.x e pnpm 10.x
+  (refletidos em `.nvmrc` e `package.json engines`).
+- Sem trigger automático de reavaliação. Stack v1.1 (externo) sincroniza com o
+  que já está em produção — não bloqueia trabalho.
+- Em caso de major bump futuro (ex.: Node 26 LTS sair, Electron 30 → 31), abrir
+  ADR dedicado.
+- Endereça **FINDING-M1** da auditoria v1 do C0. Marca a ressalva como fechada
+  via ratificação formal.
+
+### Referências
+
+- `docs/audits/C0_AUDIT_REPORT_v1.md` — FINDING-M1
+- `CLAUDE.md` §3 (Stack Tecnológica — versões reais)
+- `.nvmrc` (Node 24.10.0), `package.json` engines
+- Stack v1.0 externo (a virar v1.1 quando conveniente — não-bloqueante)
