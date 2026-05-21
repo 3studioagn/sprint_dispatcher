@@ -19,5 +19,8 @@
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "turbo build && changeset publish"
+  },
+  "devDependencies": {
+    "turbo": "^2.9.14"
   }
 }
