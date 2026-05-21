@@ -68,32 +68,39 @@ compartilhada SMB é o único canal de comunicação.
 
 ## 3. Stack Tecnológica
 
-| Categoria          | Tecnologia            | Versão      |
-| ------------------ | --------------------- | ----------- |
-| Linguagem          | TypeScript            | 5.4+        |
-| Runtime Node       | Node.js               | 20 LTS      |
-| Runtime Desktop    | Electron              | 30.x        |
-| UI Framework       | React                 | 18.3+       |
-| Estado global      | Zustand               | 4.5+        |
-| Styling            | CSS Modules + PostCSS | nativo Vite |
-| Forms              | react-hook-form       | 7.51+       |
-| Validation         | Zod                   | 3.23+       |
-| Icons              | lucide-react          | 0.380+      |
-| Date/Time          | date-fns              | 3.6+        |
-| IDs                | ulid                  | 2.3+        |
-| HTML Sanitization  | isomorphic-dompurify  | 2.10+       |
-| Logging            | Pino + pino-roll      | 9.x / 1.1+  |
-| Testing (unit)     | Vitest                | 1.6+        |
-| Testing (E2E)      | Playwright (Electron) | 1.44+       |
-| Package Manager    | pnpm                  | 9.x         |
-| Build Orchestrator | Turborepo             | 2.x         |
-| Renderer Bundler   | Vite                  | 5.x         |
-| Electron Builder   | electron-builder      | 24+         |
-| Versionamento      | Changesets            | 2.27+       |
-| Lint               | ESLint                | 9.x (flat)  |
-| Format             | Prettier              | 3.x         |
-| Git hooks          | Husky + lint-staged   | 9.x / 15.x  |
-| CI                 | GitHub Actions        | —           |
+| Categoria          | Tecnologia            | Versão (alvo / instalada)                       |
+| ------------------ | --------------------- | ----------------------------------------------- |
+| Linguagem          | TypeScript            | 5.4+ — instalada **6.0.3**                      |
+| Runtime Node       | Node.js               | engine `>=20.0.0` — `.nvmrc` **24.10.0**        |
+| Runtime Desktop    | Electron              | 30.x — _pendente (C2/C3)_                       |
+| UI Framework       | React                 | 18.3+ — _pendente (C2/C3)_                      |
+| Estado global      | Zustand               | 4.5+ — _pendente (C2/C3)_                       |
+| Styling            | CSS Modules + PostCSS | nativo Vite — _pendente (C2/C3)_                |
+| Forms              | react-hook-form       | 7.51+ — _pendente (C2)_                         |
+| Validation         | Zod                   | 3.23+ — _pendente (C1)_                         |
+| Icons              | lucide-react          | 0.380+ — _pendente (C2/C3)_                     |
+| Date/Time          | date-fns              | 3.6+ — _pendente_                               |
+| IDs                | ulid                  | 2.3+ — _pendente (C1)_                          |
+| HTML Sanitization  | isomorphic-dompurify  | 2.10+ — _pendente (C1)_                         |
+| Logging            | Pino + pino-roll      | 9.x / 1.1+ — _pendente (C6)_                    |
+| Testing (unit)     | Vitest                | 1.6+ — _pendente (C8)_                          |
+| Testing (E2E)      | Playwright (Electron) | 1.44+ — _pendente (C8)_                         |
+| Package Manager    | pnpm                  | engine `>=10.0.0` — instalada **10.18.2**       |
+| Build Orchestrator | Turborepo             | 2.x — instalada **2.9.14**                      |
+| Renderer Bundler   | Vite                  | 5.x — _pendente (C2/C3)_                        |
+| Electron Builder   | electron-builder      | 24+ — _pendente (C5)_                           |
+| Versionamento      | Changesets            | 2.27+ — instalada **2.31.0**                    |
+| Lint               | ESLint                | 9.x (flat) — instalada **10.4.0** (flat nativo) |
+| Format             | Prettier              | 3.x — instalada **3.8.3**                       |
+| Git hooks          | Husky + lint-staged   | 9.x / 15.x — instaladas **9.1.7 / 17.0.5**      |
+| CI                 | GitHub Actions        | configurado em `.github/workflows/ci.yml`       |
+
+> **Como ler a coluna:** "_pendente (CX)_" significa que a dependência ainda não
+> foi adicionada — entra na sessão do componente indicado. Quando ESLint, TS,
+> pnpm ou lint-staged divergem do alvo do plano original, é porque o ambiente
+> real do Renan tinha versão mais nova quando o monorepo foi inicializado
+> (Sessão 01); funcionou sem regressão e foi mantido. Atualize esta tabela à
+> medida que cada package/app entrar.
 
 ### Decisões de stack que importam saber sem precisar consultar DECISIONS.md
 
@@ -447,17 +454,41 @@ Quando precisar de detalhes específicos não cobertos aqui:
 Descobertas durante o desenvolvimento que economizam tempo da próxima sessão.
 **Adicione aqui imediatamente ao descobrir.**
 
-> Vazio na Wave 0. Será preenchido conforme avanço.
+### G-001: `turbo.json` usa chave `tasks`, não `pipeline`
 
-<!--
-Exemplo de entrada:
+- **Sintoma:** warning de deprecação ao rodar `pnpm turbo build` se a chave
+  `pipeline` for usada.
+- **Causa:** Turborepo 2.0 renomeou `pipeline` → `tasks`. O documento de Stack
+  externa (§11.2) ainda mostra `pipeline` no snippet de exemplo.
+- **Solução:** sempre usar `tasks` no `turbo.json` (ver o arquivo na raiz como
+  referência). `pipeline` segue funcionando com aviso, mas é dívida técnica.
+- **Descoberto em:** Sessão 01 (2026-05-21), durante BL-C0-002.
 
-### G-001: fs.watch não dispara em pastas SMB
-- Sintoma: agente não detecta arquivos em pasta de rede
-- Causa: filesystem events sobre SMB são errados/perdidos
-- Solução: usar polling (já é a decisão; nunca tente fs.watch ou chokidar)
-- Descoberto em: sessão 03 (2026-05-22)
--->
+### G-002: PowerShell bloqueia execução de `pnpm.ps1`
+
+- **Sintoma:** `pnpm --version` no PowerShell retorna
+  `UnauthorizedAccess: ...pnpm.ps1 não pode ser carregado...`.
+- **Causa:** Execution policy padrão do Windows é `Undefined`/`Restricted`, que
+  bloqueia scripts `.ps1` não-assinados. O shim do pnpm é `.ps1`.
+- **Solução:** invocar pnpm via **Git Bash / WSL / cmd.exe** (todos funcionam).
+  Alternativa permanente: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
+  (mexe na config do usuário Windows — pedir antes).
+- **Descoberto em:** Sessão 01 (2026-05-21), durante a verificação de versões na
+  Fase 1.
+
+### G-003: Changesets recusa packages que não existem ainda
+
+- **Sintoma:** `pnpm changeset status` falha com
+  `ValidationError: The package or glob expression "@sprint/contracts" specified in the linked option does not match any package in the project`.
+- **Causa:** Changesets valida `linked` e `ignore` contra o set real de
+  workspaces presentes em `apps/*` e `packages/*`. Glob patterns tampouco passam
+  se não casarem com nada.
+- **Solução:** no momento do bootstrap (W0), `linked` e `ignore` ficam vazios em
+  `.changeset/config.json`. O `.changeset/README.md` documenta a config alvo
+  (`linked: [["@sprint/contracts", "@sprint/fs-adapter", "@sprint/logger"]]`,
+  `ignore: ["sprint-leader", "sprint-operator-agent"]`) e aponta os itens BL que
+  devem re-popular: BL-C1-001, BL-C4-001, BL-C6-001, BL-C2-001, BL-C3-001.
+- **Descoberto em:** Sessão 01 (2026-05-21), durante BL-C0-006.
 
 ---
 

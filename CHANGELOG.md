@@ -11,6 +11,21 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ### Added
 
+- Monorepo pnpm 10 + workspaces (`apps/*`, `packages/*`) com Turborepo 2.x
+  (chave `tasks`) [BL-C0-001, BL-C0-002]
+- TypeScript strict (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`,
+  `verbatimModuleSyntax`) com path aliases `@sprint/*` [BL-C0-003]
+- Toolchain de qualidade: ESLint 10 flat config, Prettier 3, Husky 9,
+  lint-staged 17, commitlint 21 (escopos `C0..C8`, `repo`) [BL-C0-004]
+- Pipeline CI no GitHub Actions: install + format:check + lint + type-check +
+  test + build, com cache pnpm e cache Turbo [BL-C0-005]
+- Changesets 2.x configurado (`baseBranch=develop`, `access=restricted`);
+  `linked`/`ignore` documentados em `.changeset/README.md` como pendência
+  até os packages existirem [BL-C0-006]
+- ADR-001..004 em `DECISIONS.md`: monorepo, Electron, pasta compartilhada
+  SMB, polling [BL-C0-007]
+- `README.md` "Como rodar localmente" completo + badge CI [BL-C0-007]
+
 ### Changed
 
 ### Fixed
