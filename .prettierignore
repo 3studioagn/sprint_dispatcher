@@ -1,0 +1,11 @@
+node_modules/
+dist/
+out/
+build/
+.turbo/
+.vite/
+coverage/
+pnpm-lock.yaml
+
+# CHANGELOG.md eh gerenciado pelo Changesets — nao reformatar.
+CHANGELOG.md
