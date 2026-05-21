@@ -3,6 +3,7 @@
 
 export * from './constants';
 export * from './errors';
+export * from './filenames';
 export * from './ids';
 export * from './schemas/agent-config.schema';
 export * from './schemas/shared';
