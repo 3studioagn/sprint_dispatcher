@@ -66,6 +66,78 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 07 — 2026-05-22 — Auditoria de C2
+
+**Wave atual:** W0 (auditoria, não execução) **Duração estimada:** ~2h **Itens
+trabalhados:** Auditoria de [BL-C2-001, BL-C5-001]
+
+### Objetivo da sessão
+
+Auditoria técnica independente do Componente C2 (Leader scaffold +
+electron-builder mínimo) entregue na Sessão 06, contra a spec consolidada
+(CLAUDE.md + Requisitos + Stack + Backlog + ADRs 001..009), com ênfase em
+segurança Electron.
+
+### O que foi feito
+
+- 6 dimensões auditadas (D1 Estrutural, D2 Conteúdo, D3 Funcional, D4
+  Documental, D5 Segurança Electron, D6 Conformidade arquitetural).
+- Validação de `webPreferences` em cada BrowserWindow — na fonte e na saída
+  compilada (`dist-electron/main/index.js`).
+- CSP enforcement via leitura de `index.html` e do `dist/index.html` buildado.
+- Busca por APIs proibidas (`@electron/remote`, `<webview>`,
+  `nodeIntegration: true`, `window.require`) — zero ocorrências.
+- Bateria funcional completa exit 0; regressão zero de C0/C1
+  (`@sprint/contracts` mantém 100% de cobertura).
+- Smoke de `pnpm dev` — janela abriu, Vite HTTP 200, Electron + DevTools OK.
+- Build smoke `pnpm package` — falhou no bloqueio ambiental do ESET (G-009); o
+  `.exe` permanece não validado localmente.
+- 12 achados (0 Critical, 1 High, 0 Medium, 4 Low, 7 Info).
+- Relatório em `docs/audits/C2_AUDIT_REPORT_v1.md`.
+- Veredito: **APROVADO COM RESSALVAS**.
+
+### Estado atual
+
+- Nenhuma alteração de código ou config (auditor não corrige).
+- `docs/audits/C2_AUDIT_REPORT_v1.md` criado, aguardando review do Renan.
+
+### Decisões tomadas
+
+Nenhuma — auditoria apenas reporta.
+
+### Bloqueios encontrados
+
+- `pnpm package` não validável localmente — o ESET trava o `app.asar` (G-009). A
+  config do electron-builder é válida; só o artefato `.exe` falta.
+- Execução do workflow `build-leader.yml` no GitHub Actions não verificável — o
+  `gh` CLI não está instalado na máquina.
+- Confirmação visual do `pong` não feita — sem ferramenta de screenshot de
+  janela Electron; o wiring foi validado por inspeção de código + saída de
+  build.
+
+### Próximo passo
+
+Renan revisa `docs/audits/C2_AUDIT_REPORT_v1.md`. Decisão entre: (a) avanço para
+C3 (par funcional); (b) remediação dedicada para os Low; (c) aceite formal dos
+débitos. A auditoria recomenda (a) — o scaffold é um bom template para o C3.
+
+### Observações para a próxima sessão
+
+- A única High (FINDING-001) é de **plataforma**, não do C2: advisories do
+  Electron 30.x (corrigidos só em ≥ 38.8.6) + `tar` transitivo de build-time.
+  Afeta C2 e C3 igualmente. Idealmente decidir a cadência de atualização do
+  Electron (spike/ADR) antes ou em paralelo ao C3.
+- Os 4 Low são triviais: `include` morto no `tsconfig.json`, hardening de CSP
+  (`object-src`/`base-uri`), `rfc3161TimeStampServer` prematuro no
+  `electron-builder.yml`, e 2 commits `chore` sem o tag `[BL-C2-001]`.
+- Se for remediação, achados devem referenciar
+  `fix(C2): ... [audit-v1-FINDING-NNN]` no scope/footer.
+- C3 vai espelhar a arquitetura do C2 — que está correta e é um bom template.
+  Nenhum padrão arquitetural ruim a corrigir antes do C3.
+- Branch `docs/BL-C2-audit-v1` aberta com o relatório + esta entrada.
+
+---
+
 ## Sessão 06 — 2026-05-22 — Execução de C2 (Leader Application scaffold) + BL-C5-001 · W0
 
 **Wave atual:** W0 **Duração estimada:** ~6h **Itens trabalhados:** [BL-C2-001,
