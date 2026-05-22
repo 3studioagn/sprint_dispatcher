@@ -3,30 +3,38 @@
  *
  * Responsabilidades (W0):
  * - Single instance lock (impede 2 agents rodando)
+ * - Carregar e validar o config.json (fail-fast)
  * - Criar o tray icon
  * - Registrar handlers IPC
  *
- * Em W0 NÃO há polling e NÃO há overlay ativo. O app fica residente na
- * tray, esperando ser comandado (W1+). O carregamento de `config.json`
- * (BL-C3-002) será inserido no `bootstrap`, entre `app.whenReady()` e a
- * criação da tray.
+ * Em W0 NÃO há polling e NÃO há overlay ativo. O app carrega o
+ * `config.json` da estação, fica residente na tray, e espera ser
+ * comandado (W1+).
  *
  * @see DECISIONS.md ADR-011 — arquitetura tray-resident
+ * @see DECISIONS.md ADR-012 — config loader fail-fast
  * @see CLAUDE.md §8.1 — segurança obrigatória Electron
  */
 
+import type { AgentConfig } from '@sprint/contracts';
 import { app, dialog, ipcMain } from 'electron';
 
+import { ConfigError, getConfigPath, loadAgentConfig } from './config';
 import { acquireSingleInstanceLock } from './single-instance';
 import { createTray } from './tray';
 
 const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
 const IS_DEV = Boolean(DEV_SERVER_URL);
 
+// Config lido uma vez no boot e mantido em memória. Não vaza para o
+// renderer — o handler `getConfig` expõe só os campos seguros. Ver ADR-012.
+let configCache: AgentConfig | null = null;
+
 /**
  * Bootstrap do main process.
  *
- * Sequência: single instance lock → app ready → tray → handlers IPC.
+ * Sequência: single instance lock → app ready → config → tray → IPC.
+ * Erro de config encerra o app via diálogo (fail-fast, ADR-012).
  */
 async function bootstrap(): Promise<void> {
   // 1. Single instance lock — antes de qualquer outra coisa.
@@ -39,7 +47,15 @@ async function bootstrap(): Promise<void> {
   // 2. Aguarda o Electron ficar pronto.
   await app.whenReady();
 
-  // 3. Cria o tray icon.
+  // 3. Carrega e valida o config.json (fail-fast — ADR-012).
+  try {
+    configCache = await loadAgentConfig();
+  } catch (err) {
+    handleConfigError(err);
+    return; // o app já foi encerrado dentro de handleConfigError
+  }
+
+  // 4. Cria o tray icon.
   try {
     createTray();
   } catch (err) {
@@ -52,18 +68,53 @@ async function bootstrap(): Promise<void> {
     return;
   }
 
-  // 4. Registra os handlers IPC.
+  // 5. Registra os handlers IPC.
   registerIpcHandlers();
 }
 
 /**
  * Registra os handlers IPC do Agent.
  *
- * W0: apenas `ping` (smoke test do bridge). O handler `getConfig` entra
- * com o config loader (BL-C3-002). W1+ trará os handlers de overlay.
+ * W0: `ping` (smoke do bridge) e `getConfig` (campos seguros do config).
+ * W1+ trará os handlers de overlay.
  */
 function registerIpcHandlers(): void {
   ipcMain.handle('ping', () => 'pong');
+
+  // Expõe ao renderer apenas os campos seguros do config — sem
+  // shared_path, polling_interval ou log_level (defense-in-depth).
+  ipcMain.handle('getConfig', () => {
+    if (configCache === null) {
+      throw new Error('Config não carregado');
+    }
+    return {
+      user_id: configCache.user_id,
+      user_nome_exibicao: configCache.user_nome_exibicao,
+      hostname: configCache.hostname,
+    };
+  });
+}
+
+/**
+ * Trata erros do config loader: mostra um diálogo e encerra o app.
+ *
+ * Fail-fast — não há "modo degradado" (ADR-012). Um `ConfigError` rende
+ * uma mensagem específica; qualquer outro erro cai no ramo genérico.
+ */
+function handleConfigError(err: unknown): void {
+  if (err instanceof ConfigError) {
+    dialog.showErrorBox(
+      'Sprint Operator Agent — Config inválido',
+      `${err.message}\n\nCaminho do config:\n${getConfigPath()}`,
+    );
+  } else {
+    const message = err instanceof Error ? err.message : String(err);
+    dialog.showErrorBox(
+      'Sprint Operator Agent — Erro inesperado',
+      `Falha ao iniciar:\n\n${message}\n\nCaminho do config:\n${getConfigPath()}`,
+    );
+  }
+  app.quit();
 }
 
 app.on('window-all-closed', () => {

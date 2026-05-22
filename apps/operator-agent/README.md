@@ -46,8 +46,8 @@ src/
 
 Localização: `%APPDATA%\Roaming\sprint-operator-agent\config.json`
 
-Schema validado por `@sprint/contracts.parseAgentConfig()`. Veja Anexo F do doc
-de Requisitos para exemplo.
+Schema validado por `@sprint/contracts` via `safeParseAgentConfig`. Veja Anexo F
+do doc de Requisitos para exemplo.
 
 Comportamento na inicialização:
 
