@@ -12,11 +12,8 @@
  */
 
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { app, BrowserWindow, ipcMain } from 'electron';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
 const IS_DEV = Boolean(DEV_SERVER_URL);
