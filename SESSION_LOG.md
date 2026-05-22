@@ -66,6 +66,77 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 05 — 2026-05-22 — Remediação pós-auditoria v1 de C1
+
+**Wave atual:** W0 (remediação, não execução) **Duração estimada:** ~2h **Itens
+trabalhados:** Remediação dos achados FINDING-001 e FINDING-002 de
+`docs/audits/C1_AUDIT_REPORT_v1.md`
+
+### Objetivo da sessão
+
+Remediar os achados da auditoria v1 do C1 conforme o prompt de remediação
+formal. A auditoria v1 fechou 🟢 APROVADO (0 Critical, 0 High), então o escopo
+obrigatório era vazio; por decisão do Renan, os 2 achados Medium (opt-in) foram
+remediados. Produzir `C1_REMEDIATION_REPORT_v1.md` e a branch
+`fix/c1-audit-v1-remediation` pronta para PR.
+
+### O que foi feito
+
+- Triagem do relatório: 0 Critical, 0 High, 2 Medium, 2 Low, 5 Info. Escopo
+  confirmado com Renan: remediar os 2 Medium.
+- **FINDING-001 (Medium, D1)** — Fixed, commit `f8b2736`: criados
+  `packages/contracts/src/errors.test.ts` (10 testes) e
+  `packages/contracts/src/schemas/shared.test.ts` (16 testes), fechando a
+  heurística de par `.test.ts` 1-para-1. Puramente aditivo.
+- **FINDING-002 (Medium, D2/D4)** — Fixed, commit `a33cdbb`: replicados 12
+  blocos JSDoc de `sprint-payload.schema.ts` para `sprint-ack`, `sprint-cancel`
+  e `agent-config` (só comentários — zero alteração de schema/tipo/parser).
+- Re-validação completa após `rm -rf node_modules` + `--frozen-lockfile`:
+  bateria raiz e package exit 0; coverage 100%; smoke adversarial 10/10;
+  adversarial type-check confirmando branded types (TS2322). Zero regressões.
+- Relatório criado: `docs/audits/C1_REMEDIATION_REPORT_v1.md`.
+
+### Estado atual
+
+- Branch `fix/c1-audit-v1-remediation` com 3 commits (2 de fix + 1 de docs),
+  aguardando PR + review. Sem merge unilateral.
+- Findings: Critical 0/0, High 0/0, **Medium 2/2 Fixed**, Low 0/2 (Deferred),
+  Info 5 (n/a). 0 Disputed.
+- Package `@sprint/contracts`: 190 testes em 10 arquivos (era 164 em 8),
+  cobertura 100% em stmts/branches/funcs/lines.
+
+### Decisões tomadas
+
+Nenhuma decisão arquitetural — remediação corrige apenas o que o relatório
+listou. Nenhum finding disputado. Os 2 Low e 5 Info ficam como débito
+documentado / não-acionável (fora do escopo opt-in do §3 do prompt).
+
+### Bloqueios encontrados
+
+Nenhum.
+
+### Próximo passo
+
+Renan revisa `docs/audits/C1_REMEDIATION_REPORT_v1.md` e o PR
+`fix/c1-audit-v1-remediation`. Após merge em `develop`, abrir a sessão de
+**Auditoria v2 do C1** (mesmo prompt da v1, com aviso de re-auditoria).
+
+### Observações para a próxima sessão
+
+- A **Auditoria v2** deve validar: (a) FINDING-001 e FINDING-002 efetivamente
+  sumiram; (b) nenhum check que passava na v1 regrediu; (c) smoke adversarial
+  continua 10/10; (d) não há Disputed para reaparecer.
+- **Numeração / branches:** esta é a Sessão 05 (execução C1 = 03, auditoria C1 =
+  04, remediação = 05). A entrada da Sessão 04 e o relatório
+  `C1_AUDIT_REPORT_v1.md` vivem na branch `docs/BL-C1-audit-v1`, ainda não
+  mergeada em `develop` — por isso este log salta de 03 para 05 nesta branch.
+  Mergear `docs/BL-C1-audit-v1` reconcilia o histórico.
+- **Não iniciar o C4 antes da Auditoria v2 aprovar** — o C4
+  (`@sprint/fs-adapter`) é o primeiro consumidor cross-package real de
+  `@sprint/contracts`.
+
+---
+
 ## Sessão 03 — 2026-05-21 — Execução de C1 (Shared Contracts) · W0
 
 **Wave atual:** W0 **Duração estimada:** ~4h **Itens trabalhados:** [BL-C1-001,

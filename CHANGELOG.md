@@ -63,6 +63,12 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ### Fixed
 
+- Testes diretos para `errors.ts` e `schemas/shared.ts`: fecha a heurística de
+  par `.test.ts` 1-para-1 do package `@sprint/contracts` (164 → 190 testes,
+  cobertura 100% mantida) [audit-v1-FINDING-001]
+- JSDoc consistente nos parsers e types de `sprintAck`, `sprintCancel` e
+  `agentConfig`, replicado da referência `sprintPayload` [audit-v1-FINDING-002]
+
 ### Deprecated
 
 ### Removed
