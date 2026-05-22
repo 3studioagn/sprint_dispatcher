@@ -1,0 +1,2 @@
+# Diretório buildResources do electron-builder.
+# Receberá icon.ico, icon.png, installerHeader.bmp etc. em sessão de polish (W3).
