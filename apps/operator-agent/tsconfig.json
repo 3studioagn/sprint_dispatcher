@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "noEmit": true,
+    "composite": false,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["vite/client", "vitest/globals", "@types/react", "@types/react-dom", "node"],
+    "paths": {
+      "@/*": ["./src/*"],
+      "@sprint/contracts": ["../../packages/contracts/src/index.ts"],
+      "@sprint/contracts/*": ["../../packages/contracts/src/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "exclude": ["node_modules", "dist", "dist-electron", "release"],
+  "references": [{ "path": "./tsconfig.node.json" }]
+}
