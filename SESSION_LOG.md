@@ -152,7 +152,7 @@ ESET — idealmente montando o job de release no CI (casa com BL-C0-009, W3).
   `chore/BL-C2-session-close`. Cada uma parte da anterior (dependência
   sequencial real — Fase N precisa dos arquivos da Fase N-1). Nada foi pushado
   nem mergeado: Renan decide entre PRs em sequência ou fast-forward do
-  encadeamento (como na Sessão 05). 9 commits no total.
+  encadeamento (como na Sessão 05). 10 commits no total.
 - **Desvios do código do prompt** (todos por necessidade técnica, validados):
   `tsconfig.json` sem `vite.config.ts` no `include` (TS6305 — G-010);
   `app.whenReady().then()` e o `.then()/.catch()` do `App.tsx` viraram
@@ -171,6 +171,11 @@ ESET — idealmente montando o job de release no CI (casa com BL-C0-009, W3).
   W1+); o smoke `ping` é placeholder.
 - A próxima sessão de C2 (W1) introduz Zustand, React Router e telas reais — os
   tokens CSS e a estrutura já estão preparados para isso.
+- **Pós-Fase 8 (a pedido do Renan):** adicionado
+  `.github/workflows/build-leader.yml` — workflow do GitHub Actions que builda o
+  `.exe` num runner Windows limpo (sem ESET), contornando o bloqueio do
+  BL-C5-001. Dispara no `push` para `develop` (paths de `apps/leader`) e também
+  manualmente via `workflow_dispatch`. É o 10º commit, vai no mesmo PR do C2.
 
 ---
 
