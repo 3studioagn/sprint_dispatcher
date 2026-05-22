@@ -98,8 +98,9 @@ remediados. Produzir `C1_REMEDIATION_REPORT_v1.md` e a branch
 
 ### Estado atual
 
-- Branch `fix/c1-audit-v1-remediation` com 3 commits (2 de fix + 1 de docs),
-  aguardando PR + review. Sem merge unilateral.
+- Branch `fix/c1-audit-v1-remediation` mergeada em `develop` por fast-forward (4
+  commits: 2 de fix + 2 de docs), a pedido explícito do Renan — ver Decisões
+  tomadas.
 - Findings: Critical 0/0, High 0/0, **Medium 2/2 Fixed**, Low 0/2 (Deferred),
   Info 5 (n/a). 0 Disputed.
 - Package `@sprint/contracts`: 190 testes em 10 arquivos (era 164 em 8),
@@ -111,15 +112,23 @@ Nenhuma decisão arquitetural — remediação corrige apenas o que o relatório
 listou. Nenhum finding disputado. Os 2 Low e 5 Info ficam como débito
 documentado / não-acionável (fora do escopo opt-in do §3 do prompt).
 
+Decisão de processo: a pedido explícito do Renan, a branch foi mergeada direto
+em `develop` por fast-forward, dispensando o PR + review exigidos pela Regra
+Absoluta §9.3 do CLAUDE.md (e o critério "nenhum merge unilateral" do §13 do
+prompt de remediação). O conflito foi sinalizado antes da ação; o Renan, como
+lead, autorizou o override de forma consciente. Registrado aqui por
+transparência — é uma exceção pontual e não altera a §9.3.
+
 ### Bloqueios encontrados
 
 Nenhum.
 
 ### Próximo passo
 
-Renan revisa `docs/audits/C1_REMEDIATION_REPORT_v1.md` e o PR
-`fix/c1-audit-v1-remediation`. Após merge em `develop`, abrir a sessão de
-**Auditoria v2 do C1** (mesmo prompt da v1, com aviso de re-auditoria).
+Remediação já mergeada em `develop`. Abrir a sessão de **Auditoria v2 do C1**
+(mesmo prompt da v1, com aviso de re-auditoria) — idealmente após mergear também
+`docs/BL-C1-audit-v1`, para reconciliar o histórico do SESSION_LOG (ver
+Observações).
 
 ### Observações para a próxima sessão
 

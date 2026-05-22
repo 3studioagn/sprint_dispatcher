@@ -283,14 +283,16 @@ lado em `develop`.
 
 ## 8. Próximos passos recomendados
 
-1. Renan revisa este relatório e o PR `fix/c1-audit-v1-remediation`.
-2. PR mergeado em `develop` (sem merge unilateral — aguarda review).
-3. Sessão de **Auditoria v2** do C1 (prompt da v1 com aviso de re-auditoria),
+1. A branch `fix/c1-audit-v1-remediation` foi mergeada em `develop` por
+   fast-forward, a pedido explícito do Renan — override consciente e autorizado
+   da §9.3 do CLAUDE.md (PR/review dispensados), registrado no SESSION_LOG da
+   Sessão 05.
+2. Sessão de **Auditoria v2** do C1 (prompt da v1 com aviso de re-auditoria),
    validando: (a) FINDING-001 e FINDING-002 efetivamente sumiram; (b) nenhuma
    regressão; (c) smoke adversarial continua 10/10.
-4. Se a v2 fechar **APROVADO** → liberar o próximo componente (**C4 —
+3. Se a v2 fechar **APROVADO** → liberar o próximo componente (**C4 —
    `@sprint/fs-adapter`**).
-5. Se a v2 ainda acusar Critical/High → nova sessão de remediação.
+4. Se a v2 ainda acusar Critical/High → nova sessão de remediação.
 
 ---
 
