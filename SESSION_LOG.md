@@ -110,8 +110,8 @@ segurança aplicada.
   C4).
 - Bateria final (Fase 7): `format:check`, `lint`, `type-check`, `test`, `build`
   todos exit 0; `@sprint/contracts` coverage 100% (regressão zero).
-- **Trabalho em 7 branches encadeadas, ainda NÃO mergeadas em `develop`** (ver
-  Observações) — Renan decide a estratégia de merge.
+- **C2 (W0) consolidado em `develop`:** os 10 commits foram mergeados via PR #1
+  (merge commit `2578a36`, 2026-05-22) — review e merge pelo Renan no GitHub.
 
 ### Decisões tomadas
 
@@ -140,19 +140,20 @@ segurança aplicada.
 
 Iniciar o **prompt de auditoria do C2** (mesmo padrão das auditorias C0/C1, com
 ênfase em segurança Electron: CSP, `contextIsolation`/`sandbox`, hardening de
-`will-navigate`, bridge IPC). Em paralelo, validar o `.exe` num ambiente sem
-ESET — idealmente montando o job de release no CI (casa com BL-C0-009, W3).
+`will-navigate`, bridge IPC). Validar o `.exe` baixando o artifact do workflow
+**Build Leader** (que dispara no merge do PR #1) e testando numa máquina
+Windows.
 
 ### Observações para a próxima sessão
 
-- **Branches (7, encadeadas, nada em `develop`):**
+- **Branches (7, encadeadas) — mergeadas em `develop` via PR #1:**
   `feature/BL-C2-001-leader-scaffold` → `feature/BL-C2-001-main-and-preload` →
   `feature/BL-C2-001-renderer` → `fix/BL-C2-001-preload-cjs` →
   `feature/BL-C5-001-electron-builder-leader` → `fix/BL-C2-001-vitest-setup` →
   `chore/BL-C2-session-close`. Cada uma parte da anterior (dependência
-  sequencial real — Fase N precisa dos arquivos da Fase N-1). Nada foi pushado
-  nem mergeado: Renan decide entre PRs em sequência ou fast-forward do
-  encadeamento (como na Sessão 05). 10 commits no total.
+  sequencial real — Fase N precisa dos arquivos da Fase N-1). Os 10 commits
+  foram para `develop` no PR #1, com merge commit (`2578a36`). As branches
+  locais podem ser apagadas com segurança.
 - **Desvios do código do prompt** (todos por necessidade técnica, validados):
   `tsconfig.json` sem `vite.config.ts` no `include` (TS6305 — G-010);
   `app.whenReady().then()` e o `.then()/.catch()` do `App.tsx` viraram
@@ -175,7 +176,8 @@ ESET — idealmente montando o job de release no CI (casa com BL-C0-009, W3).
   `.github/workflows/build-leader.yml` — workflow do GitHub Actions que builda o
   `.exe` num runner Windows limpo (sem ESET), contornando o bloqueio do
   BL-C5-001. Dispara no `push` para `develop` (paths de `apps/leader`) e também
-  manualmente via `workflow_dispatch`. É o 10º commit, vai no mesmo PR do C2.
+  manualmente via `workflow_dispatch`. Foi o 10º commit; mergeado no PR #1, e o
+  merge para `develop` já disparou a primeira execução do workflow.
 
 ---
 
