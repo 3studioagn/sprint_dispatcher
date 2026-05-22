@@ -35,7 +35,10 @@
       "electron",
       "esbuild",
       "unrs-resolver"
-    ]
+    ],
+    "overrides": {
+      "tar": "^7.5.11"
+    }
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
