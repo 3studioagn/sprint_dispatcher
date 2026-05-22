@@ -1,0 +1,68 @@
+appId: br.com.artflexiveis.sprintleader
+productName: Sprint Leader
+
+# Versão lida do package.json automaticamente
+artifactName: SprintLeader-${version}-${arch}.${ext}
+
+# Diretórios
+directories:
+  buildResources: build
+  output: release
+
+# O que entra no pacote final
+files:
+  - 'dist/**/*'
+  - 'dist-electron/**/*'
+  - 'package.json'
+  - '!**/.{eslintrc,prettierrc}*'
+  - '!**/tsconfig*.json'
+  - '!**/vite.config.*'
+  - '!**/vitest.config.*'
+  - '!**/*.{ts,tsx,map}'
+  - '!**/*.test.*'
+
+# Compilação do main process (e preload) já feita pelo Vite — não recompile
+asar: true
+asarUnpack: []
+
+# Plataforma Windows
+win:
+  target:
+    - target: portable
+      arch:
+        - x64
+    - target: nsis
+      arch:
+        - x64
+  # Ícone: TODO em sessão de polish (W3) — usar default do Electron por enquanto
+  # icon: build/icon.ico
+  publisherName: ARTFLEXÍVEIS
+  rfc3161TimeStampServer: http://timestamp.digicert.com
+  # signtoolOptions: configurado em BL-C0-008 (Wave 3, code signing)
+
+# NSIS installer
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: SprintLeader-Setup-${version}.${ext}
+  installerLanguages:
+    - pt_BR
+  language: '1046' # pt-BR
+  shortcutName: Sprint Leader
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  runAfterFinish: false
+  deleteAppDataOnUninstall: false
+
+# Portable
+portable:
+  artifactName: SprintLeader-${version}-portable.${ext}
+  requestExecutionLevel: user # NÃO admin — operação no contexto do usuário (R-03)
+
+# Metadata
+extraMetadata:
+  homepage: https://artflexiveis.com.br
+  author:
+    name: 3Studio
+    email: contato@3studio.com.br

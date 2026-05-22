@@ -66,6 +66,119 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 06 — 2026-05-22 — Execução de C2 (Leader Application scaffold) + BL-C5-001 · W0
+
+**Wave atual:** W0 **Duração estimada:** ~6h **Itens trabalhados:** [BL-C2-001,
+BL-C5-001]
+
+### Objetivo da sessão
+
+Executar a parte W0 do Componente C2 (Leader Application) — o scaffold do app
+Electron `apps/leader` — junto com BL-C5-001 (electron-builder do Leader),
+deixando uma aplicação Electron + React + TypeScript funcional, buildável e com
+segurança aplicada.
+
+### O que foi feito
+
+- **Scaffold `apps/leader`** (Fase 2): `package.json` (sprint-leader),
+  `tsconfig.json` + `tsconfig.node.json`, `vite.config.ts`, `vitest.config.ts`,
+  `README.md`, `.gitignore`. Deps: electron 30.5.1, react 18, vite 5,
+  vite-plugin-electron, vitest, jsdom.
+- **Main process + preload** (Fase 3): `BrowserWindow` com webPreferences
+  seguras (CLAUDE.md §8.1) + hardening (`will-navigate`,
+  `setWindowOpenHandler`); preload com bridge tipado via
+  `contextBridge.exposeInMainWorld('api')`; `LeaderAPI` em
+  `src/shared/ipc-types.ts`; handler smoke `ping`.
+- **Renderer React** (Fase 4): `index.html` com CSP estrita, `main.tsx`
+  (StrictMode), `App.tsx` placeholder consumindo `window.api.ping()`, CSS
+  Modules e tokens em `global.css`, `env.d.ts` tipando `window.api`.
+- **Smoke E2E** (Fase 5): `pnpm dev` abre a janela, bridge IPC responde `pong`,
+  console limpo, hot reload confirmado (renderer + main).
+- **electron-builder** (Fase 6): `electron-builder.yml` (portable + NSIS, pt-BR,
+  `requestExecutionLevel: user`), `build/.gitkeep`.
+- **ADR-008** (bundling com vite-plugin-electron) e **ADR-009** (IPC
+  contract-first) em `DECISIONS.md`.
+
+### Estado atual
+
+- **BL-C2-001:** ✅ concluído — scaffold funcional, smoke E2E aprovado (bridge
+  IPC + hot reload).
+- **BL-C5-001:** ⚠️ config concluída e validada (o electron-builder carrega o
+  YAML e roda até a etapa de packaging); **a geração do `.exe` não foi validada
+  nesta sessão** — bloqueada pelo ESET (ver Bloqueios).
+- **BL-C2-002..012:** ⏸️ W1+ (telas, Zustand, Router, dispatch — dependem de
+  C4).
+- Bateria final (Fase 7): `format:check`, `lint`, `type-check`, `test`, `build`
+  todos exit 0; `@sprint/contracts` coverage 100% (regressão zero).
+- **Trabalho em 7 branches encadeadas, ainda NÃO mergeadas em `develop`** (ver
+  Observações) — Renan decide a estratégia de merge.
+
+### Decisões tomadas
+
+- **ADR-008** e **ADR-009** registrados. O prompt pedia ADR-007/ADR-008, mas o
+  ADR-007 já existia (baseline de versões); renumerados para 008/009 com aval do
+  Renan no início da sessão.
+- **App em CommonJS** (sem `"type": "module"` no `package.json`): o preload
+  sandboxado (`sandbox: true`) tem de ser CJS — ESM quebra com "Cannot use
+  import statement outside a module". O main passou a usar o global `__dirname`
+  em vez de `import.meta.url`. Ver ADR-008 e CLAUDE.md §12 G-007.
+- **`.exe` adiado:** o ESET trava o `app.asar` durante o electron-builder; sem
+  como excluir/desativar o ESET, a geração foi adiada (prompt §6). Validar em CI
+  ou ambiente sem ESET.
+- Tipos IPC vivem dentro do app, não em `@sprint/contracts` (ADR-009).
+
+### Bloqueios encontrados
+
+- **ESET (antivírus) trava o `app.asar`** — o `electron-builder` falha em
+  `EnsureEmptyDir` ("file used by another process"). O ESET não é excluível nem
+  desativável pelo Renan. Decisão conjunta: adiar a geração do `.exe` — o config
+  está pronto e validado, só o artefato falta.
+- **winCodeSign exigia privilégio de symlink** — resolvido: Renan habilitou o
+  Windows Developer Mode.
+
+### Próximo passo
+
+Iniciar o **prompt de auditoria do C2** (mesmo padrão das auditorias C0/C1, com
+ênfase em segurança Electron: CSP, `contextIsolation`/`sandbox`, hardening de
+`will-navigate`, bridge IPC). Em paralelo, validar o `.exe` num ambiente sem
+ESET — idealmente montando o job de release no CI (casa com BL-C0-009, W3).
+
+### Observações para a próxima sessão
+
+- **Branches (7, encadeadas, nada em `develop`):**
+  `feature/BL-C2-001-leader-scaffold` → `feature/BL-C2-001-main-and-preload` →
+  `feature/BL-C2-001-renderer` → `fix/BL-C2-001-preload-cjs` →
+  `feature/BL-C5-001-electron-builder-leader` → `fix/BL-C2-001-vitest-setup` →
+  `chore/BL-C2-session-close`. Cada uma parte da anterior (dependência
+  sequencial real — Fase N precisa dos arquivos da Fase N-1). Nada foi pushado
+  nem mergeado: Renan decide entre PRs em sequência ou fast-forward do
+  encadeamento (como na Sessão 05). 10 commits no total.
+- **Desvios do código do prompt** (todos por necessidade técnica, validados):
+  `tsconfig.json` sem `vite.config.ts` no `include` (TS6305 — G-010);
+  `app.whenReady().then()` e o `.then()/.catch()` do `App.tsx` viraram
+  `async/await` (CLAUDE.md §7.4 + ESLint `promise/prefer-await-to-then`);
+  `process.env` em dot notation; app em CommonJS (G-007).
+- **Mudanças na toolchain da raiz** (integração do 1º app Electron): `electron`
+  em `pnpm.onlyBuiltDependencies`; `eslint.config.mjs` e `.prettierignore`
+  ignoram `dist-electron`; `--no-warn-ignored` no comando eslint do lint-staged;
+  `.gitignore` com `!apps/*/build/`. Todas beneficiam o C3 também.
+- **5 gotchas novas** no CLAUDE.md §12: G-007 (preload CJS), G-008 (winCodeSign
+  / Developer Mode), G-009 (ESET trava app.asar), G-010 (TS6305 vite.config),
+  G-011 (vitest jsdom + passWithNoTests).
+- O leftover `apps/leader/release/win-unpacked/resources/app.asar` ficou travado
+  pelo ESET (gitignored, inofensivo) — um reboot libera.
+- `apps/leader` ainda não importa `@sprint/contracts` (declarado como dep para
+  W1+); o smoke `ping` é placeholder.
+- A próxima sessão de C2 (W1) introduz Zustand, React Router e telas reais — os
+  tokens CSS e a estrutura já estão preparados para isso.
+- **Pós-Fase 8 (a pedido do Renan):** adicionado
+  `.github/workflows/build-leader.yml` — workflow do GitHub Actions que builda o
+  `.exe` num runner Windows limpo (sem ESET), contornando o bloqueio do
+  BL-C5-001. Dispara no `push` para `develop` (paths de `apps/leader`) e também
+  manualmente via `workflow_dispatch`. É o 10º commit, vai no mesmo PR do C2.
+
+---
+
 ## Sessão 05 — 2026-05-22 — Remediação pós-auditoria v1 de C1
 
 **Wave atual:** W0 (remediação, não execução) **Duração estimada:** ~2h **Itens

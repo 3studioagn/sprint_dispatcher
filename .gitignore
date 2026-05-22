@@ -9,6 +9,9 @@ build/
 .vite/
 .turbo/
 
+# Exceto: buildResources do electron-builder (icones, assets do instalador)
+!apps/*/build/
+
 # Test outputs
 coverage/
 *.lcov

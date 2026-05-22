@@ -46,6 +46,18 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
   (endereça audit FINDING-M1)
 - README do package `@sprint/contracts` com tabela de API, branded types,
   cobertura e roadmap
+- Workspace `apps/leader`: app desktop Electron 30 + React 18 + TypeScript,
+  bundling via vite-plugin-electron [BL-C2-001]
+- Main process com `BrowserWindow` segura (CLAUDE.md §8.1) + hardening de
+  navegação (`will-navigate`, `setWindowOpenHandler`) [BL-C2-001]
+- Preload + bridge IPC contract-first via `contextBridge`; `LeaderAPI` em
+  `src/shared/ipc-types.ts` [BL-C2-001]
+- Renderer React placeholder com CSS Modules + tokens e CSP estrita no
+  `index.html` [BL-C2-001]
+- `electron-builder.yml` do Leader: targets portable + NSIS, instalador pt-BR,
+  `requestExecutionLevel: user` [BL-C5-001]
+- ADR-008 (bundling com vite-plugin-electron) e ADR-009 (IPC contract-first) em
+  `DECISIONS.md`
 
 ### Changed
 
@@ -60,6 +72,13 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - `.changeset/README.md`: marca `@sprint/contracts` como criado;
   `linked`/`ignore` continuam vazios em `config.json` até `fs-adapter` e
   `logger` existirem (endereçamento parcial de audit FINDING-M2)
+- `package.json` raiz: `electron` adicionado a `pnpm.onlyBuiltDependencies`
+  (postinstall baixa o binário do Electron); `--no-warn-ignored` no comando
+  eslint do `lint-staged` (evita falha ao commitar arquivos `.d.ts`) [BL-C2-001]
+- `eslint.config.mjs` e `.prettierignore`: ignoram `dist-electron` (saída do
+  vite-plugin-electron) [BL-C2-001]
+- `.gitignore` raiz: `!apps/*/build/` — não ignora o diretório `buildResources`
+  do electron-builder [BL-C5-001]
 
 ### Fixed
 
