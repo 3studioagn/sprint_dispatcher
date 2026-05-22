@@ -611,6 +611,25 @@ Descobertas durante o desenvolvimento que economizam tempo da próxima sessão.
   `vitest.config.ts` enquanto o app/package ainda não tem testes.
 - **Descoberto em:** Sessão 06 (2026-05-22), Fase 7 (validação) do BL-C2-001.
 
+### G-012: `pnpm install` não restaura o binário do Electron após `rm -rf node_modules`
+
+- **Sintoma:** depois de `rm -rf node_modules`, um `pnpm install` (mesmo
+  `--frozen-lockfile`) recria `node_modules/electron/` mas **não** o
+  `node_modules/electron/dist/` (o `electron.exe`, ~226 MB). `pnpm dev` e o
+  `electron-builder` então não encontram o runtime. `pnpm rebuild electron` é
+  no-op.
+- **Causa:** o postinstall do `electron` (que baixa o binário para `dist/`) não
+  é re-executado nesse cenário — o pnpm re-linka o package a partir do store sem
+  re-rodar o build script, e o `dist/` não faz parte do conteúdo publicado do
+  package nem é capturado pelo cache de side-effects.
+- **Solução:** rodar o instalador do Electron diretamente —
+  `node apps/leader/node_modules/electron/install.js` (extrai do cache em
+  `%LOCALAPPDATA%\electron\Cache`, rápido; ajuste o caminho por app). Num runner
+  de CI realmente limpo (sem store pnpm pré-existente) o postinstall roda
+  normalmente no `pnpm install`.
+- **Descoberto em:** Sessão 08 (2026-05-22), Fase 6 da remediação
+  audit-v1-FINDING-001.
+
 ---
 
 ## 13. Como atualizar este arquivo

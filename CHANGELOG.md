@@ -87,6 +87,15 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
   cobertura 100% mantida) [audit-v1-FINDING-001]
 - JSDoc consistente nos parsers e types de `sprintAck`, `sprintCancel` e
   `agentConfig`, replicado da referência `sprintPayload` [audit-v1-FINDING-002]
+- Upgrade do Electron 30.5.1 → 42.2.0 e override de `tar` para `^7.5.11`
+  (`pnpm.overrides`): `pnpm audit` cai de 10 advisories High para 0; ADR-010
+  registra a decisão [audit-v1-FINDING-001]
+- Entrada morta `electron-builder.yml.d.ts` removida do `include` do
+  `apps/leader/tsconfig.json` [audit-v1-FINDING-002]
+- CSP do `apps/leader/index.html` endurecida com `object-src 'none'` e
+  `base-uri 'self'` [audit-v1-FINDING-003]
+- `rfc3161TimeStampServer` comentado no `electron-builder.yml` do Leader — code
+  signing diferido para a Wave 3 (BL-C0-008) [audit-v1-FINDING-004]
 
 ### Deprecated
 

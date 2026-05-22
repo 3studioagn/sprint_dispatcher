@@ -66,6 +66,85 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 08 — 2026-05-22 — Remediação pós-auditoria v1 de C2
+
+**Wave atual:** W0 (remediação) **Duração estimada:** ~3h **Itens trabalhados:**
+Remediação de [BL-C2-001, BL-C5-001] conforme
+`docs/audits/C2_AUDIT_REPORT_v1.md`
+
+### Objetivo da sessão
+
+Remediar os achados Critical e High (e Low acionáveis) da auditoria v1 do C2,
+produzindo `docs/audits/C2_REMEDIATION_REPORT_v1.md` e a branch
+`fix/c2-audit-v1-remediation` pronta para PR.
+
+### O que foi feito
+
+- Triagem do relatório: 0 Critical, 1 High, 0 Medium, 4 Low, 7 Info. Veredito de
+  origem: APROVADO COM RESSALVAS.
+- Escopo confirmado com Renan: remediar a High (FINDING-001) e os 3 Low
+  acionáveis (FINDING-002, 003, 004); FINDING-005 (Low) sem ação retroativa.
+- **FINDING-001 (High, D5)** — 3 commits: override de `tar` `^7.5.11` via
+  `pnpm.overrides` (`10c94cd`); upgrade do Electron 30.5.1 → 42.2.0 (`ed74d1e`);
+  ADR-010 (`939c53a`). `pnpm audit --audit-level=high`: 10 High → 0 High / 0
+  Critical.
+- **FINDING-003 (Low, D5)** — hardening da CSP com `object-src 'none'` e
+  `base-uri 'self'` (`1b70b4f`).
+- **FINDING-002 (Low, D2)** — `include` morto removido do tsconfig (`5dc0ccd`).
+- **FINDING-004 (Low, D2)** — `rfc3161TimeStampServer` diferido para a W3
+  (`e228324`).
+- Re-validação completa (`rm -rf node_modules` + reinstall `--frozen-lockfile`):
+  bateria raiz exit 0, C1 cobertura 100% (regressão zero), re-grep adversarial
+  sem APIs proibidas, smoke dev abre a janela em Electron 42 (5 processos
+  `electron.exe`, log sem erros).
+- Relatório criado em `docs/audits/C2_REMEDIATION_REPORT_v1.md`.
+
+### Estado atual
+
+- Branch `fix/c2-audit-v1-remediation` com 7 commits (6 de remediação + 1 de
+  encerramento), aguardando PR.
+- Findings Critical: 0/0. High: **1/1 Fixed**. Medium: 0/0. Low: **3/4 Fixed**,
+  1 Deferred (FINDING-005). Disputed: 0.
+
+### Decisões tomadas
+
+- **Upgrade do Electron feito nesta sessão** (não adiado): Renan optou por
+  remediar FINDING-001 agora, em vez de abrir um spike de plataforma separado.
+- **Alvo do Electron elevado para 42.2.0** (última estável), acima do mínimo
+  `≥ 39.8.1` do relatório — 42 fica dentro da janela de suporte de 3 majors;
+  39.x nasceria fora de suporte. Registrado em ADR-010.
+- **FINDING-005 postergado** — exigiria reescrever histórico de commits
+  (proibido). O próprio relatório dizia "nenhuma ação retroativa necessária".
+
+### Bloqueios encontrados
+
+- `pnpm package` (`.exe`) continua bloqueado localmente pelo ESET (G-009),
+  idêntico à auditoria v1 — a geração do `.exe` depende do CI
+  `build-leader.yml`.
+- Binário do Electron não restaurado por `pnpm install` após
+  `rm -rf node_modules` — contornado com `node .../electron/install.js` (gotcha
+  G-012).
+
+### Próximo passo
+
+Renan revisa `docs/audits/C2_REMEDIATION_REPORT_v1.md` e o PR
+`fix/c2-audit-v1-remediation`. Após o merge em `develop`, abrir a Sessão 09
+(Auditoria v2 do C2). **Não iniciar o C3 antes da v2 aprovar** — o C3 vai
+espelhar a arquitetura do C2, inclusive o Electron 42.x.
+
+### Observações para a próxima sessão
+
+- A **Auditoria v2** deve validar: (a) os 4 findings Fixed sumiram; (b) nenhum
+  check que passava na v1 regrediu; (c) `pnpm audit` 0 High / 0 Critical; (d)
+  smoke dev abre a janela em Electron 42; (e) a tabela de métricas de segurança.
+- O merge em `develop` dispara o `build-leader.yml` — **verificar que ele gera o
+  `.exe` com Electron 42** num runner Windows limpo (valida o que o ESET impede
+  localmente).
+- Gotcha **G-012** novo no CLAUDE.md §12: `pnpm install` não restaura o binário
+  do Electron após `rm -rf node_modules`.
+- O C3 (Agent) usará Electron 42.x — o prompt do C3 deve refletir isso (não
+  Electron 30).
+
 ## Sessão 07 — 2026-05-22 — Auditoria de C2
 
 **Wave atual:** W0 (auditoria, não execução) **Duração estimada:** ~2h **Itens
