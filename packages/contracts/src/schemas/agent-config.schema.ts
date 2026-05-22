@@ -28,9 +28,24 @@ export const agentConfigSchema = z
   })
   .strict();
 
+/**
+ * Tipo da configuração do agente, inferido do schema.
+ *
+ * Use em assinaturas de função, props de componentes, etc.
+ */
 export type AgentConfig = z.infer<typeof agentConfigSchema>;
+
+/**
+ * Tipo de entrada (antes de defaults serem aplicados) — necessário para
+ * uso com `react-hook-form` onde campos com default podem estar ausentes.
+ */
 export type AgentConfigInput = z.input<typeof agentConfigSchema>;
 
+/**
+ * Parser estrito: lança `ContractValidationError` em configuração inválida.
+ *
+ * Use quando o caller espera dados válidos e tratar erro como excepcional.
+ */
 export function parseAgentConfig(data: unknown): AgentConfig {
   const result = agentConfigSchema.safeParse(data);
   if (!result.success) {
@@ -39,6 +54,12 @@ export function parseAgentConfig(data: unknown): AgentConfig {
   return result.data;
 }
 
+/**
+ * Parser não-throwable: retorna discriminated union `{ success, data | error }`.
+ *
+ * Use quando validação faz parte do fluxo normal (UI form, polling de
+ * arquivos potencialmente corrompidos).
+ */
 export function safeParseAgentConfig(
   data: unknown,
 ): { success: true; data: AgentConfig } | { success: false; error: ContractValidationError } {
