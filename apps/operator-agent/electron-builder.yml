@@ -1,0 +1,69 @@
+appId: br.com.artflexiveis.sprintoperatoragent
+productName: Sprint Operator Agent
+
+# Versão lida do package.json automaticamente
+artifactName: SprintOperatorAgent-${version}-${arch}.${ext}
+
+# Diretórios
+directories:
+  buildResources: build
+  output: release
+
+# O que entra no pacote final
+files:
+  - 'dist/**/*'
+  - 'dist-electron/**/*'
+  - 'package.json'
+  - '!**/.{eslintrc,prettierrc}*'
+  - '!**/tsconfig*.json'
+  - '!**/vite.config.*'
+  - '!**/vitest.config.*'
+  - '!**/*.{ts,tsx,map}'
+  - '!**/*.test.*'
+
+# Compilação do main process (e preload) já feita pelo Vite — não recompile
+asar: true
+asarUnpack: []
+
+# Plataforma Windows
+win:
+  target:
+    - target: portable
+      arch:
+        - x64
+    - target: nsis
+      arch:
+        - x64
+  # Ícone do app: TODO em sessão de polish (W3) — usar default do Electron por enquanto
+  # icon: build/icon.ico
+  publisherName: ARTFLEXÍVEIS
+  # Code signing diferido para BL-C0-008 (Wave 3):
+  # rfc3161TimeStampServer: http://timestamp.digicert.com
+  # signtoolOptions: configurado em BL-C0-008 (Wave 3, code signing)
+
+# NSIS installer
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: SprintOperatorAgent-Setup-${version}.${ext}
+  installerLanguages:
+    - pt_BR
+  language: '1046' # pt-BR
+  shortcutName: Sprint Operator Agent
+  createDesktopShortcut: false # agent vive na tray — atalho no desktop é poluição
+  createStartMenuShortcut: true
+  runAfterFinish: true # inicia o agent logo após instalar
+  deleteAppDataOnUninstall: false # preserva o config.json na desinstalação
+
+# Portable
+portable:
+  artifactName: SprintOperatorAgent-${version}-portable.${ext}
+  requestExecutionLevel: user # NÃO admin — operação no contexto do usuário (R-03)
+
+# Metadata
+extraMetadata:
+  homepage: https://artflexiveis.com.br
+  author:
+    name: 3Studio
+    email: contato@3studio.com.br
