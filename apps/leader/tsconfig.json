@@ -13,7 +13,7 @@
       "@sprint/contracts/*": ["../../packages/contracts/src/*"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "electron-builder.yml.d.ts"],
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
   "exclude": ["node_modules", "dist", "dist-electron", "release"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
