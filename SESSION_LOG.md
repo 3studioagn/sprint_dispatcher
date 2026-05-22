@@ -101,8 +101,9 @@ produzindo `docs/audits/C2_REMEDIATION_REPORT_v1.md` e a branch
 
 ### Estado atual
 
-- Branch `fix/c2-audit-v1-remediation` com 7 commits (6 de remediação + 1 de
-  encerramento), aguardando PR.
+- Branch `fix/c2-audit-v1-remediation` (8 commits: 6 de remediação + 1 de
+  encerramento + 1 de consolidação) mergeada em `develop` por fast-forward e
+  empurrada para `origin/develop` — ver Decisões tomadas.
 - Findings Critical: 0/0. High: **1/1 Fixed**. Medium: 0/0. Low: **3/4 Fixed**,
   1 Deferred (FINDING-005). Disputed: 0.
 
@@ -115,6 +116,12 @@ produzindo `docs/audits/C2_REMEDIATION_REPORT_v1.md` e a branch
   39.x nasceria fora de suporte. Registrado em ADR-010.
 - **FINDING-005 postergado** — exigiria reescrever histórico de commits
   (proibido). O próprio relatório dizia "nenhuma ação retroativa necessária".
+- **Consolidação direta em `develop`** — a pedido explícito do Renan, a branch
+  foi mergeada em `develop` por fast-forward e `origin/develop` empurrada,
+  dispensando o PR + review da §9.3 do CLAUDE.md (e o critério "nenhum merge
+  unilateral" do prompt de remediação). Override consciente do lead, nos moldes
+  da Sessão 05; sinalizado antes da ação. Registrado aqui por transparência —
+  exceção pontual, não altera a §9.3.
 
 ### Bloqueios encontrados
 
@@ -127,10 +134,11 @@ produzindo `docs/audits/C2_REMEDIATION_REPORT_v1.md` e a branch
 
 ### Próximo passo
 
-Renan revisa `docs/audits/C2_REMEDIATION_REPORT_v1.md` e o PR
-`fix/c2-audit-v1-remediation`. Após o merge em `develop`, abrir a Sessão 09
-(Auditoria v2 do C2). **Não iniciar o C3 antes da v2 aprovar** — o C3 vai
-espelhar a arquitetura do C2, inclusive o Electron 42.x.
+Renan revisa `docs/audits/C2_REMEDIATION_REPORT_v1.md` (a remediação já está em
+`develop`). O push para `develop` dispara o CI (`ci.yml`) e o `build-leader.yml`
+— acompanhar essas execuções. Em seguida, abrir a Sessão 09 (Auditoria v2 do
+C2). **Não iniciar o C3 antes da v2 aprovar** — o C3 vai espelhar a arquitetura
+do C2, inclusive o Electron 42.x.
 
 ### Observações para a próxima sessão
 
