@@ -5,6 +5,8 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: [],
+    // Scaffold W0 ainda nao tem testes; W1+ adiciona. Evita exit 1 do vitest.
+    passWithNoTests: true,
     include: ['src/**/*.test.{ts,tsx}'],
     coverage: {
       provider: 'v8',
