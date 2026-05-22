@@ -91,8 +91,7 @@ segurança aplicada.
   `src/shared/ipc-types.ts`; handler smoke `ping`.
 - **Renderer React** (Fase 4): `index.html` com CSP estrita, `main.tsx`
   (StrictMode), `App.tsx` placeholder consumindo `window.api.ping()`, CSS
-  Modules
-  - tokens em `global.css`, `env.d.ts` tipando `window.api`.
+  Modules e tokens em `global.css`, `env.d.ts` tipando `window.api`.
 - **Smoke E2E** (Fase 5): `pnpm dev` abre a janela, bridge IPC responde `pong`,
   console limpo, hot reload confirmado (renderer + main).
 - **electron-builder** (Fase 6): `electron-builder.yml` (portable + NSIS, pt-BR,
@@ -153,7 +152,7 @@ ESET — idealmente montando o job de release no CI (casa com BL-C0-009, W3).
   `chore/BL-C2-session-close`. Cada uma parte da anterior (dependência
   sequencial real — Fase N precisa dos arquivos da Fase N-1). Nada foi pushado
   nem mergeado: Renan decide entre PRs em sequência ou fast-forward do
-  encadeamento (como na Sessão 05). 8 commits no total.
+  encadeamento (como na Sessão 05). 9 commits no total.
 - **Desvios do código do prompt** (todos por necessidade técnica, validados):
   `tsconfig.json` sem `vite.config.ts` no `include` (TS6305 — G-010);
   `app.whenReady().then()` e o `.then()/.catch()` do `App.tsx` viraram
