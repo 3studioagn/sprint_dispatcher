@@ -74,6 +74,8 @@ entradas em ordem cronológica crescente — mais recente no fim.
   Electron com vite-plugin-electron
 - [ADR-009](#adr-009-ipc-contract-first-com-tipos-compartilhados-mainrenderer) —
   IPC contract-first com tipos compartilhados main↔renderer
+- [ADR-010](#adr-010-upgrade-do-electron-para-a-linha-42x-remediacao-finding-001)
+  — Upgrade do Electron para a linha 42.x (remediação FINDING-001)
 
 ---
 
@@ -663,3 +665,93 @@ Adotar **IPC contract-first**:
 - Stack §5.1
 - BL-C2-001, BL-C3-001
 - <https://www.electronjs.org/docs/latest/tutorial/context-isolation>
+
+---
+
+## ADR-010: Upgrade do Electron para a linha 42.x (remediação FINDING-001)
+
+- **Status:** Accepted
+- **Data:** 2026-05-22
+- **Decisores:** Renan (3Studio)
+- **Endereça:** Auditoria v1 do C2, FINDING-001
+
+### Contexto
+
+A auditoria v1 do C2 (FINDING-001, severidade High, dimensão D5) reportou que
+`pnpm audit` acusava 10 advisories High no projeto: **4 em `electron`**
+(runtime, embarcado no produto) e **6 em `tar`** (dependência transitiva de
+build-time, via `electron-builder` → `app-builder-lib`).
+
+Os 4 de `electron` — três use-after-free (offscreen child window paint;
+WebContents fullscreen / pointer-lock / keyboard-lock; PowerMonitor) e uma
+injeção de switches de linha de comando no renderer — não têm correção na linha
+30.x. A versão fixada pelo ADR-002 (Electron 30.x) só é patcheada desses
+advisories a partir de ≥ 38.8.6 / ≥ 39.8.1: exige bump de major.
+
+Os 6 de `tar` não têm patch na linha 6.x (instalada: 6.2.1) — a correção só
+existe na linha 7.5.x.
+
+### Decisão
+
+**Runtime — Electron 30.5.1 → 42.2.0.** Adotar a última estável do Electron
+(42.2.0) como nova versão-alvo, em vez do mínimo ≥ 39.8.1 sugerido pelo
+relatório. O Electron mantém suporte de segurança apenas para os 3 majors mais
+recentes (no momento, 42/41/40); fixar em 39.x faria o C2 nascer fora da janela
+de suporte e uma re-auditoria reabriria o tema de imediato. O scaffold do C2 usa
+apenas APIs estáveis do Electron (`BrowserWindow`, `webPreferences`,
+`ipcMain.handle`, `contextBridge`, ciclo de vida do `app`, `will-navigate`,
+`setWindowOpenHandler`), então o salto 30 → 42 não exigiu mudança de código nem
+de toolchain (`electron-builder`, `vite-plugin-electron`).
+
+**Build-time — `tar` `^7.5.11` via `pnpm.overrides`.** Forçar `tar` para a linha
+7.5.x (resolvido: 7.5.15) no `package.json` raiz, eliminando os 6 advisories de
+path traversal / symlink poisoning. `tar` é dependência exclusivamente de
+build-time (extração de tarballs no `electron-builder`) — não embarca no
+produto.
+
+Resultado: `pnpm audit --audit-level=high` passou de 10 High para **0 High / 0
+Critical**.
+
+Esta decisão **atualiza a versão-alvo do Electron definida no ADR-002**, que
+permanece válido quanto à escolha do Electron como runtime desktop (vs.
+Tauri/WPF/etc.) — muda apenas o número da versão.
+
+### Alternativas consideradas
+
+1. **Manter Electron 30.x e aceitar o risco residual.** Sugerido pelo relatório
+   como opção de curto prazo. Rejeitada: deixaria 4 CVEs High em código
+   embarcado no produto, sem caminho de patch na linha 30.x.
+2. **Subir apenas para 39.8.1 (mínimo do relatório).** Limpa os advisories
+   atuais, mas a linha 39.x já está fora da janela de suporte de 3 majors do
+   Electron — débito de segurança imediato.
+3. **Patchar a linha 6.x do `tar`.** Inviável — o node-tar não fez backport das
+   correções para a 6.x; só existem na 7.5.x.
+4. **Adiar FINDING-001 para um spike de plataforma dedicado.** Avaliada na
+   triagem desta remediação; Renan optou por remediar agora, no mesmo fluxo.
+
+### Consequências
+
+- O C2 passa a rodar Electron 42.x, dentro da janela de suporte de segurança do
+  Electron.
+- O C3 (Operator Agent), que espelhará a arquitetura do C2, já deve nascer em
+  Electron 42.x — não herda o débito do 30.x.
+- `pnpm.overrides` no `package.json` raiz vira ponto de manutenção: ao atualizar
+  o `electron-builder` no futuro, revisar se o override de `tar` ainda é
+  necessário.
+- A validação de que o `electron-builder` empacota o `.exe` com `tar` 7 e
+  Electron 42 depende do CI (`build-leader.yml`) — `pnpm package` não roda
+  localmente pelo bloqueio do ESET (CLAUDE.md §12 G-009).
+- Atualizações futuras do Electron seguem a cadência de 3 majors: quando o C2/C3
+  saírem da janela de suporte, abrir novo ADR de bump.
+- Restam 3 advisories moderate transitivos (abaixo do limiar High do
+  FINDING-001) — não-bloqueantes, ficam como débito monitorável.
+
+### Referências
+
+- `docs/audits/C2_AUDIT_REPORT_v1.md` — FINDING-001
+- [ADR-002](#adr-002-electron-como-runtime-desktop) — escolha do Electron como
+  runtime (versão-alvo atualizada por este ADR)
+- `apps/leader/package.json` (`electron` `^42.2.0`); `package.json` raiz
+  (`pnpm.overrides.tar`)
+- Electron security / release cadence:
+  <https://www.electronjs.org/docs/latest/tutorial/electron-timelines>
