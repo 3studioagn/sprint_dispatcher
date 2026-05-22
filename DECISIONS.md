@@ -70,6 +70,10 @@ entradas em ordem cronológica crescente — mais recente no fim.
   Convenção de naming de arquivos com ULID completo
 - [ADR-007](#adr-007-ratificacao-do-baseline-de-versoes-instaladas-vs-stack-v10)
   — Ratificação do baseline de versões instaladas vs Stack v1.0
+- [ADR-008](#adr-008-bundling-electron-com-vite-plugin-electron) — Bundling
+  Electron com vite-plugin-electron
+- [ADR-009](#adr-009-ipc-contract-first-com-tipos-compartilhados-mainrenderer) —
+  IPC contract-first com tipos compartilhados main↔renderer
 
 ---
 
@@ -542,3 +546,120 @@ v1.1 seja produzido externamente.
 - `CLAUDE.md` §3 (Stack Tecnológica — versões reais)
 - `.nvmrc` (Node 24.10.0), `package.json` engines
 - Stack v1.0 externo (a virar v1.1 quando conveniente — não-bloqueante)
+
+---
+
+## ADR-008: Bundling Electron com vite-plugin-electron
+
+- **Status:** Accepted
+- **Data:** 2026-05-22
+- **Decisores:** Renan (3Studio)
+
+### Contexto
+
+C2 (Leader) e C3 (Agent) precisam empacotar 3 entry points distintos (main
+process, preload script, renderer) num único `.exe` Electron. O Vite (já adotado
+para o renderer per Stack §11.3) não cobre main/preload nativamente — é
+necessário um orquestrador que builde os três e ligue o fluxo de dev.
+
+### Decisão
+
+Adotar `vite-plugin-electron` + `vite-plugin-electron-renderer` como
+orquestrador único de build dos 3 entry points, dirigido pelo `vite.config.ts`
+do app.
+
+### Alternativas consideradas
+
+1. **Setup manual:** Vite só pro renderer, `tsc` separado pro main/preload,
+   scripts npm orquestrando. Mais explícito, mas mais código de build e sem hot
+   reload integrado.
+2. **electron-vite framework** (electron-vite.org): opinionado, escopo além do
+   necessário, lock-in maior.
+3. **electron-forge** (oficial Electron): bom, mas exigiria migração custosa do
+   electron-builder (já adotado em Stack §11.4).
+
+### Consequências
+
+**Aceitas:**
+
+- Hot reload funciona end-to-end — renderer (HMR) e main/preload (restart);
+  validado no smoke E2E da Sessão 06.
+- Watch unificado num único `pnpm dev`.
+- TypeScript em main/preload sem step de build separado; source maps inline no
+  preload para debug.
+
+**Trade-offs:**
+
+- Lock-in com `vite-plugin-electron` (mantido pela electron-vite-org).
+- A configuração do plugin tem peculiaridades (callbacks `onstart`) e
+  **sobrescreve `rollupOptions.output.format`** — não dá para forçar o formato
+  de um entry isolado por essa via.
+- O preload sandboxado (`sandbox: true`, obrigatório CLAUDE.md §8.1) **tem de
+  ser CommonJS**; com `"type": "module"` no `package.json` o plugin compila ESM
+  e o preload quebra com _"Cannot use import statement outside a module"_. O app
+  fica em CommonJS (sem `"type": "module"`). Descoberto no smoke E2E da Sessão
+  06; ver CLAUDE.md §12 G-007.
+
+### Referências
+
+- Stack §11.3 (Vite), §11.4 (electron-builder)
+- CLAUDE.md §8.1 (segurança Electron), §12 G-007
+- BL-C2-001, BL-C3-001
+- <https://github.com/electron-vite/vite-plugin-electron>
+
+---
+
+## ADR-009: IPC contract-first com tipos compartilhados main↔renderer
+
+- **Status:** Accepted
+- **Data:** 2026-05-22
+- **Decisores:** Renan (3Studio)
+
+### Contexto
+
+Em Electron com `contextIsolation` + `sandbox` (CLAUDE.md §8.1), main e renderer
+são contextos distintos. A comunicação é exclusivamente via IPC + preload. Sem
+disciplina, isso vira "anything goes" com canais `string` e payloads não tipados
+— fonte clássica de bugs sutis em Electron.
+
+### Decisão
+
+Adotar **IPC contract-first**:
+
+1. Tipos das APIs definidos em `src/shared/ipc-types.ts` (por app).
+2. O preload implementa o tipo e expõe via
+   `contextBridge.exposeInMainWorld('api', impl)`.
+3. O renderer declara `Window['api']: LeaderAPI` em `env.d.ts`.
+4. O main implementa handlers via `ipcMain.handle(channel, ...)`.
+5. Nomes de canais = nomes de métodos do tipo (1-para-1).
+
+### Alternativas consideradas
+
+1. **tRPC over IPC:** muito poder, overhead desproporcional à escala do projeto.
+2. **Strings cruas + validação manual:** exatamente o que se quer evitar.
+3. **electron-trpc** ou similares: dependência adicional pouco justificada para
+   os ~10-15 endpoints do MVP.
+
+### Consequências
+
+**Aceitas:**
+
+- Type-safety end-to-end (main, preload, renderer).
+- Refactor de assinatura captura automaticamente desalinhos.
+- Documentação implícita via JSDoc em `ipc-types.ts`.
+
+**Trade-offs:**
+
+- A validação runtime ainda é responsabilidade do dev (no preload). Recomenda-se
+  validar payloads via Zod (disponível em `@sprint/contracts`) em W1+, quando
+  surgirem endpoints de dispatch real.
+- Os tipos IPC vivem dentro de cada app, não em `@sprint/contracts` — decisão
+  consciente, porque o bridge IPC é específico de cada app (Leader e Agent não
+  compartilham bridge).
+
+### Referências
+
+- CLAUDE.md §8.1 (segurança Electron)
+- Stack §5.1
+- BL-C2-001, BL-C3-001
+- <https://www.electronjs.org/docs/latest/tutorial/context-isolation>

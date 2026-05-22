@@ -72,10 +72,10 @@ compartilhada SMB é o único canal de comunicação.
 | ------------------ | --------------------- | -------------------------------------------------- |
 | Linguagem          | TypeScript            | 5.4+ — instalada **6.0.3**                         |
 | Runtime Node       | Node.js               | engine `>=20.0.0` — `.nvmrc` **24.10.0**           |
-| Runtime Desktop    | Electron              | 30.x — _pendente (C2/C3)_                          |
-| UI Framework       | React                 | 18.3+ — _pendente (C2/C3)_                         |
+| Runtime Desktop    | Electron              | 30.x — instalada **30.5.1** (`sprint-leader`)      |
+| UI Framework       | React                 | 18.3+ — instalada **18.3.x** (`sprint-leader`)     |
 | Estado global      | Zustand               | 4.5+ — _pendente (C2/C3)_                          |
-| Styling            | CSS Modules + PostCSS | nativo Vite — _pendente (C2/C3)_                   |
+| Styling            | CSS Modules + PostCSS | nativo Vite — em uso em `sprint-leader`            |
 | Forms              | react-hook-form       | 7.51+ — _pendente (C2)_                            |
 | Validation         | Zod                   | 3.23+ — instalada **3.25.x** (`@sprint/contracts`) |
 | Icons              | lucide-react          | 0.380+ — _pendente (C2/C3)_                        |
@@ -87,8 +87,8 @@ compartilhada SMB é o único canal de comunicação.
 | Testing (E2E)      | Playwright (Electron) | 1.44+ — _pendente (C8)_                            |
 | Package Manager    | pnpm                  | engine `>=10.0.0` — instalada **10.18.2**          |
 | Build Orchestrator | Turborepo             | 2.x — instalada **2.9.14**                         |
-| Renderer Bundler   | Vite                  | 5.x — _pendente (C2/C3)_                           |
-| Electron Builder   | electron-builder      | 24+ — _pendente (C5)_                              |
+| Renderer Bundler   | Vite                  | 5.x — instalada **5.4.21** (`sprint-leader`)       |
+| Electron Builder   | electron-builder      | 24+ — instalada **24.13.3** (`sprint-leader`)      |
 | Versionamento      | Changesets            | 2.27+ — instalada **2.31.0**                       |
 | Lint               | ESLint                | 9.x (flat) — instalada **10.4.0** (flat nativo)    |
 | Format             | Prettier              | 3.x — instalada **3.8.3**                          |
@@ -546,6 +546,70 @@ Descobertas durante o desenvolvimento que economizam tempo da próxima sessão.
   ```
 - **Descoberto em:** Sessão 03 (2026-05-21), F2 — primeiro arquivo `.ts` lintado
   em config file expôs o bug latente.
+
+### G-007: Preload sandboxed tem de ser CommonJS — app sem `"type": "module"`
+
+- **Sintoma:**
+  `Unable to load preload script ... SyntaxError: Cannot use import statement outside a module`;
+  `window.api` fica `undefined` no renderer.
+- **Causa:** o Electron avalia o preload sandboxed (`sandbox: true`, §8.1) como
+  CommonJS. Com `"type": "module"` no `package.json` do app, o
+  `vite-plugin-electron` compila os entries como ESM e o preload quebra. O
+  plugin sobrescreve `rollupOptions.output.format` — não dá pra forçar CJS só no
+  preload por essa via.
+- **Solução:** o `package.json` do app Electron **não** leva `"type": "module"`
+  (fica CommonJS, o modo padrão do vite-plugin-electron) — main e preload
+  compilam CJS. No main, use o global `__dirname` em vez de
+  `fileURLToPath(import.meta.url)`.
+- **Descoberto em:** Sessão 06 (2026-05-22), smoke E2E do BL-C2-001.
+
+### G-008: electron-builder no Windows exige Developer Mode (winCodeSign)
+
+- **Sintoma:** `electron-builder` falha com
+  `Cannot create symbolic link : O cliente não tem o privilégio necessário` ao
+  extrair o `winCodeSign`.
+- **Causa:** o `winCodeSign` contém symlinks de libs macOS; criar symlink no
+  Windows exige Developer Mode ligado **ou** processo elevado (admin).
+- **Solução:** habilitar o Windows Developer Mode (Configurações → Sistema →
+  Para desenvolvedores). Vale para processos novos. Se restar cache parcial,
+  limpar `%LOCALAPPDATA%\electron-builder\Cache\winCodeSign`.
+- **Descoberto em:** Sessão 06 (2026-05-22), BL-C5-001.
+
+### G-009: Antivírus (ESET) trava o `app.asar` no electron-builder
+
+- **Sintoma:** `electron-builder` falha em `EnsureEmptyDir` —
+  `remove ...app.asar: The process cannot access the file because it is being used by another process`.
+  Nenhum processo do projeto está rodando.
+- **Causa:** a proteção em tempo real de um antivírus de terceiros (ESET, na
+  máquina do Renan) abre/trava o `app.asar` recém-escrito; o passo seguinte do
+  electron-builder não consegue removê-lo.
+- **Solução:** excluir a pasta do projeto da proteção em tempo real do AV; ou
+  buildar em ambiente sem o AV — idealmente um runner de CI Windows (ver
+  BL-C0-009). Não é contornável só com config.
+- **Descoberto em:** Sessão 06 (2026-05-22), BL-C5-001 — geração do `.exe`
+  adiada.
+
+### G-010: `vite.config.ts` não pode estar em dois tsconfig (TS6305)
+
+- **Sintoma:**
+  `error TS6305: Output file 'vite.config.d.ts' has not been built from source file 'vite.config.ts'`.
+- **Causa:** `vite.config.ts` listado no `include` do `tsconfig.json` **e** no
+  `tsconfig.node.json` (composite, referenciado) — dupla posse entre projetos.
+- **Solução:** `vite.config.ts` fica apenas no `tsconfig.node.json` (padrão do
+  template Vite). O `tsconfig.json` do app tem `references`, então não emite
+  TS18003 mesmo com o `include` casando nada.
+- **Descoberto em:** Sessão 06 (2026-05-22), BL-C2-001 scaffold.
+
+### G-011: vitest `environment: 'jsdom'` exige o pacote `jsdom`; scaffold vazio precisa de `passWithNoTests`
+
+- **Sintoma:** `MISSING DEPENDENCY Cannot find dependency 'jsdom'`; ou, sem
+  testes, `vitest run` sai com exit 1 (`No test files found`) e derruba o
+  `turbo test`.
+- **Causa:** o vitest **não** empacota o `jsdom` — `environment: 'jsdom'` exige
+  o pacote instalado. E `vitest run` sem nenhum teste sai exit 1 por padrão.
+- **Solução:** `jsdom` nas `devDependencies` do app; `passWithNoTests: true` no
+  `vitest.config.ts` enquanto o app/package ainda não tem testes.
+- **Descoberto em:** Sessão 06 (2026-05-22), Fase 7 (validação) do BL-C2-001.
 
 ---
 
