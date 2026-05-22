@@ -99,7 +99,8 @@ segurança Electron.
 ### Estado atual
 
 - Nenhuma alteração de código ou config (auditor não corrige).
-- `docs/audits/C2_AUDIT_REPORT_v1.md` criado, aguardando review do Renan.
+- `docs/audits/C2_AUDIT_REPORT_v1.md` criado e consolidado em `develop` (ver
+  Próximo passo).
 
 ### Decisões tomadas
 
@@ -117,9 +118,9 @@ Nenhuma — auditoria apenas reporta.
 
 ### Próximo passo
 
-Renan revisa `docs/audits/C2_AUDIT_REPORT_v1.md`. Decisão entre: (a) avanço para
-C3 (par funcional); (b) remediação dedicada para os Low; (c) aceite formal dos
-débitos. A auditoria recomenda (a) — o scaffold é um bom template para o C3.
+Renan decidiu: abrir uma **sessão dedicada de correção** do C2. Essa sessão lê o
+`docs/audits/C2_AUDIT_REPORT_v1.md` integral e remedia os achados — a High
+FINDING-001 é decisão de plataforma (ver Observações), seguida dos 4 Low.
 
 ### Observações para a próxima sessão
 
@@ -134,7 +135,10 @@ débitos. A auditoria recomenda (a) — o scaffold é um bom template para o C3.
   `fix(C2): ... [audit-v1-FINDING-NNN]` no scope/footer.
 - C3 vai espelhar a arquitetura do C2 — que está correta e é um bom template.
   Nenhum padrão arquitetural ruim a corrigir antes do C3.
-- Branch `docs/BL-C2-audit-v1` aberta com o relatório + esta entrada.
+- O relatório e esta entrada foram consolidados direto em `develop`
+  (fast-forward de `docs/BL-C2-audit-v1`), a pedido explícito do Renan —
+  override consciente da §9.3 do CLAUDE.md (PR + review), nos moldes da
+  Sessão 05. A branch `docs/BL-C2-audit-v1` fica redundante.
 
 ---
 
