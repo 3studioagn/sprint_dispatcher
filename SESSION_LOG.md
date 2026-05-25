@@ -66,6 +66,130 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 11 — 2026-05-25 — Fechamento da Wave 0 (C7 W0 + C8 W0)
+
+**Wave atual:** W0 (último trabalho residual) **Método:** Padrão triplo (executa
+→ audita → corrige) — sessão híbrida especial **Duração estimada:** ~2h **Itens
+trabalhados:** [BL-C7-001, BL-C7-004, BL-C7-005, BL-C8-001, BL-C8-005]
+
+### Objetivo da sessão
+
+Executar trabalho residual da W0 (5 BLs em C7 e C8) que ainda não tinha sido
+implementado, deixando o repositório pronto para auditoria de fechamento. **Não
+declara o Gate W0 → W1** — espera auditoria.
+
+### O que foi feito
+
+- **BL-C8-001 (Vitest consolidado):** `pnpm test` e `pnpm test:coverage` raiz
+  orquestram todos os packages via Turborepo. `turbo.json` ganhou task
+  `test:coverage`. Reporters padronizados nos 4 workspaces (`text`, `json`,
+  `json-summary`, `html`, `lcov`). `sprint-leader` recebeu script
+  `test:coverage` + dep `@vitest/coverage-v8` para consistência. CLAUDE.md
+  §7.7.1 tem tabela formal de thresholds por package.
+- **BL-C8-005 (lint customizado):** 2 regras `no-restricted-imports` adicionadas
+  ao `eslint.config.mjs`:
+  - **Regra 1:** `apps/leader/**` não pode importar `apps/operator-agent/**` (e
+    vice-versa) — separação por componente.
+  - **Regra 2:** `apps/**` e `packages/**` não podem usar paths relativos para
+    `packages/*` — devem usar alias `@sprint/<pkg>`.
+  - **Regra 3 (no-console estrito):** registrada em CLAUDE.md §12 como débito
+    formal para W1, dispara quando BL-C6-001 entregar `@sprint/logger`.
+  - Validação adversarial confirmou que ambas regras bloqueiam violações com
+    mensagens custom. Codebase atual passa lint exit 0 (4/4 tasks).
+- **BL-C7-004 (ADR-003 complementado):** seção "Alternativas Consideradas" do
+  ADR-003 ganhou entrada **A5 (mensageria — RabbitMQ/MQTT/ActiveMQ)** na tabela
+  de alternativas e na tabela de critérios (5 dimensões). Sem ADR novo (preserva
+  numeração cronológica 001-013).
+- **BL-C7-005 (ADR-002 complementado):** seção "Alternativas Consideradas" do
+  ADR-002 ganhou entrada **Web (PWA / browser)** com justificativa de
+  incompatibilidade com requisitos (RF-07 TOPMOST, RF-19 auto-start, sem APIs
+  nativas Windows). Sem ADR novo.
+- **BL-C7-001 (README raiz):** stub do C0 substituído por versão definitiva
+  (~219 linhas). Onboarding de dev em ≤ 10 min, visão geral, estrutura,
+  componentes C0-C8 com status real, comandos comuns (incluindo
+  `test:coverage`), padrões obrigatórios, links para CLAUDE/DECISIONS/CHANGELOG/
+  SESSION_LOG, status W0-W4, paths separados para dev novo e TI ARTFLEXÍVEIS.
+
+### Estado atual
+
+- **BL-C7-001:** ✅ concluído (README raiz)
+- **BL-C7-004:** ✅ concluído (via complemento de ADR-003)
+- **BL-C7-005:** ✅ concluído (via complemento de ADR-002)
+- **BL-C8-001:** ✅ concluído (Vitest via Turborepo)
+- **BL-C8-005:** ✅ concluído (2 regras ativas; 3ª como débito W1)
+- **Wave 0:** trabalho completo, **aguardando auditoria de fechamento**
+
+Bateria final na raiz: `format:check`, `lint`, `type-check`, `test`,
+`test:coverage`, `build` — todos exit 0. Regressão zero em C0-C4:
+
+- `@sprint/contracts` 100% (190 testes em 10 arquivos)
+- `@sprint/fs-adapter` 99.05/100/96.69/99.05 (135 testes em 4 arquivos)
+- `sprint-operator-agent` 100% (15 testes em 2 arquivos)
+- `sprint-leader` build OK (scaffold sem testes — `passWithNoTests`)
+
+### Decisões tomadas
+
+- **Não criar ADR-014/015 duplicados para BL-C7-004 e BL-C7-005** — complementar
+  ADR-002 e ADR-003 existentes preserva integridade da numeração cronológica.
+  Path validado por Renan no Protocolo de Início.
+- **Regra ESLint `no-console` estrita adiada para W1** — depende de
+  `@sprint/logger` (BL-C6-001 W1). Registrada como débito explícito em CLAUDE.md
+  §12 com disparador formal.
+- **Não declarar Gate W0 → W1 nesta sessão** — só após auditoria + remediação
+  aprovadas (decisão pré-acordada do prompt § Sessão especial).
+- **Patterns combinados nas regras ESLint custom (não 3 blocos genéricos como no
+  prompt §3.3)** — ESLint flat config sobrescreve `rules` por chave em blocos
+  seguintes ao invés de fazer merge dos patterns. Combinar patterns dentro de
+  uma única regra `no-restricted-imports` por glob específico (`apps/leader/**`,
+  `apps/operator-agent/**`, `packages/**`) garante que ambas as restrições se
+  apliquem sem sobrescrita. Documentado inline no `eslint.config.mjs`.
+- **Reporters consistentes nos 4 workspaces** (`text`, `json`, `json-summary`,
+  `html`, `lcov`) — ferramentas externas de coverage agregada (Codecov,
+  Coveralls, futuros dashboards) precisam de `json-summary` e `lcov`.
+- **`sprint-leader` recebe `test:coverage` e `@vitest/coverage-v8` mesmo sem
+  testes** — consistência de tooling, `passWithNoTests` evita exit 1 do vitest,
+  ferramenta pronta para W1+.
+- **C7 e C8 marcados como "🔄 Em fechamento da Wave 0" no README** — refletem
+  estado real (trabalho feito, mas Gate W0 → W1 ainda não formalizado).
+
+### Bloqueios encontrados
+
+Nenhum.
+
+### Próximo passo
+
+Iniciar **sessão de auditoria de fechamento da Wave 0** (sessão independente
+nova, padrão das auditorias C0-C3). Auditor valida:
+
+- 5 BLs entregues conforme spec
+- Regressão zero em C0-C4
+- ADR-002 e ADR-003 com seção de alternativas completa após complementos
+- README renderiza, links funcionam
+- Lint custom não tem falsos positivos (testar amostragem)
+- `pnpm test:coverage` raiz orquestra coverage agregada
+
+Após auditoria + remediação (se necessária) aprovadas, **declarar formalmente
+Gate W0 → W1** em SESSION_LOG separada, e iniciar Wave 1.
+
+### Observações para a próxima sessão (auditoria)
+
+- **Regras ESLint customizadas podem ter falsos positivos em testes** se W1+
+  adicionar imports legítimos. Sem tests com imports cross-app ou path-relativo
+  para `@sprint/*` no codebase atual, mas auditor deve revisar amostragem.
+- **ADRs complementados preservam Status e Data originais** (2026-05-21 para
+  ADR-002 e ADR-003). Auditor não deve esperar mudança de metadados — só de
+  conteúdo da seção "Alternativas consideradas" e Referências.
+- **README deve passar por revisão de gosto humano** (Renan) além da auditoria
+  técnica — é deliverable público interno, tom importa.
+- **Débito `no-console` estrito** em CLAUDE.md §12 é o primeiro item formal da
+  nova subsecção "Débitos técnicos pendentes". Auditor deve confirmar que o
+  disparador (entrega de BL-C6-001) está claro.
+- **6 branches encadeadas** desta sessão (F2 → F3 → F4 → F5 → F6 → F7):
+  `feature/BL-C8-001-vitest-consolidation` → `feature/BL-C8-005-custom-lint` →
+  `docs/BL-C7-004-adr-003-alternativas` → `docs/BL-C7-005-adr-002-alternativas`
+  → `docs/BL-C7-001-readme-raiz` → `chore/W0-closure-session-close`. Decisão de
+  PR-por-fase vs. consolidação direta em `develop` fica com Renan.
+
 ## Sessão 10 — 2026-05-25 — Execução de C4 (Filesystem Adapter) · W0 · Auto-validação
 
 **Wave atual:** W0 **Método:** **NOVO** — auto-validação interna (sem

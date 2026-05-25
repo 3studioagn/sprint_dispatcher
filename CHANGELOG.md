@@ -100,8 +100,35 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
   garantindo paridade Node↔Memory [BL-C4-001]
 - ADR-013 (filesystem adapter port-and-adapter hexagonal) em
   `DECISIONS.md`
+- README raiz definitivo do monorepo (onboarding ≤ 10 min, visão geral,
+  estrutura, componentes C0-C8, comandos, padrões, status) [BL-C7-001]
+- Vitest consolidado via Turborepo: `pnpm test` e `pnpm test:coverage`
+  na raiz orquestram todos os packages [BL-C8-001]
+- Task `test:coverage` em `turbo.json` com `outputs: ["coverage/**"]`
+  [BL-C8-001]
+- Tabela formal de coverage thresholds por package em CLAUDE.md §7.7.1
+  [BL-C8-001]
+- ESLint regra customizada: `apps/leader` proibido de importar
+  `apps/operator-agent` (e vice-versa) [BL-C8-005]
+- ESLint regra customizada: imports de `packages/*` devem usar alias
+  `@sprint/<pkg>` (sem path relativo cross-package) [BL-C8-005]
+- Seção "Débitos técnicos pendentes" em CLAUDE.md §12 — registra a
+  3ª regra ESLint (no-console estrito) como pendente para W1
+  [BL-C8-005]
+- ADR-002 complementado com alternativa Web/PWA (incompatibilidade
+  com RF-07 TOPMOST, RF-19 auto-start) [BL-C7-005]
+- ADR-003 complementado com alternativa A5 mensageria (RabbitMQ /
+  MQTT / ActiveMQ) e tabela de critérios estendida [BL-C7-004]
 
 ### Changed
+
+- `apps/leader/package.json`: adicionado script `test:coverage` e
+  devDep `@vitest/coverage-v8` para consistência com os demais
+  workspaces [BL-C8-001]
+- `apps/leader/vitest.config.ts` e `apps/operator-agent/vitest.config.ts`:
+  reporters padronizados (`text`, `json`, `json-summary`, `html`,
+  `lcov`) para uso por ferramentas externas de coverage agregada
+  [BL-C8-001]
 
 - `eslint.config.mjs`: corrige merge de `rules` no override
   `disableTypeChecked` (bug latente em C0 exposto pelo primeiro `.ts`
