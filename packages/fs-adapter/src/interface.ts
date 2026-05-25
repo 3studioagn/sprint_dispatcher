@@ -55,12 +55,16 @@ export interface IFilesystemAdapter {
   /**
    * Escreve arquivo atomicamente (write → fsync → rename).
    *
-   * Usa sufixo `.tmp` durante a escrita. Em caso de crash mid-write,
-   * o arquivo final original (se existir) permanece intacto; apenas
-   * o `.tmp` órfão fica no disco. Sobrescreve destino se existir.
+   * Usa um `.tmp` com sufixo aleatório durante a escrita — isola
+   * escritas concorrentes ao mesmo destino. Em caso de crash
+   * mid-write, o arquivo final original (se existir) permanece
+   * intacto; apenas o `.tmp` órfão fica no disco. Sobrescreve
+   * destino se existir.
    *
-   * @throws {FilesystemIOError} em erros de I/O (diretório pai não
-   *   existe, sem espaço em disco, permissão negada, etc.)
+   * @throws {FileNotFoundError} se algum componente do diretório pai
+   *   não existe (ENOENT no open)
+   * @throws {FilesystemIOError} em outros erros de I/O (sem espaço
+   *   em disco, permissão negada, etc.)
    */
   writeFileAtomic(filepath: string, content: string): Promise<void>;
 
