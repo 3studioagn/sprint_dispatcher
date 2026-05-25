@@ -822,6 +822,26 @@ Descobertas durante o desenvolvimento que economizam tempo da próxima sessão.
 - **Descoberto em:** Sessão 10 (2026-05-25), Fase 7 do BL-C4-001 (suite de
   contrato).
 
+### Débitos técnicos pendentes
+
+Itens conhecidos que **deveriam** existir mas dependem de pré-requisito ainda
+não entregue. Cada um tem disparador explícito que reabre o trabalho.
+
+#### Débito: regra ESLint `no-console` estrita (apenas `@sprint/logger`)
+
+- **Status:** pendente — disparador é a entrega do BL-C6-001 (`@sprint/logger`)
+  em W1.
+- **Estado atual:** `eslint.config.mjs` permite `console.warn` e `console.error`
+  (`'no-console': ['error', { allow: ['warn', 'error'] }]`). `console.log` já é
+  proibido.
+- **Plano:** quando `@sprint/logger` estiver disponível, endurecer para
+  `'no-console': 'error'` (zero allow), e refatorar os `console.warn`/`error`
+  remanescentes (main/preload do Leader e Agent) para usar o logger.
+- **Por que adiar:** sem `@sprint/logger`, banir `console.*` removeria o único
+  canal de logging em ramos de erro críticos (ex: `handleConfigError` no Agent).
+- **Referências:** BL-C8-005 (terceira regra planejada — adiada por ADR
+  implícito), BL-C6-001 (entrega o logger).
+
 ---
 
 ## 13. Como atualizar este arquivo

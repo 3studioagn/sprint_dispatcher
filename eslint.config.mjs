@@ -67,9 +67,85 @@ export default tseslint.config(
       'promise/no-return-wrap': 'error',
       'promise/param-names': 'error',
       'promise/prefer-await-to-then': 'error',
-
-      // TODO [BL-C8-005]: regra customizada proibindo imports diretos entre apps/*
-      // sera adicionada quando os apps existirem (sessao futura, componente C8).
+    },
+  },
+  // === Sprint Dispatcher — regras especificas do projeto [BL-C8-005] ===
+  // Leader: proibido importar de Agent (separacao por componente) e
+  // imports relativos para packages/* (forca uso do alias @sprint/<pkg>).
+  // Cross-app: aplicado tambem a tests (zero razao legitima para violar).
+  // Patterns combinados em uma regra: ESLint flat config sobrescreve
+  // rules em blocos seguintes ao inves de fazer merge dos patterns.
+  {
+    files: ['apps/leader/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/operator-agent/**', '**/sprint-operator-agent/**'],
+              message:
+                'Leader nao pode importar de Agent. Compartilhe via @sprint/contracts ou @sprint/fs-adapter.',
+            },
+            {
+              group: [
+                '**/packages/contracts/**',
+                '**/packages/fs-adapter/**',
+                '**/packages/logger/**',
+              ],
+              message: 'Use alias @sprint/<package> em vez de caminho relativo.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  // Agent: proibido importar de Leader; mesma regra para packages/*.
+  {
+    files: ['apps/operator-agent/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/leader/**', '**/sprint-leader/**'],
+              message:
+                'Agent nao pode importar de Leader. Compartilhe via @sprint/contracts ou @sprint/fs-adapter.',
+            },
+            {
+              group: [
+                '**/packages/contracts/**',
+                '**/packages/fs-adapter/**',
+                '**/packages/logger/**',
+              ],
+              message: 'Use alias @sprint/<package> em vez de caminho relativo.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  // Packages internos: nao podem se referenciar via caminho relativo
+  // entre si (use sempre @sprint/<pkg>).
+  {
+    files: ['packages/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: [
+                '**/packages/contracts/**',
+                '**/packages/fs-adapter/**',
+                '**/packages/logger/**',
+              ],
+              message: 'Use alias @sprint/<package> em vez de caminho relativo.',
+            },
+          ],
+        },
+      ],
     },
   },
   {
