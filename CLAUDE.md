@@ -708,6 +708,99 @@ Descobertas durante o desenvolvimento que economizam tempo da próxima sessão.
 - **Descoberto em:** Sessão 09 (2026-05-25), Fase 4 do BL-C3-002 — ao escrever
   `config.test.ts` que mocka `electron.app.getPath` apontando pro tmp dir.
 
+### G-016: `abstract class` em TS é compile-time only; `new.target` no constructor enforça em runtime
+
+- **Sintoma:** `expect(() => new FilesystemError('/x', 'msg')).toThrow()` falha
+  porque `new FilesystemError(...)` **não joga** em runtime — a classe é
+  instanciável mesmo com `abstract`. O `@ts-expect-error` no teste só silencia o
+  erro de tipo, não valida comportamento.
+- **Causa:** A keyword `abstract` em TypeScript é puramente compile-time. Em JS
+  compilado, `abstract` desaparece — a classe é uma `class` normal, e
+  `new AbstractClass(...)` retorna uma instância funcional (com fields abstract
+  ficando `undefined`).
+- **Solução:** check de `new.target` no constructor base, lançando `TypeError`
+  quando instanciada diretamente:
+  ```ts
+  export abstract class FilesystemError extends Error {
+    abstract override readonly name: string;
+    constructor(public readonly filepath: string, message: string, ...) {
+      super(message);
+      if (new.target === FilesystemError) {
+        throw new TypeError('FilesystemError é abstract; use subclasses.');
+      }
+    }
+  }
+  ```
+  `new.target` dentro do constructor base aponta para a classe usada com `new`
+  (ex.: `new FileNotFoundError(...)` → `new.target = FileNotFoundError`, passa
+  pelo check). Subclasses funcionam normalmente; instanciação direta joga.
+- **Descoberto em:** Sessão 10 (2026-05-25), Fase 3 do BL-C4-001, quando o teste
+  de abstract enforcement do prompt falhou em runtime.
+
+### G-017: `writeFileAtomic` com `.tmp` compartilhado colide em escritas concorrentes
+
+- **Sintoma:** 2 chamadas concorrentes a `writeFileAtomic(path, ...)` ao mesmo
+  destino: uma renomeia primeiro (removendo o `.tmp` compartilhado), a outra
+  joga `ENOENT: no such file or directory, rename '...tmp' -> '...'`.
+- **Causa:** Implementação ingênua usa `${filepath}.tmp` como sufixo fixo —
+  todas as escritas ao mesmo `filepath` compartilham o mesmo `.tmp`. A primeira
+  que termina o `rename` deleta o `.tmp` que a segunda ainda precisa.
+- **Solução:** sufixo aleatório no `.tmp`. Use `randomBytes(6).toString('hex')`
+  (48 bits de entropia, suficiente para isolar):
+  ```ts
+  const tmpPath = `${filepath}.${randomBytes(6).toString('hex')}.tmp`;
+  ```
+  Em testes que verificam ausência de `.tmp` órfão, use
+  `entries.filter(e => e.endsWith('.tmp'))` (não checar nome fixo).
+- **Descoberto em:** Sessão 10 (2026-05-25), Fase 5 do BL-C4-007, quando o teste
+  de concorrência do prompt falhou na 1ª execução.
+
+### G-018: `writeFileAtomic` com diretório pai inexistente joga `FileNotFoundError` (não IOError)
+
+- **Sintoma:** `await adapter.writeFileAtomic('/dir/nao-existe/file.json', 'x')`
+  joga `FileNotFoundError`, não `FilesystemIOError` — apesar de intuitivamente
+  parecer "erro de I/O" (path final não pôde ser criado).
+- **Causa:** O `open(tmpPath, 'w')` na implementação Node falha com `ENOENT`
+  porque o componente do diretório pai não existe. `mapError` é genérico e
+  mapeia ENOENT → `FileNotFoundError` consistentemente, independente do contexto
+  (read vs write).
+- **Solução:** comportamento intencional, documentado no JSDoc da interface.
+  Consumers que precisam discriminar "arquivo não existe" (read) de "componente
+  do path não existe" (write) devem inspecionar o `cause`
+  (`NodeJS.ErrnoException` com `code: 'ENOENT'`) ou usar
+  `adapter.exists(parent)` antes da escrita.
+- **Convenção:** caller é responsável por `mkdir(parent)` antes de
+  `writeFileAtomic` em paths aninhados. Em Node isso evita o erro; em Memory é
+  no-op idempotente. Suite de contrato compartilhada assume essa convenção.
+- **Descoberto em:** Sessão 10 (2026-05-25), Fase 5 do BL-C4-007.
+
+### G-019: `MemoryFilesystemAdapter` usa diretórios implícitos; testes podem divergir do Node em corner cases
+
+- **Sintoma:** após
+  `await adapter.rename('/pending/x.json', '/archive/x.json')`,
+  `await adapter.listDir('/pending')` retorna `[]` no Node (diretório vazio
+  existe) mas lança `DirectoryNotFoundError` no Memory (sem filhos → "não
+  existe").
+- **Causa:** decisão de design do MemoryFilesystemAdapter — diretórios são
+  representados implicitamente via presença de filhos no
+  `Map<string, MemoryFileEntry>`. Sem entry de arquivo dentro, o diretório
+  "deixa de existir". `mkdir` é no-op porque não há como criar diretório
+  explicitamente sem arquivo dentro.
+- **Solução:** testes que dependem de "diretório vazio existente" devem ou (a)
+  tratar ambos os outcomes como equivalentes ("sprint não está em pending"); ou
+  (b) escrever um arquivo placeholder antes para forçar existência. Suite de
+  contrato compartilhada faz (a) explicitamente:
+  ```ts
+  try {
+    const stillPending = await adapter.listDir(resolvePath('pending'));
+    expect(stillPending).not.toContain('01HX-joao.json');
+  } catch (err) {
+    expect(err).toBeInstanceOf(DirectoryNotFoundError);
+  }
+  ```
+- **Descoberto em:** Sessão 10 (2026-05-25), Fase 7 do BL-C4-001 (suite de
+  contrato).
+
 ---
 
 ## 13. Como atualizar este arquivo

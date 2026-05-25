@@ -66,6 +66,186 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 10 — 2026-05-25 — Execução de C4 (Filesystem Adapter) · W0 · Auto-validação
+
+**Wave atual:** W0 **Método:** **NOVO** — auto-validação interna (sem
+audit/remediation separadas) **Duração estimada:** ~3h **Itens trabalhados:**
+[BL-C4-001, BL-C4-006, BL-C4-007]
+
+### Objetivo da sessão
+
+Executar a parte W0 do Componente C4 (Filesystem Adapter) — implementar
+`IFilesystemAdapter` (port), `NodeFilesystemAdapter` (adapter de produção) e
+`MemoryFilesystemAdapter` (adapter de teste) em `packages/fs-adapter`, com
+paridade comportamental validada via suite de contrato compartilhada. Primeira
+sessão sob o novo método de Wave 0 (auto-validação substitui audit externa).
+
+### O que foi feito
+
+- Scaffold do package `@sprint/fs-adapter` (source-first, `sideEffects: false`,
+  sem deps de produção — Node-only via builtins).
+- 3 `FilesystemError` concretos + base abstract com `new.target` check em
+  runtime (instanciação direta lança `TypeError`, força uso de subclasses).
+- `IFilesystemAdapter` com 8 métodos primitivos (`readFile`, `writeFileAtomic`,
+  `listDir`, `exists`, `rename`, `unlink`, `mkdir`, `stat`)
+  - tipo `FileStat`. JSDoc com `@throws` em cada método.
+- `NodeFilesystemAdapter` usando `node:fs/promises` + `node:crypto.randomBytes`.
+  `mapError` exhaustive: ENOENT → `FileNotFoundError`; ENOTDIR, EISDIR, EACCES,
+  EPERM, EEXIST, ENOSPC, EBUSY e default → `FilesystemIOError` específicos com
+  `cause` preservado.
+- `writeFileAtomic`:
+  `open(tmp) → writeFile → fsync → close → rename(tmp, final)` com sufixo
+  aleatório (6 bytes hex) no `.tmp` para isolar escritas concorrentes. Cleanup
+  do `.tmp` em qualquer falha (write ou rename), com cleanup-do-cleanup gracioso
+  (cleanup falhando ainda relança erro original).
+- `MemoryFilesystemAdapter` com `Map<string, MemoryFileEntry>`. Diretórios
+  implícitos via presença de filhos; `mkdir` no-op idempotente. Helpers
+  `seed()`/`reset()` para fixtures de teste.
+- Normalização de paths no Memory: barras duplas colapsadas, trailing slash
+  removido (exceto raiz). Paths equivalentes (`/a` === `/a/` === `//a//`)
+  resolvem ao mesmo entry.
+- Suite de contrato compartilhada (`src/__tests__/contract.test.ts` +
+  `helpers.ts`): 26 testes × 2 adapters = 52 testes garantindo paridade.
+- `src/index.ts` com exports nomeados explícitos em 3 seções comentadas
+  (Interface, Errors, Adapters). Sem `export *`, sem export de helpers internos
+  (`mapError`, `normalize`, `MemoryFileEntry`).
+- ADR-013 (port-and-adapter hexagonal) registrado.
+- 4 gotchas novos em CLAUDE.md §12: G-016 (`new.target` em classe abstract para
+  enforcement runtime), G-017 (sufixo aleatório no `.tmp` para concorrência),
+  G-018 (writeFileAtomic + dir pai ausente = `FileNotFoundError`, não IOError),
+  G-019 (diretórios implícitos no MemoryAdapter).
+
+### Estado atual
+
+- **BL-C4-001:** ✅ concluído (interface `IFilesystemAdapter` + 4 erros tipados
+  - `FileStat`)
+- **BL-C4-006:** ✅ concluído (`MemoryFilesystemAdapter` + helpers `seed/reset`)
+- **BL-C4-007:** ✅ concluído (`NodeFilesystemAdapter` + escrita atômica)
+- **BL-C4-002..005:** ⏸️ W1+ (operações de domínio:
+  `writePendingSprint`/`listAcks`/`writeAck`/`writeCancel`/`moveToArchive` —
+  módulos separados que consumirão o adapter)
+
+Cobertura `@sprint/fs-adapter`: **99.05% lines / 96.69% branches / 100% funcs**
+em 135 testes (4 arquivos). `errors.ts` e `memory-adapter.ts` 100%;
+`node-adapter.ts` 97.74% lines / 93.33% branches (4 linhas defensivas dos
+catches do `handle.close()` em error path — exigiriam mock profundo de
+`FileHandle` para exercitar).
+
+Bateria final na raiz: `format:check`, `lint`, `type-check`, `test`, `build` —
+todos exit 0. Regressão zero em C0-C3 (`@sprint/contracts` 100% cobertura
+mantida; `sprint-operator-agent` 15 testes 100%; `sprint-leader` build OK).
+
+### Auto-validação interna (substituição de audit externa)
+
+| Check                                                           | Status        |
+| --------------------------------------------------------------- | ------------- |
+| `pnpm install --frozen-lockfile`                                | ✅            |
+| Raiz: `format:check / lint / type-check / test / build`         | ✅ 5/5 tasks  |
+| Coverage `@sprint/fs-adapter`: lines ≥ 95%                      | ✅ 99.05%     |
+| Coverage `@sprint/fs-adapter`: branches ≥ 90%                   | ✅ 96.69%     |
+| Library purity (Node-only só em `node-adapter.ts` + testes)     | ✅            |
+| Sem `any`, `console.log`, `@ts-ignore` em `src/`                | ✅ 0 hits     |
+| 3 `FilesystemError` concretos + base abstract                   | ✅            |
+| 8 métodos primitivos na interface                               | ✅            |
+| `NodeFilesystemAdapter` e `MemoryFilesystemAdapter` implementam | ✅            |
+| Paridade Node↔Memory: contrato passa em ambos                   | ✅ 52/52      |
+| Sem operações de domínio na interface                           | ✅ só em doc  |
+| Public API: exports nomeados explícitos                         | ✅ 7 exports  |
+| Regressão `@sprint/contracts`                                   | ✅ 100% mant. |
+| Regressão `sprint-operator-agent`                               | ✅ 100% mant. |
+| Regressão `sprint-leader`                                       | ✅ build OK   |
+| JSDoc em API pública (com `@throws`)                            | ✅ 13 @throws |
+
+**15/15 ✅.**
+
+### Decisões tomadas
+
+- **ADR-013** (port-and-adapter hexagonal) — `IFilesystemAdapter` com 8
+  primitivos, operações de domínio fora da interface (W1+), `writeFileAtomic`
+  como método do adapter, `MemoryFilesystemAdapter` como par paritário do Node
+  (não mock).
+- **Numeração ADR-013** (não ADR-011 como o prompt sugeria) — ADR-011/012 já
+  estavam ocupados pelo C3 (Sessão 09). Renumeração aceita por Renan no F1.
+- **`abstract class FilesystemError` com `new.target` check no constructor** —
+  abstractness enforced em runtime + compile-time. Sem isso, o
+  `@ts-expect-error new FilesystemError(...)` no teste só silenciaria o tipo sem
+  validar comportamento. Decisão de design, não no prompt original.
+- **Sufixo aleatório de 6 bytes hex no `.tmp` do `writeFileAtomic`** —
+  descoberto via teste de concorrência: sem isso, 2 writers concorrentes ao
+  mesmo destino colidem no `.tmp` compartilhado e uma rename remove o `.tmp` da
+  outra. ADR-013 documenta como parte do padrão de escrita atômica.
+- **`writeFileAtomic` em diretório pai inexistente lança `FileNotFoundError`**
+  (não `FilesystemIOError`) — `mapError` é genérico, mapeia ENOENT
+  consistentemente. JSDoc da interface ajustado para refletir.
+- **Caller deve `mkdir(parent)` antes de `writeFileAtomic` em paths aninhados**
+  — alinhamento de contrato entre Node (precisa) e Memory (no-op idempotente).
+  Suite de contrato faz isso explicitamente.
+- **`MemoryFilesystemAdapter` mantém helpers `seed()`/`reset()`** fora da
+  interface — disponíveis só na classe concreta. Permite fixtures de teste
+  ergonômicas sem poluir o contrato.
+- **`mapError` permanece privado** no `node-adapter.ts` (sem export) — branches
+  do mapper exercitados via `vi.spyOn(fs.readFile)` com erros sintéticos. Sem
+  export de helpers internos (princípio do Public API).
+- **Detail fallback do mapError com `length > 0` + `??`** em vez de `||` —
+  ESLint barra `||` (prefer nullish), mas a semântica original (string vazia cai
+  para code) é preservada via
+  `err.message.length > 0 ? err.message : (err.code ?? 'desconhecido')`.
+- **Refactor do `apps/operator-agent/src/main/config.ts` NÃO foi feito** —
+  opcional explícito do prompt §2.1 (default = não fazer). O `TODO(C4)`
+  permanece. Acontece em sessão dedicada quando outros consumers da W1 estiverem
+  prontos.
+- **Consolidação direta em `develop`** — a pedido explícito do Renan no F8, as 6
+  branches encadeadas (scaffold → errors → interface → node → memory →
+  contract-tests → close) foram mergeadas em `develop` por fast-forward,
+  dispensando PR + review da §9.3. Override consciente do lead, nos moldes das
+  Sessões 05, 07, 08, 09. Registrado por transparência — exceção pontual, não
+  altera a §9.3.
+
+### Bloqueios encontrados
+
+Nenhum. Duas correções inline durante a execução:
+
+1. Teste de concorrência falhou na 1ª execução por colisão no `.tmp`
+   compartilhado — corrigido com sufixo aleatório, sem mudança de escopo.
+2. Teste "diretório pai inexistente" esperava `FilesystemIOError` mas o
+   `mapError` mapeia ENOENT consistentemente para `FileNotFoundError` — teste e
+   JSDoc ajustados.
+
+### Próximo passo
+
+Próximo componente da Wave 0: **C6 (Observability/Logger)** — `@sprint/logger`
+wrapper sobre Pino + pino-roll. Após C6, restam C7 (docs) e C8 (QA
+cross-cutting) para fechar a W0. Wave 1 começa com BL-C4-002..005 (operações de
+domínio consumindo o adapter) + BL-C2/C3 W1 (telas reais, polling, dispatch,
+overlay).
+
+### Observações para a próxima sessão
+
+- **`@sprint/fs-adapter` está pronto para consumo em W1.** O primeiro consumer
+  natural é `MemoryFilesystemAdapter` em testes de C2 W1 (dispatch do Leader) e
+  C3 W1 (polling do Agent) — evita tmpdir em cada teste.
+- **`apps/operator-agent/src/main/config.ts` continua com `fs/promises` direto**
+  e `TODO(C4)`. Refactor para usar `IFilesystemAdapter` pode ser feito em sessão
+  dedicada ou em W1 quando outros consumers começarem. Mudança pequena (injeção
+  de dependência no `loadAgentConfig`).
+- **Suite de contrato compartilhada (`describeContract`)** é padrão a replicar
+  em outros adapters futuros (logger? notifier? clipboard?). Permite novos
+  adapters mas garante que o contrato não regrida.
+- **O método novo de Wave 0 (auto-validação) economizou tempo significativo
+  comparado com C0-C3.** Sessão única (~3h) vs. padrão antigo de 3 sessões
+  (~6-8h total). Avaliar se manter o ritmo nos próximos componentes (C6 Logger é
+  candidato natural — também library pura, mesma natureza de C4).
+- **`turbo` loga "no output files found"** para `@sprint/fs-adapter#build` e
+  `#test` — esperado, package usa `tsc --noEmit`. Mesmo warning que
+  `@sprint/contracts` tem (SESSION_LOG Sessão 03). Não-bloqueante; pode ser
+  silenciado adicionando `outputs: []` em `packages/fs-adapter/turbo.json` em
+  sessão futura.
+- **Cobertura defensiva incompleta no `node-adapter.ts`:** 4 linhas
+  (`handle.close()` no error path + finally path) ficaram não-cobertas — são
+  catches que raramente disparam (close de FileHandle só falha em circunstâncias
+  muito específicas). Cobrir exigiria mock profundo do `FileHandle`,
+  fragilizando os testes. Threshold de 90% branches respeitado (93.33%).
+
 ## Sessão 09 — 2026-05-25 — Execução de C3 (Operator Agent scaffold + Config Loader) + BL-C5-002 · W0
 
 **Wave atual:** W0 **Duração estimada:** ~6h **Itens trabalhados:** [BL-C3-001,

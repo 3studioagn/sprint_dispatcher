@@ -79,6 +79,27 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
   sem desktop shortcut, preserva `config.json` na desinstalação [BL-C5-002]
 - ADR-011 (arquitetura tray-resident) e ADR-012 (loader fail-fast) em
   `DECISIONS.md`
+- Package `@sprint/fs-adapter` (port-and-adapter hexagonal): library de
+  filesystem com port + 2 adapters [BL-C4-001]
+- `IFilesystemAdapter` interface com 8 métodos primitivos (`readFile`,
+  `writeFileAtomic`, `listDir`, `exists`, `rename`, `unlink`, `mkdir`,
+  `stat`) + tipo `FileStat` [BL-C4-001]
+- `FilesystemError` abstract base + `FileNotFoundError`,
+  `DirectoryNotFoundError`, `FilesystemIOError` concretos; `new.target`
+  check enforce abstractness em runtime [BL-C4-001]
+- `NodeFilesystemAdapter` usando `node:fs/promises` com escrita atômica
+  (open→writeFile→fsync→close→rename) e sufixo aleatório de 6 bytes hex
+  no `.tmp` para isolar escritas concorrentes [BL-C4-007]
+- `mapError` exhaustive cobrindo ENOENT, ENOTDIR, EISDIR, EACCES, EPERM,
+  EEXIST, ENOSPC, EBUSY e fallback `desconhecido` [BL-C4-007]
+- `MemoryFilesystemAdapter` in-memory (`Map<string, MemoryFileEntry>`)
+  com diretórios implícitos, `mkdir` no-op idempotente, helpers
+  `seed()`/`reset()` para fixtures [BL-C4-006]
+- Suite de contrato compartilhada (`describeContract` em
+  `src/__tests__/contract.test.ts`): 26 testes × 2 adapters = 52 testes
+  garantindo paridade Node↔Memory [BL-C4-001]
+- ADR-013 (filesystem adapter port-and-adapter hexagonal) em
+  `DECISIONS.md`
 
 ### Changed
 

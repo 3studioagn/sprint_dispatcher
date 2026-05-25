@@ -80,6 +80,8 @@ entradas em ordem cronológica crescente — mais recente no fim.
   tray-resident do Operator Agent
 - [ADR-012](#adr-012-loader-de-configjson-com-fail-fast-validation) — Loader de
   `config.json` com fail-fast validation
+- [ADR-013](#adr-013-filesystem-adapter-port-and-adapter-hexagonal) — Filesystem
+  Adapter port-and-adapter (hexagonal)
 
 ---
 
@@ -925,3 +927,133 @@ profundidade caso o overlay seja comprometido em W1+.
   hoisting)
 - BL-C3-002 (loader)
 - BL-C4-001 (interface `IFilesystemAdapter` — futuro)
+
+---
+
+## ADR-013: Filesystem Adapter port-and-adapter (hexagonal)
+
+- **Status:** Accepted
+- **Data:** 2026-05-25
+- **Decisores:** Renan (3Studio)
+
+### Contexto
+
+Consumers (Leader, Agent) precisam fazer I/O em filesystem (config local da
+estação, pasta compartilhada SMB, arquivo histórico). Acoplar consumers
+diretamente a `fs/promises` torna testes lentos (cada teste precisaria de tmpdir
+real) e flaky (concorrência de arquivos, permissões variáveis entre máquinas).
+Também dificulta substituições futuras (ex.: storage remoto, S3, ou versão
+diferente do filesystem com cache).
+
+O primeiro consumer de I/O do projeto — o loader de `config.json` do Operator
+Agent (BL-C3-002, Sessão 09) — usa `fs/promises` direto marcado com `TODO(C4)`.
+ADR-012 estabelece esse uso como provisório até C4 entregar.
+
+### Decisão
+
+Adotar padrão **port-and-adapter (hexagonal)**:
+
+1. **`IFilesystemAdapter` é o port** — interface no domínio com 8 operações
+   primitivas: `readFile`, `writeFileAtomic`, `listDir`, `exists`, `rename`,
+   `unlink`, `mkdir`, `stat`.
+2. **`NodeFilesystemAdapter` é o adapter de produção** — implementação real
+   usando `node:fs/promises` + `node:crypto.randomBytes` (sufixo aleatório no
+   `.tmp` para isolar escritas concorrentes).
+3. **`MemoryFilesystemAdapter` é o adapter de teste** — implementação in-memory
+   (`Map<string, MemoryFileEntry>`), diretórios implícitos, helpers `seed()` e
+   `reset()` para fixtures.
+4. **Operações de domínio** (`writePendingSprint`, `listAcks`, `moveToArchive`,
+   `writeAck`, `writeCancel`, etc.) ficam em **módulos separados** que recebem
+   `IFilesystemAdapter` como dependência — não entram na interface.
+   BL-C4-002..005 (W1) entregarão esses módulos.
+5. **`writeFileAtomic` é método do adapter** (não helper externo) porque
+   atomicidade depende da implementação concreta: Node faz
+   `open → writeFile → fsync → rename` com sufixo aleatório no `.tmp`; Memory é
+   trivialmente atômico (Map.set).
+6. **`exists` não lança exceção** — retorna `false` em qualquer erro (ENOENT,
+   EACCES, path inválido). Caso especial pragmático para checks rápidos. Outros
+   métodos lançam `FilesystemError` concreto via `instanceof` para forçar
+   tratamento explícito.
+7. **Suite de contrato compartilhada** — `describeContract(name, setup)` roda os
+   mesmos testes contra ambos os adapters. Se um teste passa em um adapter mas
+   falha no outro, há divergência comportamental.
+
+### Alternativas consideradas
+
+1. **Acoplamento direto a `fs/promises` em consumers** (estado atual de
+   BL-C3-002, marcado com `TODO(C4)`): mais simples inicialmente, mas testes
+   ficam lentos e dependentes de tmpdir/permissions. O ADR-012 já estabelece
+   esse acoplamento como provisório.
+2. **Adapter com operações de domínio na interface** (`writePendingSprint` etc.
+   como métodos): viola separação de responsabilidades — adapter conheceria
+   SprintPayload, schemas, semântica de pasta compartilhada. Acoplamento alto
+   entre I/O e domínio.
+3. **Apenas mock manual via Vitest:** menos disciplinado, fácil de criar
+   discrepâncias entre mock e fs real (drift). Suite de contrato compartilhada
+   elimina essa classe de bug.
+4. **`writeFileAtomic` como helper externo** que recebe `IFilesystemAdapter` e
+   chama métodos primitivos: impossível em prática — atomicidade requer `fsync`
+   em handle aberto, que não é exposto pela interface (e expor `FileHandle`
+   quebraria a abstração).
+
+### Consequências
+
+**Aceitas:**
+
+- Testes de consumers podem usar `MemoryFilesystemAdapter` — instantâneos e
+  isolados. Sem tmpdir, sem cleanup async, sem flakiness por concorrência de
+  filesystem.
+- Adapter substituível (futuro: S3, http storage, etc.) sem tocar em consumers.
+- Operações de domínio (W1) testáveis isoladamente — recebem
+  `IFilesystemAdapter` mockável.
+- Suite de contrato compartilhada garante paridade entre adapters; novos
+  adapters (futuros) só são "completos" quando passam a suite.
+
+**Trade-offs:**
+
+- Mais código (interface + 2 implementações + helpers + suite vs. uma chamada
+  `fs.readFile`). Pagamento amortizado conforme W1+ adiciona consumers.
+- **`MemoryFilesystemAdapter` tem semântica de "diretório implícito"** que
+  difere ligeiramente de filesystem real: diretórios sem filhos não existem. Em
+  consumers, isso é OK porque sempre criamos arquivo dentro do dir antes de
+  listar. Caller deve `mkdir(parent)` antes de `writeFileAtomic` em paths
+  aninhados (pelo contrato — Node exige; Memory é no-op idempotente).
+- **`writeFileAtomic` em diretório pai inexistente lança `FileNotFoundError`**
+  (não `FilesystemIOError`). `mapError` é genérico e mapeia ENOENT
+  consistentemente. JSDoc documenta esse comportamento.
+
+### Padrão de escrita atômica (Node)
+
+```
+open(tmp = `${path}.${randomBytes(6).hex}.tmp`, 'w')
+  → handle.writeFile(content, 'utf-8')
+  → handle.sync()       // fsync força flush ao disco
+  → handle.close()
+  → fs.rename(tmp, path)
+```
+
+**Por que `fsync` é crítico:** sem ele, o sistema operacional pode estar
+bufferizando os dados na RAM no momento do rename. Crash mid-rename poderia
+resultar em arquivo final apontando para inode com conteúdo zerado. Com `fsync`,
+garantimos que dados estão no disco antes do rename atômico.
+
+**Por que sufixo aleatório no `.tmp`:** sem ele, 2 writers concorrentes ao mesmo
+destino colidem no `.tmp` compartilhado — a rename de um remove o `.tmp` do
+outro, causando `ENOENT` errático. Sufixo aleatório (6 bytes hex = 48 bits de
+entropia) isola escritas concorrentes.
+
+### Método novo da Wave 0 aplicado
+
+Esta é a **primeira sessão sob o método novo de auto-validação** — sem
+audit/remediation separadas (que tínhamos em C0-C3). Auto-validação interna na
+Fase 8 substituiu auditoria externa, com 15 checks inspecionados pelo próprio
+executor. Resultado: 15/15 ✅. Tempo total estimado ~70% menor que o padrão de 3
+sessões.
+
+### Referências
+
+- BL-C4-001 (interface + erros), BL-C4-006 (Memory), BL-C4-007 (Node)
+- ADR-005 (schema-first) — `@sprint/contracts` é peer, não dependência
+- ADR-012 (loader fail-fast) — primeiro consumer marcado `TODO(C4)`
+- `packages/fs-adapter/README.md`
+- Alistair Cockburn, "Hexagonal Architecture" (2005)
