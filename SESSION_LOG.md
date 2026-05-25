@@ -165,6 +165,12 @@ Smoke E2E validado ao vivo pelo Renan no Windows: ① config ausente → diálog
 - **CSP endurecida** (`object-src 'none'; base-uri 'self';`) — usei a CSP atual
   do Leader (pós-remediação audit-v1-FINDING-003), não a versão pré-hardening do
   prompt §6.1.
+- **Consolidação direta em `develop`** — a pedido explícito do Renan, a branch
+  `chore/BL-C3-session-close` foi mergeada em `develop` por fast-forward e
+  `origin/develop` empurrada, dispensando o PR + review da §9.3 do CLAUDE.md.
+  Override consciente do lead, nos moldes das Sessões 05 e 08; sinalizado antes
+  da ação. Registrado aqui por transparência — exceção pontual, não altera a
+  §9.3.
 
 ### Bloqueios encontrados
 
