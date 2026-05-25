@@ -151,6 +151,11 @@ Bateria final na raiz: `format:check`, `lint`, `type-check`, `test`,
   ferramenta pronta para W1+.
 - **C7 e C8 marcados como "🔄 Em fechamento da Wave 0" no README** — refletem
   estado real (trabalho feito, mas Gate W0 → W1 ainda não formalizado).
+- **Consolidação direta em `develop`** — a pedido explícito do Renan no F7, as 6
+  branches encadeadas (F2 → F3 → F4 → F5 → F6 → F7) foram mergeadas em `develop`
+  por fast-forward, dispensando os PRs por fase do prompt §8 e do CLAUDE.md
+  §9.3. Override consciente do lead, nos moldes das Sessões 05, 07, 08, 09 e 10.
+  Registrado por transparência — exceção pontual, não altera a §9.3.
 
 ### Bloqueios encontrados
 
