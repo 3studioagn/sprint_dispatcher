@@ -93,7 +93,7 @@ do repositório**, gerenciados externamente por Renan.
 | C1  | Shared Contracts (`@sprint/contracts`)     | Library       | ✅ Wave 0                     |
 | C2  | Leader Application                         | Desktop App   | ✅ Composer W1 (sem dispatch) |
 | C3  | Operator Agent                             | Desktop App   | ✅ Scaffold + config          |
-| C4  | Filesystem Adapter (`@sprint/fs-adapter`)  | Library       | ✅ Wave 0                     |
+| C4  | Filesystem Adapter (`@sprint/fs-adapter`)  | Library       | ✅ Domain W1 (Pending+Ack)    |
 | C5  | Installer & Deployment                     | Package       | ✅ Config validada            |
 | C6  | Observability & Logging (`@sprint/logger`) | Library       | ⏸️ Wave 1                     |
 | C7  | Documentation                              | Docs          | 🔄 Em fechamento da Wave 0    |
@@ -186,6 +186,9 @@ enquanto:
 
 - Apps são desktop Windows (Electron 42+)
 - Comunicação via pasta compartilhada SMB/CIFS
+- **Path canônico da pasta:** `\\srv-alpha\TEMP\Metas_3Studio` (UNC) — subpastas
+  `pending/`, `acks/`, `arquivo/`. Instalador deve gravar este UNC no
+  `config.json` de cada estação (nunca a letra de drive mapeada — varia por PC)
 - Sem backend, sem nuvem, sem auto-update no MVP
 - Permissões NTFS controlam quem escreve em `pending/` (líderes) e em `acks/`
   (operadores)

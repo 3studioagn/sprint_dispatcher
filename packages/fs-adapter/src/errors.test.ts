@@ -5,6 +5,7 @@ import {
   FileNotFoundError,
   FilesystemError,
   FilesystemIOError,
+  NotImplementedError,
 } from './errors';
 
 describe('FilesystemError hierarchy', () => {
@@ -98,11 +99,44 @@ describe('FilesystemError hierarchy', () => {
         new FileNotFoundError('/a'),
         new DirectoryNotFoundError('/b'),
         new FilesystemIOError('/c', 'msg'),
+        new NotImplementedError('writeCancel'),
       ];
       for (const err of errors) {
         expect(err).toBeInstanceOf(FilesystemError);
-        expect(err.filepath).toMatch(/^\//);
       }
+    });
+  });
+
+  describe('NotImplementedError', () => {
+    it('estende FilesystemError e Error', () => {
+      const err = new NotImplementedError('writeCancel');
+      expect(err).toBeInstanceOf(FilesystemError);
+      expect(err).toBeInstanceOf(NotImplementedError);
+      expect(err).toBeInstanceOf(Error);
+    });
+
+    it('expõe name discriminante', () => {
+      expect(new NotImplementedError('foo').name).toBe('NotImplementedError');
+    });
+
+    it('expõe operationName', () => {
+      expect(new NotImplementedError('writeCancel').operationName).toBe('writeCancel');
+    });
+
+    it('mensagem inclui operationName', () => {
+      expect(new NotImplementedError('writeCancel').message).toContain('writeCancel');
+    });
+
+    it('filepath default é placeholder quando não passado', () => {
+      expect(new NotImplementedError('foo').filepath).toBe('<not-applicable>');
+    });
+
+    it('filepath é preservado quando passado', () => {
+      expect(new NotImplementedError('foo', '/p/x.json').filepath).toBe('/p/x.json');
+    });
+
+    it('cause é undefined (NotImplementedError não recebe cause)', () => {
+      expect(new NotImplementedError('foo').cause).toBeUndefined();
     });
   });
 });

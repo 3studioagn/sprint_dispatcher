@@ -174,6 +174,36 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
   parte 1)" documentando organização do `renderer/` e convenções
   específicas (selectors puros, schema-first, flag DISPATCH_ENABLED,
   decisão de não usar RHF)
+- `@sprint/fs-adapter`: camada de domínio em `src/domain/` (port-and-adapter
+  per ADR-013) — `PendingStore` (`writePendingSprint`, `listPending`,
+  `deletePending`), `AckStore` (`writeAck`, `listAcks`), stubs `CancelStore`
+  (W2 / BL-C4-004) e `ArchiveStore` (W3 / BL-C4-005). Todos com construtor
+  uniforme `(adapter, sharedPath)` [BL-C4-002, BL-C4-003, BL-C4-006]
+- `@sprint/fs-adapter`: utility interno `readAndParseJson` com
+  discriminador `kind: 'not-found' | 'invalid'` em `ok: false` —
+  consumers distinguem race condition (skip) de corrupção (`kind: invalid`)
+  sem string match
+- `@sprint/fs-adapter`: `NotImplementedError` na hierarquia
+  `FilesystemError` — usado pelos stubs `CancelStore.writeCancel` e
+  `ArchiveStore.moveToArchive` com `operationName` exposto
+- `@sprint/fs-adapter`: `writePendingSprint` sanitiza `body_html` antes
+  de gravar (CLAUDE.md §7.9 + ADR-014); re-valida via `parseSprintPayload`
+  como defesa em profundidade contra cast bypass; idem `writeAck` via
+  `parseSprintAck`
+- `@sprint/fs-adapter`: tipos exportados —
+  `PendingEntry`/`AckEntry` (discriminated unions com `kind` e `modifiedAt`),
+  `ListPendingFilter`/`ListAcksFilter`, `WritePendingResult`/`WriteAckResult`/
+  `WriteCancelResult`/`MoveToArchiveResult`
+- `@sprint/fs-adapter`: nova runtime dep `@sprint/contracts` (`workspace:*`)
+  para parsers, sanitizer e filename builders
+- `@sprint/fs-adapter`: sanity test em `src/__tests__/barrel.test.ts`
+  importando via barrel raiz — captura early o erro de adicionar símbolo
+  público sem atualizar `index.ts`
+- ADR-016 (domain layer do `@sprint/fs-adapter` — W1) em `DECISIONS.md`
+- CLAUDE.md §4 ganhou nova subseção "Estrutura interna de
+  `@sprint/fs-adapter` (W1 domain layer)" documentando convenções
+  (construtor uniforme, `path.posix.join`, RN-09 no domain layer,
+  race-safe via FileNotFoundError skip, JSON pretty-print, stubs W2/W3)
 
 ### Changed
 

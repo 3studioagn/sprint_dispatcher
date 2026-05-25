@@ -52,6 +52,14 @@ compartilhada SMB é o único canal de comunicação.
    outros líderes                  arquivo/                   Maria, Carlos...
 ```
 
+> **Path real da pasta compartilhada (anotado 2026-05-25):**
+> `\\srv-alpha\TEMP\Metas_3Studio` (UNC) — montado como `Z:\Metas_3Studio` no PC
+> dev de Renan. Subpastas `pending/`, `acks/`, `arquivo/` já criadas. Cada
+> estação dos operadores pode mapear letra diferente ou nem mapear; o instalador
+> (BL-C5-002) deve escrever o **UNC** no `config.json` do Agent
+> (`shared_path: "\\\\srv-alpha\\TEMP\\Metas_3Studio"`), nunca a letra. Idem
+> para o setup do Leader (BL-C2-007+).
+
 ### Princípios arquiteturais inegociáveis
 
 - **P-01.** Toda comunicação Leader ↔ Agent passa pela pasta compartilhada via
@@ -201,6 +209,68 @@ renderer/
 - **Flag `DISPATCH_ENABLED = false` em `routes/NovaSprint/NovaSprint.tsx`** —
   controla o botão "Enviar". **Remover quando BL-C2-007 (parte 2 da W1.C2)
   integrar o dispatch real via `@sprint/fs-adapter`.**
+
+### Estrutura interna de `@sprint/fs-adapter` (W1 domain layer)
+
+O package segue port-and-adapter hexagonal (ADR-013). Após W1.C4
+(BL-C4-002/003/006):
+
+```
+packages/fs-adapter/src/
+├── interface.ts                 # port — IFilesystemAdapter + FileStat (W0)
+├── errors.ts                    # FilesystemError abstract + 4 concretos (W0+W1)
+├── node-adapter.ts              # adapter de produção (W0)
+├── memory-adapter.ts            # adapter de teste (W0)
+├── index.ts                     # barrel — public API
+├── __tests__/
+│   ├── contract.test.ts         # paridade Node↔Memory (W0)
+│   ├── barrel.test.ts           # sanity check do public API
+│   └── helpers.ts
+└── domain/                      # camada de domínio (W1)
+    ├── read-and-parse.ts        # utility read + JSON + Zod safeParse
+    ├── pending-store.ts         # writePendingSprint, listPending, deletePending
+    ├── ack-store.ts             # writeAck, listAcks
+    ├── cancel-store.ts          # writeCancel — stub W2 (BL-C4-004)
+    └── archive-store.ts         # moveToArchive — stub W3 (BL-C4-005)
+```
+
+**Convenções específicas do fs-adapter (W1):**
+
+- **Domain stores compartilham construtor uniforme** —
+  `new XxxStore(adapter: IFilesystemAdapter, sharedPath: string)`. Caller
+  (Leader, Agent) injeta tudo; stores não lêem config.
+- **Paths internos via `path.posix.join`** — uniformidade entre Linux CI,
+  Windows dev e MemoryFilesystemAdapter (que normaliza só `/`, ver G-019).
+  Windows aceita ambos os separadores em `fs/promises`.
+- **Re-validação Zod em writes** — `writePendingSprint` chama
+  `parseSprintPayload`; `writeAck` chama `parseSprintAck`. Defesa em
+  profundidade contra `as SprintPayload` cast bypass. Erros viram
+  `ContractValidationError`, não `FilesystemError`.
+- **`writePendingSprint` sanitiza `body_html`** antes de gravar (ADR-014, §7.9).
+  Idempotente.
+- **JSON sempre pretty-printed** (`JSON.stringify(payload, null, 2)`) — pasta
+  compartilhada é inspecionada manualmente pela TI da fábrica via
+  `notepad`/`type`.
+- **`mkdir(parent)` antes de cada `writeFileAtomic`** — convenção do contrato
+  (G-018). Node cria recursivo idempotente; Memory é no-op.
+- **`listPending`/`listAcks` aplicam RN-09** — arquivos malformados viram entry
+  com `kind: 'invalid'`, não lançam. Único throw é `DirectoryNotFoundError`
+  (pasta inexistente — precondição do polling).
+- **Race-safe via `FileNotFoundError` skip** — se arquivo desaparece entre
+  `listDir` e `stat`/`readFile` (Agent processou em outro lugar), entry é pulada
+  silenciosamente. Outros `FilesystemError` propagam.
+- **`readAndParseJson` retorna discriminated union** com
+  `kind: 'not-found' | 'invalid'` em `ok: false` — consumers distinguem race
+  condition (skip) de corrupção (entry `kind: 'invalid'`) sem string match.
+- **`deletePending` aceita pending E cancel** (ambos vivem em `pending/`),
+  rejeita ack e path traversal via `safeParseFilename` antes do `unlink`.
+- **`CancelStore`/`ArchiveStore` são stubs** com `NotImplementedError` (estende
+  `FilesystemError`). Assinaturas finais preservadas para callers poderem
+  escrever código contra o contrato. **Remover stubs em BL-C4-004 (W2) e
+  BL-C4-005 (W3).**
+- **MemoryFilesystemAdapter é o mock de fato** — não há classe paralela.
+  Paridade Node↔Memory garantida pela contract suite W0; testes do domain layer
+  usam Memory direto (sem tmpdir, sem flakiness).
 
 ---
 

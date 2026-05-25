@@ -86,6 +86,8 @@ entradas em ordem cronológica crescente — mais recente no fim.
   Sanitização de `body_html` via isomorphic-dompurify
 - [ADR-015](#adr-015-arquitetura-do-composer-da-app-lider-w1c2-parte-1) —
   Arquitetura do composer da app Líder (W1.C2 parte 1)
+- [ADR-016](#adr-016-domain-layer-do-sprintfs-adapter-w1) — Domain layer do
+  `@sprint/fs-adapter` (W1)
 
 ---
 
@@ -1310,3 +1312,144 @@ existe.
   específicos
 - CLAUDE.md §12 G-014 — débito `rootDir` do Leader (fix de 1 linha pré-requisito
   para BL-C2-007)
+
+---
+
+## ADR-016: Domain layer do `@sprint/fs-adapter` (W1)
+
+- **Status:** Accepted
+- **Data:** 2026-05-25
+- **Decisores:** Renan (3Studio)
+
+### Contexto
+
+ADR-013 (W0) estabeleceu o port-and-adapter hexagonal e prometeu que operações
+de domínio (`writePendingSprint`, `listAcks`, `moveToArchive`, etc.) ficariam em
+**módulos separados** em W1+, fora da interface `IFilesystemAdapter`. Este ADR
+documenta como esses módulos foram materializados em BL-C4-002, BL-C4-003 e
+BL-C4-006 — junto com stubs explícitos para BL-C4-004 (W2) e BL-C4-005 (W3).
+
+### Decisão
+
+Adotamos **4 stores em `src/domain/`** — `PendingStore`, `AckStore`,
+`CancelStore`, `ArchiveStore` — cada um com **construtor uniforme**
+`(adapter: IFilesystemAdapter, sharedPath: string)`. Características
+compartilhadas:
+
+1. **Path arithmetic via `path.posix.join`** — Windows aceita ambos os
+   separadores; uniformidade elimina drift entre Linux CI, Windows dev e Memory
+   adapter (que normaliza só `/`, ver G-019).
+2. **Defense-in-depth via Zod**: `writePendingSprint`/`writeAck` re-validam via
+   `parseSprintPayload`/`parseSprintAck` antes de gravar. Captura callers que
+   façam `as SprintPayload` cast bypass — erro vira `ContractValidationError`,
+   não `FilesystemError`.
+3. **Sanitização de `body_html` em `writePendingSprint`** (CLAUDE.md §7.9 e
+   ADR-014). Idempotente — chamada nunca quebra um payload já sanitizado.
+4. **`mkdir(parent)` antes de cada `writeFileAtomic`** — segue G-018. Node cria
+   recursivo idempotente; Memory é no-op.
+5. **JSON pretty-printed** (`null, 2`) — pasta compartilhada é inspecionada
+   manualmente pela TI via `notepad`/`type`. ~30% mais bytes, ganho de
+   debuggability supera o custo.
+6. **`listPending`/`listAcks` aplicam RN-09**: arquivos malformados viram
+   `kind: 'invalid'` em vez de lançar. Só `DirectoryNotFoundError` (pasta
+   inexistente) propaga.
+7. **Race-safe**: `FileNotFoundError` no `stat` ou `readFile` (arquivo
+   desaparece entre `listDir` e a próxima chamada) é skipado silenciosamente.
+   Outros `FilesystemError` propagam.
+
+### Utility readAndParseJson com discriminador `kind`
+
+Helper interno (`src/domain/read-and-parse.ts`) faz read + JSON parse +
+validation Zod, retornando discriminated union:
+
+```ts
+type ReadAndParseResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; kind: 'not-found' | 'invalid'; reason: string };
+```
+
+O `kind` evita brittle string match em `reason` — consumers distinguem "race
+condition (skip)" de "corrupção (`kind: 'invalid'`)" sem inspecionar o texto do
+erro. RN-09 ("arquivo malformado: log e ignora silenciosamente") aplica-se ao
+`kind: 'invalid'`.
+
+### Stubs W2/W3 com NotImplementedError
+
+`CancelStore.writeCancel` (BL-C4-004 W2) e `ArchiveStore.moveToArchive`
+(BL-C4-005 W3) lançam `NotImplementedError(operationName)`. A classe estende
+`FilesystemError` — consumers continuam usando `instanceof FilesystemError` como
+discriminação única do package.
+
+Assinaturas finais preservadas (`writeCancel(_cancel: SprintCancel)`,
+`moveToArchive(_filename: string)`) para callers de W1+ poderem escrever código
+que type-check contra o contrato final. Prefixo `_` no parâmetro silencia
+`no-unused-vars`; some na implementação real de W2/W3.
+
+### Sanity test via barrel
+
+`src/__tests__/barrel.test.ts` importa via `..` (resolve para `index.ts`) e
+confirma que cada classe/tipo está exportada. Captura cedo o erro de "adicionou
+símbolo público e esqueceu de atualizar o barrel". Forma é equivalente a
+`import { X } from '@sprint/fs-adapter'` em runtime (source-first com
+`main: ./src/index.ts`).
+
+### Alternativas consideradas
+
+1. **Mock paralelo ao Memory** (proposto no prompt original do W1.C4):
+   rejeitado. `MemoryFilesystemAdapter` do W0 já é paritário ao Node via
+   contract suite; testes do domain usam Memory direto. Helpers tipo
+   `injectFailure` se resolvem com `vi.spyOn(adapter, '...')` com setup mais
+   simples e menos surface area.
+2. **Operações de domínio como métodos da interface `IFilesystemAdapter`**: já
+   rejeitado em ADR-013, confirmado aqui. Acoplaria adapter a `SprintPayload`,
+   schemas, semântica de pasta compartilhada.
+3. **`sharedPath` como dep injetada no adapter**: rejeitado. Adapter é port
+   puro; `sharedPath` é responsabilidade do domain layer.
+4. **`deletePending` aceitar qualquer filename**: rejeitado por path traversal.
+   Validamos via `safeParseFilename` antes do `unlink`.
+5. **`listPending` lançar para qualquer falha**: rejeitado por RN-09. Arquivo
+   malformado individual não deve quebrar polling agentwide.
+6. **Brittle string match em `reason` para detectar race**: rejeitado.
+   Discriminador `kind` no `ReadAndParseResult` resolve com type-safe.
+7. **Numerar BLs como o prompt original sugeria** (writeAck=006, mock=007):
+   rejeitado. SESSION_LOG #10 já usou 006/007 para MemoryAdapter/NodeAdapter no
+   W0. Mantemos a numeração efetiva do projeto.
+
+### Consequências
+
+**Aceitas:**
+
+- Leader (BL-C2-007, parte 2) e Agent (BL-C3-003/007) ganham API completa para
+  dispatch + polling + ack. Próximas sessões consomem `PendingStore` /
+  `AckStore` diretamente.
+- Stores são testáveis isoladamente via `MemoryFilesystemAdapter` (sem tmpdir,
+  sem flakiness).
+- Coverage 100% em toda a camada de domínio (5 arquivos, 9 suites, 235 testes no
+  fs-adapter total).
+- Stubs `CancelStore`/`ArchiveStore` permitem code-completion e type-check para
+  callers de W1+ sem precisar esperar W2/W3 entregarem o corpo.
+
+**Trade-offs:**
+
+- Stores compartilham boilerplate (constructor, mkdir-before-write,
+  pretty-print). Extrair classe-base reduziria legibilidade dos métodos
+  individuais. Aceito.
+- `@sprint/fs-adapter` ganha runtime dep em `@sprint/contracts` — mudança de
+  schema/sanitizer dispara rebuild do fs-adapter. Inevitável com o domain layer.
+- W3 (job de limpeza, BL-C4-008) precisará usar `ArchiveStore.moveToArchive`
+  quando entregue; até lá, sprints processadas se acumulam em `pending/`.
+
+### Referências
+
+- ADR-013 (port-and-adapter; fundação)
+- ADR-014 (sanitização body_html — usada em `writePendingSprint`)
+- ADR-005 (schema-first; parsers Zod usados em defesa em profundidade)
+- ADR-006 (filename com ULID; `buildPendingFilename`/`buildAckFilename`/
+  `buildCancelFilename`)
+- BL-C4-002 (`writePendingSprint`), BL-C4-003 (`listPending`/`listAcks`/
+  `deletePending`), BL-C4-006 (`writeAck`), BL-C4-004 W2 (`writeCancel` stub),
+  BL-C4-005 W3 (`moveToArchive` stub)
+- CLAUDE.md §7.9 (sanitização obrigatória), §4 ("Estrutura interna de
+  `@sprint/fs-adapter`")
+- CLAUDE.md §12 G-018 (caller faz `mkdir` antes de `writeFileAtomic` em paths
+  aninhados), G-019 (Memory adapter normaliza só `/`) para BL-C2-007)

@@ -71,3 +71,28 @@ export class FilesystemIOError extends FilesystemError {
     super(filepath, `Erro de I/O em ${filepath}: ${message}`, cause);
   }
 }
+
+/**
+ * Operação de domain layer ainda não implementada.
+ *
+ * Stubs de módulos de domínio (`cancel-store`, `archive-store`) lançam
+ * esta exceção até que BL-C4-004 (W2) e BL-C4-005 (W3) sejam entregues.
+ *
+ * Subclasse de {@link FilesystemError} para preservar `instanceof
+ * FilesystemError` único nos consumers — tratamento de erros do
+ * fs-adapter continua centralizado.
+ *
+ * `filepath` é opcional: stubs frequentemente não têm um arquivo
+ * associado no momento do throw; o default `<not-applicable>` deixa
+ * isso claro em logs.
+ */
+export class NotImplementedError extends FilesystemError {
+  override readonly name = 'NotImplementedError';
+
+  public readonly operationName: string;
+
+  constructor(operationName: string, filepath = '<not-applicable>') {
+    super(filepath, `Operação não implementada: ${operationName}`);
+    this.operationName = operationName;
+  }
+}

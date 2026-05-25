@@ -66,6 +66,223 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 14 — 2026-05-25 — Wave 1, C4 inteiro (domain layer do fs-adapter)
+
+**Wave atual:** W1 **Método:** gate-by-gate com aprovação explícita entre gates
+**Duração estimada:** ~3h **Itens trabalhados:** [BL-C4-002, BL-C4-003,
+BL-C4-006] (+ stubs explícitos BL-C4-004 W2 / BL-C4-005 W3)
+
+### Objetivo da sessão
+
+Entregar a camada de domínio de `@sprint/fs-adapter` em estado de produção para
+W1 — destravando o dispatch real do Leader (BL-C2-007, parte 2 da Sessão 13) e o
+polling/ack do Agent (BL-C3-003+). Sessão começou com prompt assumindo
+arquitetura "adapter real + mock paralelo com métodos de domínio na interface",
+mas o W0 (Sessão 10, ADR-013) tinha entregue port-and-adapter hexagonal com
+domínio prometido em módulos separados. Gate 1 reconciliou a discrepância —
+plano revisado executado.
+
+### O que foi feito
+
+- **Gate 1 — reconciliação arquitetural.** Reportei a divergência entre o prompt
+  (adapter real + mock paralelo com métodos de domínio na interface) e a
+  arquitetura W0 ratificada em ADR-013 (port com 8 primitivos + domain layer
+  separado). Renan aprovou o plano revisado: entregar 4 stores em `src/domain/`
+  consumindo `IFilesystemAdapter`.
+- **Gate 2 — fundação.** `NotImplementedError` adicionado à hierarquia
+  `FilesystemError`; utility `domain/read-and-parse.ts` com discriminador
+  `kind: 'not-found' | 'invalid'` em `ok: false` (consumers distinguem race
+  condition de corrupção sem string match). 7 testes de `NotImplementedError`
+  - 13 de `readAndParseJson` (incluindo smoke contra `safeParseSprintPayload`).
+    Adicionada dep runtime `@sprint/contracts: workspace:*`.
+- **Gate 3 — `pending-store.ts` writePendingSprint (BL-C4-002).** Classe
+  `PendingStore(adapter, sharedPath)` com `writePendingSprint(payload)` que
+  re-valida via `parseSprintPayload`, sanitiza `body_html` via
+  `sanitizeBodyHtml` (idempotente per §7.9), deriva filename via
+  `buildPendingFilename`, faz `mkdir(<shared>/pending)` antes do
+  `writeFileAtomic`. JSON pretty-printed (2 espaços) para inspeção manual da TI.
+  15 testes contra `MemoryFilesystemAdapter`.
+- **Gate 4 — `ack-store.ts` writeAck (BL-C4-006).** Espelha PendingStore com
+  diferenças: sem sanitização (ack não tem `body_html`), overwrite é caso de uso
+  explícito (Agent reescreve com `acknowledged_at` adicionado depois do
+  `displayed_at`). 14 testes.
+- **Gate 5 — listPending, listAcks, deletePending (BL-C4-003).** Refactor de
+  `ReadAndParseResult` para discriminador `kind`. `listPending`/`listAcks`
+  retornam discriminated union `PendingEntry`/`AckEntry` com
+  `kind: 'sprint'|'cancel'|'ack'|'invalid'`, aplicam RN-09 (malformados viram
+  `kind: 'invalid'`, não lançam), são race-safe via `FileNotFoundError` skip em
+  `stat`/`readFile`, ordenam ascendente por `modifiedAt`. Filtros
+  `userId`/`sprintId` pré-I/O. `deletePending` aceita pending + cancel, rejeita
+  ack/path traversal via `safeParseFilename`. +25 testes no pending-store, +13
+  no ack-store.
+- **Gate 6 — stubs CancelStore (W2 / BL-C4-004) e ArchiveStore (W3 /
+  BL-C4-005).** Mesmo construtor `(adapter, sharedPath)`; métodos lançam
+  `NotImplementedError(operationName)` via `Promise.reject` (evita lint
+  require-await em método sem await). Assinaturas finais preservadas para
+  callers de W1+ poderem escrever código contra o contrato. 4+4 testes.
+- **Gate 7 — fechamento.** Barrel `src/index.ts` reescrito exportando 4 domain
+  stores + tipos + erros + adapters W0 (12 exports). Sanity test em
+  `__tests__/barrel.test.ts` (5 testes — importa via `..`, valida que cada
+  símbolo está exportado). Changeset `fs-adapter-domain-layer.md` (patch).
+- **ADR-016** em `DECISIONS.md` (domain layer do `@sprint/fs-adapter` — W1):
+  documenta construtor uniforme, `path.posix.join`, defense-in-depth via Zod,
+  sanitização per §7.9, race-safe via `FileNotFoundError` skip, RN-09 no domain
+  layer, stubs W2/W3, sanity test do barrel. Lista 7 alternativas rejeitadas.
+- **CLAUDE.md §4** ganhou nova subseção "Estrutura interna de
+  `@sprint/fs-adapter` (W1 domain layer)" documentando árvore do `src/domain/` e
+  11 convenções específicas (paralelo à subseção do Leader).
+- **CHANGELOG.md** `[Unreleased].Added` com 10 entries cobrindo domain stores,
+  utility readAndParseJson, NotImplementedError, sanitização no
+  writePendingSprint, tipos, dep runtime nova, sanity test do barrel, ADR-016 e
+  CLAUDE.md.
+
+### Estado atual
+
+- **BL-C4-001:** ✅ (W0, mantido)
+- **BL-C4-002 (writePendingSprint):** ✅ concluído
+- **BL-C4-003 (listPending / listAcks / deletePending):** ✅ concluído
+- **BL-C4-006 (writeAck):** ✅ concluído
+- **BL-C4-007 (NodeFilesystemAdapter):** ✅ (W0, mantido)
+- **BL-C4-006 (MemoryFilesystemAdapter):** ✅ (W0, mantido — numeração efetiva
+  do projeto difere do prompt; ver Gate 1)
+- **BL-C4-004 (writeCancel):** ⏸️ stub W2 — `CancelStore.writeCancel` lança
+  `NotImplementedError`
+- **BL-C4-005 (moveToArchive):** ⏸️ stub W3 — `ArchiveStore.moveToArchive` lança
+  `NotImplementedError`
+- **BL-C4-008 (job de limpeza):** ⏸️ W3
+
+Bateria final na raiz: `format:check`, `lint`, `type-check`, `test`, `build` —
+todos exit 0. Regressão zero:
+
+- `@sprint/contracts`: 230 testes 100% (sem mudança)
+- `@sprint/fs-adapter`: **235 testes** (era 135 no W0, +100 do W1) em **10
+  suites**, cobertura **99.61% lines / 98.03% branches / 100% funcs / 99.61%
+  stmts**. **100% em toda a camada `src/domain/`**. Threshold global
+  (95/95/90/95) com folga.
+- `sprint-operator-agent`: 15 testes 100% (sem mudança)
+- `sprint-leader`: 84 testes 96.64% lines (sem mudança)
+
+### Decisões tomadas
+
+- **Plano revisado da sessão (Gate 1)** — entregar domain layer alinhado com
+  ADR-013 (em vez do "adapter real + mock paralelo" do prompt original).
+  Recolocar métodos de domínio na interface teria exigido superseder ADR-013 +
+  duplicar W0 já fechado.
+- **ADR-016 registrado** (domain layer do `@sprint/fs-adapter` — W1).
+- **`MemoryFilesystemAdapter` é o mock de fato** — não criar Mock paralelo.
+  Paridade Node↔Memory garantida pela contract suite W0;
+  `vi.spyOn(adapter, '...')` resolve casos de injectFailure/setLatency com setup
+  mais simples e menos surface area.
+- **`@sprint/contracts: workspace:*` adicionado como runtime dep** — domain
+  layer precisa de parsers Zod, sanitizer e filename builders. Não há circular
+  dep (contracts NÃO importa fs-adapter).
+- **`path.posix.join` em todos os stores** — cross-platform consistente. Windows
+  aceita `/` em `fs/promises`; Memory adapter normaliza só `/` (G-019).
+- **Pretty-printed JSON** (`null, 2`) em todos os writes — debuggability via
+  `notepad`/`type` da pasta compartilhada. ~30% mais bytes, aceito.
+- **`readAndParseJson` retorna discriminador `kind`** — refactor pequeno em Gate
+  5 que permite consumers distinguir race de corrupção com type-safety.
+- **`deletePending` valida via `safeParseFilename` antes do `unlink`** — defesa
+  em profundidade contra path traversal e contra deletar ack (que vive em
+  `acks/`, não `pending/`).
+- **Stubs cancel/archive com `Promise.reject(new NotImplementedError(...))`** em
+  vez de `async + throw` — evita `@typescript-eslint/require-await` em método
+  sem `await`. Mesmo comportamento do ponto de vista do caller.
+- **Sanity test do barrel** (`__tests__/barrel.test.ts`) com
+  `import ... from '..'` — captura early erro de "adicionou símbolo público sem
+  atualizar `index.ts`".
+- **Numeração BLs mantida conforme SESSION_LOG #10** — BL-C4-006 = MemoryAdapter
+  (W0), BL-C4-007 = NodeAdapter (W0). Prompt da sessão usava numeração
+  diferente; não atualizamos backlog externo (§9.1 "imutável").
+
+### Bloqueios encontrados
+
+Nenhum bloqueio funcional. 3 fricções resolvidas inline:
+
+1. **Gate 2 type error** — fixtures de teste usavam `schema_version: 1` (number)
+   e raw strings para `sprint_id`/`user_id` (G-005 branded types). Trocado por
+   `parseSprintPayload({...})` que aplica branding correto.
+2. **Gate 3 lint error** — `as unknown as SprintPayload` desnecessário para
+   `meta: 0` e `body_html: ''` (passam estrutural; Zod refinement falha em
+   runtime). Cast mantido só para `sprint_id`/`user_id` (branded types).
+3. **Gate 5 lint error** — `node:path` precisa vir antes de `@sprint/contracts`
+   (builtin > external) com blank line entre grupos. Convention difere do que
+   CLAUDE.md §7.3 sugere ("`@sprint/*` em grupo próprio"); ESLint é a fonte de
+   verdade.
+
+### Próximo passo
+
+Renan revisa o working tree (12 arquivos modificados/novos no fs-adapter +
+ADR-016 + CLAUDE/CHANGELOG/SESSION_LOG/README) e decide:
+
+1. Forma de consolidação (PR + review §9.3 ou fast-forward override das sessões
+   anteriores).
+2. Próximo BL da W1. **Recomendação técnica: BL-C2-007 (parte 2 da Sessão 13)**
+   — dispatch real do Leader integrando `PendingStore.writePendingSprint`.
+   Pré-requisito: fix de 1 linha em `apps/leader/tsconfig.json`
+   (`"rootDir": "./src"` → `"../.."`) para destravar import source-first de
+   `@sprint/contracts` (débito G-014).
+
+### Observações para a próxima sessão
+
+- **`PendingStore` está pronto para consumir em BL-C2-007.** Construtor:
+  `new PendingStore(new NodeFilesystemAdapter(), sharedPath)`. Método:
+  `await store.writePendingSprint(payload)` retorna `{ filename, filepath }`. Em
+  ambiente de teste/CI: trocar `NodeFilesystemAdapter` por
+  `MemoryFilesystemAdapter`.
+- **Débito `rootDir` do Leader (CLAUDE.md §12)** — fix de 1 linha pré-requisito
+  imediato para BL-C2-007 (Leader vai importar `@sprint/contracts` no renderer).
+- **`AckStore` e `listPending` prontos para BL-C3-003/007.** Polling do Agent:
+  `await pendingStore.listPending({ userId })` retorna entries ordenadas
+  cronologicamente, com `kind: 'sprint'|'cancel'|'invalid'`. Após processar:
+  `await pendingStore.deletePending(filename)`.
+- **`CancelStore.writeCancel` ainda é stub** (W2) — Leader não pode cancelar
+  sprints em W1. Mas `listPending` JÁ entrega `kind: 'cancel'`, então o Agent já
+  consegue receber/processar cancels gerados manualmente (via Leader W2 ou seed
+  direto via adapter em testes).
+- **`ArchiveStore.moveToArchive` ainda é stub** (W3) — sprints processadas se
+  acumulam em `pending/` até W3 entregar a limpeza. Aceito para W1.
+- **Numeração BLs do prompt vs. projeto** — prompt da sessão tinha divergência
+  (BL-C4-006 = writeAck no prompt vs. MemoryAdapter no SESSION_LOG #10). Mantida
+  numeração efetiva (W0 sessions). Renan pode considerar atualizar o
+  `sprint_dispatcher_backlog.docx` externo para alinhar.
+- **10 suites no fs-adapter agora** — `errors`, `memory-adapter`,
+  `node-adapter`, `__tests__/contract`, `__tests__/barrel`,
+  `domain/read-and-parse`, `domain/pending-store`, `domain/ack-store`,
+  `domain/cancel-store`, `domain/archive-store`. Tempo total de execução ~1.7s.
+  Mantém ritmo rápido conforme W1 expandir.
+- **Sem novos gotchas** nesta sessão — convenções estabelecidas em W0 (G-018
+  mkdir-before-write, G-019 Memory normalize) foram seguidas e funcionaram. As
+  11 convenções específicas do fs-adapter ficaram documentadas em CLAUDE.md §4
+  (nova subseção).
+
+**Arquivos modificados/novos:**
+
+- `packages/fs-adapter/package.json` (+1 dep `@sprint/contracts: workspace:*`)
+- `packages/fs-adapter/src/errors.ts` (+`NotImplementedError`)
+- `packages/fs-adapter/src/errors.test.ts` (+7 testes)
+- `packages/fs-adapter/src/index.ts` (barrel reescrito com domain exports)
+- `packages/fs-adapter/src/domain/read-and-parse.ts` (novo)
+- `packages/fs-adapter/src/domain/read-and-parse.test.ts` (novo, 13 testes)
+- `packages/fs-adapter/src/domain/pending-store.ts` (novo)
+- `packages/fs-adapter/src/domain/pending-store.test.ts` (novo, 40 testes)
+- `packages/fs-adapter/src/domain/ack-store.ts` (novo)
+- `packages/fs-adapter/src/domain/ack-store.test.ts` (novo, 27 testes)
+- `packages/fs-adapter/src/domain/cancel-store.ts` (novo, stub)
+- `packages/fs-adapter/src/domain/cancel-store.test.ts` (novo, 4 testes)
+- `packages/fs-adapter/src/domain/archive-store.ts` (novo, stub)
+- `packages/fs-adapter/src/domain/archive-store.test.ts` (novo, 4 testes)
+- `packages/fs-adapter/src/__tests__/barrel.test.ts` (novo, 5 testes)
+- `pnpm-lock.yaml` (atualizado pela install do workspace link)
+- `.changeset/fs-adapter-domain-layer.md` (novo, patch)
+- `DECISIONS.md` (ADR-016 + lista de registro)
+- `CLAUDE.md` (§4 nova subseção)
+- `CHANGELOG.md` ([Unreleased].Added com 10 entries)
+- `README.md` (status C4 atualizado)
+- `SESSION_LOG.md` (esta entrada)
+
+---
+
 ## Sessão 13 — 2026-05-25 — Wave 1, BL-C2-002/003/004/005/011 (Composer do Leader, parte 1)
 
 **Wave atual:** W1 **Método:** gate-by-gate com aprovação explícita entre gates

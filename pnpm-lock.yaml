@@ -190,6 +190,10 @@ importers:
         version: 1.6.1(@types/node@25.9.1)(jsdom@28.1.0)
 
   packages/fs-adapter:
+    dependencies:
+      '@sprint/contracts':
+        specifier: workspace:*
+        version: link:../contracts
     devDependencies:
       '@vitest/coverage-v8':
         specifier: ^1.6.0
