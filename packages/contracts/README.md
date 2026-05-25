@@ -87,6 +87,34 @@ processSprint(sprintIdSchema.parse(raw)); // ✅ valida e converte
 Os builds validam `sprintId` e `userId` antes de compor a string — emitem nomes
 garantidos roundtrip-compatíveis com o parser.
 
+### Sanitização
+
+| Função                   | Descrição                                             |
+| ------------------------ | ----------------------------------------------------- |
+| `sanitizeBodyHtml(html)` | Sanitiza `body_html` contra XSS via whitelist estrita |
+
+A função aceita uma string HTML, aplica whitelist de tags derivada de
+`ALLOWED_HTML_TAGS` (`<b>`, `<i>`, `<br>`, `<p>`, `<h1>`, `<span>` — RN-10),
+remove **todos** os atributos (defesa contra handlers inline,
+`style: url(javascript:)`, `href: javascript:`) e preserva texto interno de tags
+removidas (`KEEP_CONTENT: true`). Implementação via
+[`isomorphic-dompurify`](https://github.com/kkomelin/isomorphic-dompurify) —
+funciona em main process Node e em renderer browser-like.
+
+Uso obrigatório em toda escrita (Leader) e leitura (Agent) de `body_html`,
+conforme CLAUDE.md §7.9 e ADR-014. Função é pura e idempotente —
+`sanitizeBodyHtml(sanitizeBodyHtml(x)) === sanitizeBodyHtml(x)`.
+
+```ts
+import { sanitizeBodyHtml } from '@sprint/contracts';
+
+sanitizeBodyHtml('<b>Meta: 8</b><script>alert(1)</script>');
+// → '<b>Meta: 8</b>'
+
+sanitizeBodyHtml('<b onmouseover="alert(1)">x</b>');
+// → '<b>x</b>' (tag mantida, atributo removido)
+```
+
 ### Geração de IDs
 
 | Função               | Descrição                                     |
@@ -123,6 +151,7 @@ garantidos roundtrip-compatíveis com o parser.
 | `errors.ts`    |   100% |     100% |  100% |       100% |
 | `filenames.ts` |   100% |     100% |  100% |       100% |
 | `ids.ts`       |   100% |     100% |  100% |       100% |
+| `sanitize.ts`  |   100% |     100% |  100% |       100% |
 | `schemas/*.ts` |   100% |     100% |  100% |       100% |
 | **Global**     |   100% |     100% |  100% |       100% |
 
@@ -131,9 +160,8 @@ Thresholds configurados em `vitest.config.ts`: ≥ 95% lines/funcs/statements, �
 
 ## Roadmap interno
 
-- **BL-C1-004 (Wave 1):** `sanitizeBodyHtml()` com DOMPurify para sanear o campo
-  `body_html` antes da exibição. **Schema não sanitiza** — sanitização é
-  responsabilidade explícita do sanitizador, documentado em `security.test.ts`.
+- **BL-C1-004 ✅ entregue (Sessão 12, 2026-05-25):** `sanitizeBodyHtml()` via
+  `isomorphic-dompurify` — ver seção "Sanitização" acima e ADR-014.
 - **Branded types em forms.** Com `react-hook-form`, use o tipo `*Input` em vez
   de `*` (com brand) — defaults e brand-checks só são aplicados após parse.
 

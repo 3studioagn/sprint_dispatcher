@@ -25,6 +25,7 @@
     "type-check": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "isomorphic-dompurify": "^2.36.0",
     "ulid": "^2.3.0",
     "zod": "^3.23.0"
   },

@@ -66,6 +66,149 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 12 — 2026-05-25 — Wave 1, BL-C1-004 (sanitizeBodyHtml)
+
+**Wave atual:** W1 (primeira entrega) **Método:** gate-by-gate com aprovação
+explícita entre gates **Duração estimada:** ~2h **Itens trabalhados:**
+[BL-C1-004]
+
+### Objetivo da sessão
+
+Primeira entrega da Wave 1: implementar `sanitizeBodyHtml(html: string): string`
+em `@sprint/contracts` para sanear o campo `body_html` do `SprintPayload` contra
+XSS, conforme RF-17, RN-10 e RNF-18. Sessão também atravessa informalmente a
+fronteira W0 → W1 (o gate W0→W1 formal aguardava auditoria, mas Renan decidiu
+prosseguir).
+
+### O que foi feito
+
+- `packages/contracts/src/sanitize.ts` — função pura `sanitizeBodyHtml(html)`
+  via `isomorphic-dompurify` ^2.36.0 (nova dep runtime). Whitelist estrita
+  derivada de `ALLOWED_HTML_TAGS` (constante já existente desde BL-C1-006),
+  `ALLOWED_ATTR: []`, `KEEP_CONTENT: true`, `ALLOW_DATA_ATTR: false`,
+  `ALLOW_UNKNOWN_PROTOCOLS: false`, `RETURN_TRUSTED_TYPE: false`.
+- `packages/contracts/src/sanitize.test.ts` — 40 testes adversariais organizados
+  em 4 grupos (casos normais, vetores XSS clássicos, edge cases, asserções sobre
+  `ALLOWED_HTML_TAGS`), todos passando na primeira execução. Helper interno
+  `expectNoXssExecution(output)` para asserções semânticas robustas a variações
+  de whitespace do DOMPurify.
+- Barrel raiz `packages/contracts/src/index.ts` ganhou bloco
+  `// === Sanitization ===` com export único de `sanitizeBodyHtml`.
+- `.changeset/sanitize-body-html.md` (patch) com descrição estruturada.
+- ADR-014 em `DECISIONS.md` (sanitização de `body_html` via
+  isomorphic-dompurify) — justifica whitelist estrita, reuso de
+  `ALLOWED_HTML_TAGS`, defesa em profundidade e desvio explícito da §6.2 do
+  prompt (omissão de `USE_PROFILES`).
+- CLAUDE.md §7.9 (nova convenção: toda escrita e leitura de `body_html` passa
+  por `sanitizeBodyHtml`).
+- CLAUDE.md §12 "Débitos técnicos pendentes" ganhou novo débito: `rootDir` do
+  Leader em `apps/leader/tsconfig.json` (G-014 exercitado e confirmado no Gate
+  4).
+- CHANGELOG.md `[Unreleased].Added` com entrada do sanitizador, ADR-014 e §7.9.
+
+### Estado atual
+
+- **BL-C1-004:** ✅ concluído (sanitizador + 40 testes + barrel + ADR-014 +
+  CLAUDE.md §7.9 + changeset)
+- `@sprint/contracts`: **230 testes** (era 190), cobertura **100%** em todos os
+  módulos (sanitize.ts inclusive). Regressão zero.
+- Total no package: 11 arquivos de teste (era 10), 1 novo módulo de produção
+  (`sanitize.ts`), 1 nova dep runtime (`isomorphic-dompurify`).
+
+Bateria final no `@sprint/contracts`: `type-check`, `lint`, `test`,
+`test:coverage`, `build` — todos exit 0. Smoke import via alias
+`@sprint/contracts` confirmado no Agent (`apps/operator-agent`).
+
+### Decisões tomadas
+
+- **ADR-014** (sanitização de `body_html` via isomorphic-dompurify) — whitelist
+  estrita derivada de `ALLOWED_HTML_TAGS`, defesa em profundidade, justificativa
+  do reuso de constante e da omissão de `USE_PROFILES`.
+- **Reusar `ALLOWED_HTML_TAGS` (já existente em BL-C1-006), não criar
+  `ALLOWED_BODY_TAGS`** — desvio explícito do prompt §6.1, aprovado por Renan no
+  Gate 1. Mesma whitelist, mesmo propósito, mesmo JSDoc citando RF-17/RN-10.
+  Criar duplicata arriscaria drift entre as duas.
+- **Estrutura flat (`src/sanitize.ts`), não subpasta `src/sanitize/`** — desvio
+  explícito do prompt §6, alinhado ao padrão de utility modules do package
+  (constants/errors/filenames/ids). Aprovado no Gate 1.
+- **Omitir `USE_PROFILES: { html: true }`** — desvio explícito da §6.2 do
+  prompt. Razão: o DOMPurify v3 documenta que `USE_PROFILES` sobrescreve
+  `ALLOWED_TAGS` quando ambos são setados, abrindo o profile HTML inteiro
+  (`<div>`, `<table>`, `<a>`, etc) — anularia a whitelist restrita. Validação
+  empírica pelos testes adversariais (`<div>`, `<table>`, `<unknown>` são
+  corretamente neutralizados).
+- **Versão `^2.36.0` (não `^2.10.0` como pedido pelo prompt §5.1)** — o pnpm
+  resolveu para a última estável da major 2 ao executar
+  `pnpm add 'isomorphic-dompurify@^2.10.0'`. Dentro da major 2 (sem violar §10),
+  com correções de segurança mais recentes. Aceito.
+- **Smoke do import pivotado de Leader para Agent** — o Leader bate em G-014
+  (TS6059 por `rootDir: "./src"`) no `tsc --noEmit`. Pivotar preserva o §2.2 do
+  prompt (não refatorar W0 fora do escopo) — o fix é responsabilidade de
+  BL-C2-007 ou BL micro dedicado. Registrado como débito explícito em CLAUDE.md
+  §12.
+
+### Bloqueios encontrados
+
+Nenhum. O smoke do Leader falhou como **previsto pela Sessão 09** (G-014); pivot
+para o Agent funcionou imediatamente.
+
+### Próximo passo
+
+Renan revisa o working tree (6 arquivos modificados + 5 novos, listados abaixo),
+aprova e decide:
+
+1. Se a sessão fecha com PR + review (§9.3 do CLAUDE.md) ou consolidação direta
+   em `develop` por fast-forward (override do §9.3, padrão das sessões
+   05/07/08/09/10/11).
+2. Próximo BL da W1: candidatos prováveis são **BL-C4-002..005** (operações de
+   domínio em `@sprint/fs-adapter` — `writePending`, `listAcks`, `writeAck`,
+   `writeCancel`, `moveToArchive`); ou **BL-C2-007** (integração do
+   `sanitizeBodyHtml` no Leader, incluindo o fix do `rootDir` débito); ou
+   **BL-C6-001** (`@sprint/logger`).
+
+### Observações para a próxima sessão
+
+- **W0 → W1 oficializada de fato.** O Gate W0→W1 formal nunca foi declarado em
+  `SESSION_LOG` (sessão 11 deixou aguardando auditoria), mas esta sessão começou
+  pela W1 com aval direto do Renan. A próxima sessão pode considerar a W1
+  formalmente em andamento.
+- **`packages/contracts/README.md` roadmap** ainda lista BL-C1-004 como
+  pendência ("BL-C1-004 (Wave 1): `sanitizeBodyHtml()` com DOMPurify…").
+  Atualizado nesta sessão para refletir a entrega.
+- **Débito `rootDir` do Leader** (CLAUDE.md §12, nova subseção) precisa ser
+  resolvido **antes** do primeiro consumer real de `@sprint/contracts` no Leader
+  em W1. Fix de 1 linha: `"rootDir": "./src"` → `"rootDir": "../.."` em
+  `apps/leader/tsconfig.json`. Pode bundlar como Fase 0 de BL-C2-007 ou virar BL
+  micro.
+- **Footprint runtime adicionado:** `dompurify` ~681 KB + `jsdom` ~4 MB no
+  `node_modules`. No bundle final do renderer (Vite + browser), jsdom é
+  tree-shaken. Quando BL-C2-007 e BL-C3-004 forem entregues, validar que o
+  tamanho do `.exe` empacotado pelo electron-builder não inflou
+  desproporcionalmente.
+- **Idempotência testada explicitamente** — `sanitizeBodyHtml(x)` aplicada duas
+  vezes produz o mesmo output. Defesa em profundidade dupla (Leader + Agent)
+  está OK por design.
+- **Versão `^2.36.0` vs. `^2.10.0`** — quando Renan revisar o changeset e o
+  `package.json`, vai notar a divergência da spec do prompt. Justificada acima;
+  revertível pra `^2.10.0` literal editando o `package.json` se preferir manter
+  alinhado ao spec (não recomendado).
+
+**Arquivos modificados/novos:**
+
+- `packages/contracts/src/sanitize.ts` (novo, ~63 linhas)
+- `packages/contracts/src/sanitize.test.ts` (novo, 40 testes)
+- `packages/contracts/src/index.ts` (+3 linhas, bloco Sanitization)
+- `packages/contracts/package.json` (+1 dep)
+- `packages/contracts/README.md` (roadmap atualizado)
+- `pnpm-lock.yaml` (resolução das novas deps)
+- `.changeset/sanitize-body-html.md` (novo, patch)
+- `DECISIONS.md` (ADR-014 + lista de registro)
+- `CLAUDE.md` (§7.9 + débito tsconfig do Leader em §12)
+- `CHANGELOG.md` ([Unreleased].Added)
+- `SESSION_LOG.md` (esta entrada)
+
+---
+
 ## Sessão 11 — 2026-05-25 — Fechamento da Wave 0 (C7 W0 + C8 W0)
 
 **Wave atual:** W0 (último trabalho residual) **Método:** Padrão triplo (executa

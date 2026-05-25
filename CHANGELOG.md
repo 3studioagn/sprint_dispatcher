@@ -119,6 +119,17 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
   com RF-07 TOPMOST, RF-19 auto-start) [BL-C7-005]
 - ADR-003 complementado com alternativa A5 mensageria (RabbitMQ /
   MQTT / ActiveMQ) e tabela de critérios estendida [BL-C7-004]
+- `@sprint/contracts`: `sanitizeBodyHtml(html)` — sanitização de
+  `body_html` via `isomorphic-dompurify` (^2.36.0); whitelist estrita
+  via `ALLOWED_HTML_TAGS`, zero atributos permitidos, `KEEP_CONTENT`
+  preserva texto de tags removidas; idempotente; defesa em
+  profundidade (Leader sanitiza ao escrever, Agent ao renderizar);
+  40 testes adversariais (XSS clássicos, edge cases) com cobertura
+  100% no módulo [BL-C1-004]
+- ADR-014 (sanitização de `body_html` via isomorphic-dompurify) em
+  `DECISIONS.md`
+- CLAUDE.md §7.9 (convenção de uso obrigatório de `sanitizeBodyHtml`
+  em toda escrita e leitura de `body_html`)
 
 ### Changed
 

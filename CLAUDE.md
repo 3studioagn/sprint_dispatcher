@@ -302,6 +302,32 @@ Tipos: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `build`, `ci`,
 
 Exemplo: `feat(C1): zod schemas para SprintPayload [BL-C1-002]`
 
+### 7.9. Sanitização de HTML
+
+O campo `body_html` do `SprintPayload` é a única superfície de HTML controlada
+pelo líder que vai parar num overlay renderizado. **Toda escrita e toda
+leitura** do `body_html` passa por `sanitizeBodyHtml(html)` de
+`@sprint/contracts` — não há exceção.
+
+- **No Leader (C2):** sanitizar antes de gravar JSON em
+  `pending/<sprintId>-<userId>.json` (BL-C2-007, W1).
+- **No Agent (C3):** sanitizar antes de renderizar no overlay (BL-C3-004, W1). É
+  idempotente — o segundo passe não muta o output do primeiro; defende contra
+  adulteração do arquivo em trânsito.
+- **Whitelist de tags:** `ALLOWED_HTML_TAGS` em `@sprint/contracts/constants`
+  (RN-10): `<b>`, `<i>`, `<br>`, `<p>`, `<h1>`, `<span>`. **Não duplicar a
+  whitelist** — sempre importar a constante. Mudança na whitelist exige ADR +
+  bump em `SCHEMA_VERSION` se for incompatível.
+- **Atributos:** zero permitidos. Nem `class`, nem `id`, nem `style`, nem
+  `data-*`. Defesa contra handlers inline e `style: url(javascript:...)`.
+- **Schema NÃO sanitiza.** Aceitar `<script>alert(1)</script>` em `body_html` é
+  comportamento documentado do schema (ver `schemas/security.test.ts`).
+  Sanitização é responsabilidade exclusiva de `sanitizeBodyHtml`.
+- **Não usar `USE_PROFILES` no DOMPurify** — sobrescreve `ALLOWED_TAGS` e abre a
+  whitelist inteira do profile HTML (`<div>`, `<table>`, etc). Ver ADR-014.
+
+Ver ADR-014 para justificativa completa.
+
 ---
 
 ## 8. Configurações Críticas
@@ -841,6 +867,25 @@ não entregue. Cada um tem disparador explícito que reabre o trabalho.
   canal de logging em ramos de erro críticos (ex: `handleConfigError` no Agent).
 - **Referências:** BL-C8-005 (terceira regra planejada — adiada por ADR
   implícito), BL-C6-001 (entrega o logger).
+
+#### Débito: `rootDir` do Leader em `apps/leader/tsconfig.json`
+
+- **Status:** pendente — disparador é o início do BL-C2-007 (integração do
+  `sanitizeBodyHtml` no fluxo de dispatch do Leader) ou de qualquer outro
+  consumer real de `@sprint/contracts` no Leader em W1.
+- **Sintoma:** `tsc --noEmit` no Leader emite TS6059 ao importar qualquer
+  símbolo de `@sprint/contracts` source-first
+  (`File '...packages/contracts/...' is not under 'rootDir' '...apps/leader/src'`).
+- **Causa:** ver G-014. O `tsconfig.json` do Leader ainda tem
+  `"rootDir": "./src"` (herança do scaffold da Sessão 06, anterior à descoberta
+  de G-014 na Sessão 09). O Agent já foi ajustado para `"rootDir": "../.."` em
+  BL-C3-002.
+- **Plano:** fix de 1 linha em `apps/leader/tsconfig.json` —
+  `"rootDir": "./src"` → `"rootDir": "../.."`. Pode ser feito como Fase 0 de
+  BL-C2-007 ou como BL micro dedicado.
+- **Exercitado em:** Sessão 12 (2026-05-25), Gate 4 do BL-C1-004 — smoke do
+  import `sanitizeBodyHtml` via `@sprint/contracts` no Leader falhou; smoke foi
+  pivotado para o Agent (já com `rootDir` correto).
 
 ---
 

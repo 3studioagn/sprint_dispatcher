@@ -82,6 +82,8 @@ entradas em ordem cronológica crescente — mais recente no fim.
   `config.json` com fail-fast validation
 - [ADR-013](#adr-013-filesystem-adapter-port-and-adapter-hexagonal) — Filesystem
   Adapter port-and-adapter (hexagonal)
+- [ADR-014](#adr-014-sanitizacao-de-body_html-via-isomorphic-dompurify) —
+  Sanitização de `body_html` via isomorphic-dompurify
 
 ---
 
@@ -1072,3 +1074,120 @@ sessões.
 - ADR-012 (loader fail-fast) — primeiro consumer marcado `TODO(C4)`
 - `packages/fs-adapter/README.md`
 - Alistair Cockburn, "Hexagonal Architecture" (2005)
+
+---
+
+## ADR-014: Sanitização de body_html via isomorphic-dompurify
+
+- **Status:** Accepted
+- **Data:** 2026-05-25
+- **Decisores:** Renan (3Studio)
+
+### Contexto
+
+O `SprintPayload` carrega um campo `body_html` (Requisitos RF-17) com o conteúdo
+do aviso que o operador verá no overlay. O líder digita HTML — em produção, é
+formatação simples (negrito, itálico, quebra de linha, parágrafo). Sem
+sanitização, o campo é uma superfície clássica de XSS: handlers inline
+(`onerror`, `onmouseover`, …), schemes perigosos (`javascript:`, `data:` em
+`<a>`), tags executáveis (`<script>`, `<svg>+onload`, `<iframe>`,
+`<style>+url(javascript:)`). RNF-18 explicita defesa contra injeção; RN-10
+estabelece a whitelist de tags válidas.
+
+O schema Zod **deliberadamente não sanitiza** (decisão arquitetural antecipada
+em `schemas/security.test.ts`, BL-C1-002 W0): aceita qualquer string em
+`body_html` para preservar separação de responsabilidades. Sanitização é uma
+operação distinta, com biblioteca dedicada.
+
+### Decisão
+
+Adotamos **`isomorphic-dompurify` ^2.36.0** como dependência única de
+sanitização do `@sprint/contracts`, exposta via função pura
+`sanitizeBodyHtml(html: string): string`:
+
+1. **Whitelist estrita** derivada de `ALLOWED_HTML_TAGS` (constante já existente
+   desde BL-C1-006 W0, com mesmo conteúdo proposto pela RN-10): `<b>`, `<i>`,
+   `<br>`, `<p>`, `<h1>`, `<span>`. **Não criamos `ALLOWED_BODY_TAGS`
+   redundante** — fonte única.
+2. **Atributos: zero permitidos** (`ALLOWED_ATTR: []`). Defesa máxima contra
+   handlers inline (`on*=`), `style: url(javascript:...)` e `href: javascript:`.
+   Nem `class` nem `id` passam.
+3. **`KEEP_CONTENT: true`** — texto dentro de tags removidas é preservado.
+   Exemplo: `<div>texto</div>` → `texto`.
+4. **`ALLOW_DATA_ATTR: false`** e **`ALLOW_UNKNOWN_PROTOCOLS: false`** — rejeita
+   `data-*` e schemes não-padrão.
+5. **`RETURN_TRUSTED_TYPE: false`** — retorno `string`, compatível com
+   `JSON.stringify` para serialização em `pending/`.
+6. **`USE_PROFILES` omitido** — desvio do prompt original do BL-C1-004 (§6.2).
+   Razão: na versão atual do DOMPurify, `USE_PROFILES: { html: true }`
+   **sobrescreve** `ALLOWED_TAGS` com o profile HTML completo (validado contra
+   doc oficial e contra testes adversariais). A whitelist explícita é mais
+   restritiva. Validado empiricamente: testes com `<div>`, `<table>`,
+   `<unknown>` confirmam que essas tags são removidas (e seus filhos
+   preservados) — com `USE_PROFILES` ativo, passariam.
+
+A função é **pura, idempotente**
+(`sanitizeBodyHtml(sanitizeBodyHtml(x)) === sanitizeBodyHtml(x)`) e
+**isomórfica** (funciona em main process Node e em renderer browser-like, via
+`isomorphic-dompurify` que carrega `dompurify` nativo no browser e usa `jsdom`
+no Node).
+
+### Defesa em profundidade
+
+Sanitização é aplicada **duas vezes** no fluxo, com a mesma rotina:
+
+1. **Leader (escrita)** — antes de gravar `pending/<sprintId>-<userId>.json`
+   (BL-C2-007, W1).
+2. **Agent (leitura)** — antes de renderizar `body_html` no overlay (BL-C3-004,
+   W1).
+
+A idempotência garante que o segundo passe não muta o output do primeiro. Se um
+arquivo for adulterado em trânsito (alguém com acesso a `pending/` editando
+manualmente), o Agent re-sanitiza e neutraliza.
+
+### Alternativas consideradas
+
+| Alternativa                                        | Por que rejeitada                                                                                                                                    |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Implementação própria (regex / parser ad-hoc)**  | Superfície de ataque grande; mXSS, parser quirks de browsers, bypasses conhecidos (`<<script>script>...`). Rolar do zero é anti-padrão de segurança. |
+| **`sanitize-html`**                                | API menos ergonômica, adoção menor, menos auditado que DOMPurify.                                                                                    |
+| **DOMPurify puro (sem wrapper isomorfo)**          | Requer mock manual de DOM/JSDOM no main process Node (Electron). Wrapper isomorfo elimina overhead de setup.                                         |
+| **Escapar tudo manualmente (`innerHTML` → texto)** | Perde formatação que o líder genuinamente quer (negrito, parágrafo). RN-10 já reconhece que algumas tags são necessárias.                            |
+
+### Consequências
+
+**Aceitas:**
+
+- Defesa robusta contra XSS via biblioteca auditada (DOMPurify é o padrão de
+  facto, usado por GitHub, npm, Slack, e milhares de outros).
+- Função pura — testável isoladamente, sem dependência de DOM real (40 testes
+  adversariais em `sanitize.test.ts`, cobertura 100%).
+- Defesa em profundidade trivial — mesma função, dois pontos de aplicação.
+- Adição de footprint runtime: `dompurify` ~681 KB no `node_modules` + jsdom ~4
+  MB (só no Node side). No bundle final do Leader/Agent, jsdom é tree-shaken
+  pelo Vite (renderer = browser).
+
+**Trade-offs:**
+
+- Bibliotecas de sanitização evoluem: novos vetores XSS aparecem; é necessário
+  manter `isomorphic-dompurify` atualizado. **Disparador de revisão:** quando
+  `pnpm audit` reportar advisory High em `dompurify`/`isomorphic-dompurify`,
+  bump imediato (mesmo padrão do ADR-010 para Electron).
+- A whitelist de 6 tags é restritiva — se o líder pedir suporte a `<ul>/<li>`,
+  `<a>`, `<img>`, etc no futuro, expandir exige bump em RN-10 e em
+  `ALLOWED_HTML_TAGS` (e bump do `SCHEMA_VERSION` se a expansão for
+  incompatível).
+
+### Referências
+
+- BL-C1-004 (esta sessão)
+- BL-C1-006 (constante `ALLOWED_HTML_TAGS` já existente)
+- BL-C2-007 (integração no Leader, W1)
+- BL-C3-004 (integração no Agent, W1)
+- Requisitos RF-17 (sanitização), RN-10 (whitelist), RNF-18 (defesa XSS)
+- ADR-005 (schema-first) — schema deliberadamente não sanitiza
+- `packages/contracts/src/sanitize.ts`
+- `packages/contracts/src/schemas/security.test.ts` (afirmação arquitetural
+  prévia de que schema não sanitiza)
+- <https://github.com/cure53/DOMPurify>
+- <https://github.com/kkomelin/isomorphic-dompurify>

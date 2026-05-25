@@ -82,3 +82,6 @@ export {
   safeParseFilename,
   type ParsedFilename,
 } from './filenames';
+
+// === Sanitization ===
+export { sanitizeBodyHtml } from './sanitize';
