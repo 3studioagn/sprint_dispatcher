@@ -68,32 +68,34 @@ compartilhada SMB é o único canal de comunicação.
 
 ## 3. Stack Tecnológica
 
-| Categoria          | Tecnologia            | Versão (alvo / instalada)                          |
-| ------------------ | --------------------- | -------------------------------------------------- |
-| Linguagem          | TypeScript            | 5.4+ — instalada **6.0.3**                         |
-| Runtime Node       | Node.js               | engine `>=20.0.0` — `.nvmrc` **24.10.0**           |
-| Runtime Desktop    | Electron              | 30.x — instalada **30.5.1** (`sprint-leader`)      |
-| UI Framework       | React                 | 18.3+ — instalada **18.3.x** (`sprint-leader`)     |
-| Estado global      | Zustand               | 4.5+ — _pendente (C2/C3)_                          |
-| Styling            | CSS Modules + PostCSS | nativo Vite — em uso em `sprint-leader`            |
-| Forms              | react-hook-form       | 7.51+ — _pendente (C2)_                            |
-| Validation         | Zod                   | 3.23+ — instalada **3.25.x** (`@sprint/contracts`) |
-| Icons              | lucide-react          | 0.380+ — _pendente (C2/C3)_                        |
-| Date/Time          | date-fns              | 3.6+ — _pendente_                                  |
-| IDs                | ulid                  | 2.3+ — instalada **2.4.x** (`@sprint/contracts`)   |
-| HTML Sanitization  | isomorphic-dompurify  | 2.10+ — _pendente (BL-C1-004, W1)_                 |
-| Logging            | Pino + pino-roll      | 9.x / 1.1+ — _pendente (C6)_                       |
-| Testing (unit)     | Vitest                | 1.6+ — instalada **1.6.1** (`@sprint/contracts`)   |
-| Testing (E2E)      | Playwright (Electron) | 1.44+ — _pendente (C8)_                            |
-| Package Manager    | pnpm                  | engine `>=10.0.0` — instalada **10.18.2**          |
-| Build Orchestrator | Turborepo             | 2.x — instalada **2.9.14**                         |
-| Renderer Bundler   | Vite                  | 5.x — instalada **5.4.21** (`sprint-leader`)       |
-| Electron Builder   | electron-builder      | 24+ — instalada **24.13.3** (`sprint-leader`)      |
-| Versionamento      | Changesets            | 2.27+ — instalada **2.31.0**                       |
-| Lint               | ESLint                | 9.x (flat) — instalada **10.4.0** (flat nativo)    |
-| Format             | Prettier              | 3.x — instalada **3.8.3**                          |
-| Git hooks          | Husky + lint-staged   | 9.x / 15.x — instaladas **9.1.7 / 17.0.5**         |
-| CI                 | GitHub Actions        | configurado em `.github/workflows/ci.yml`          |
+| Categoria            | Tecnologia                                   | Versão (alvo / instalada)                                                 |
+| -------------------- | -------------------------------------------- | ------------------------------------------------------------------------- |
+| Linguagem            | TypeScript                                   | 5.4+ — instalada **6.0.3**                                                |
+| Runtime Node         | Node.js                                      | engine `>=20.0.0` — `.nvmrc` **24.10.0**                                  |
+| Runtime Desktop      | Electron                                     | 30.x — instalada **42.2.0** (`sprint-leader`, `sprint-operator-agent`)    |
+| UI Framework         | React                                        | 18.3+ — instalada **18.3.x** (`sprint-leader`)                            |
+| Routing              | react-router-dom                             | 6.23+ — instalada **6.30.3** (`sprint-leader`)                            |
+| Estado global        | Zustand                                      | 4.5+ — instalada **4.5.7** (`sprint-leader`)                              |
+| Styling              | CSS Modules + PostCSS                        | nativo Vite — em uso em `sprint-leader`                                   |
+| Forms                | react-hook-form                              | 7.51+ — _pendente (avaliar em BL-C2-006, W2)_                             |
+| Validation           | Zod                                          | 3.23+ — instalada **3.25.x** (`@sprint/contracts`, `sprint-leader`)       |
+| Icons                | lucide-react                                 | 0.380+ — _pendente (avaliar em W2)_                                       |
+| Date/Time            | date-fns                                     | 3.6+ — _pendente_                                                         |
+| IDs                  | ulid                                         | 2.3+ — instalada **2.4.x** (`@sprint/contracts`)                          |
+| HTML Sanitization    | isomorphic-dompurify                         | 2.10+ — instalada **2.36.0** (`@sprint/contracts`)                        |
+| Logging              | Pino + pino-roll                             | 9.x / 1.1+ — _pendente (C6)_                                              |
+| Testing (unit)       | Vitest                                       | 1.6+ — instalada **1.6.1** (`@sprint/contracts`, `sprint-leader`, demais) |
+| Testing (componente) | @testing-library/{react,user-event,jest-dom} | 16+/14+/6+ — instaladas **16.3.2 / 14.6.1 / 6.9.1** (`sprint-leader`)     |
+| Testing (E2E)        | Playwright (Electron)                        | 1.44+ — _pendente (C8)_                                                   |
+| Package Manager      | pnpm                                         | engine `>=10.0.0` — instalada **10.18.2**                                 |
+| Build Orchestrator   | Turborepo                                    | 2.x — instalada **2.9.14**                                                |
+| Renderer Bundler     | Vite                                         | 5.x — instalada **5.4.21** (`sprint-leader`)                              |
+| Electron Builder     | electron-builder                             | 24+ — instalada **24.13.3** (`sprint-leader`)                             |
+| Versionamento        | Changesets                                   | 2.27+ — instalada **2.31.0**                                              |
+| Lint                 | ESLint                                       | 9.x (flat) — instalada **10.4.0** (flat nativo)                           |
+| Format               | Prettier                                     | 3.x — instalada **3.8.3**                                                 |
+| Git hooks            | Husky + lint-staged                          | 9.x / 15.x — instaladas **9.1.7 / 17.0.5**                                |
+| CI                   | GitHub Actions                               | configurado em `.github/workflows/ci.yml`                                 |
 
 > **Como ler a coluna:** "_pendente (CX)_" significa que a dependência ainda não
 > foi adicionada — entra na sessão do componente indicado. Quando ESLint, TS,
@@ -151,6 +153,54 @@ Componentes só se comunicam através de **interfaces tipadas** definidas em
 - `@sprint/logger` (logs)
 
 Apps **nunca** importam um do outro. Use ESLint rule pra forçar isso.
+
+### Estrutura interna do Leader (W1.C2 parte 1)
+
+A app `sprint-leader` segue esta convenção dentro de
+`apps/leader/src/renderer/`:
+
+```
+renderer/
+├── App.tsx                # HashRouter + layout grid (sidebar + main)
+├── main.tsx               # entry React (StrictMode)
+├── env.d.ts               # Window['api']: LeaderAPI
+├── test-setup.ts          # jest-dom matchers + RTL cleanup
+├── components/
+│   ├── Sidebar/           # nav persistente
+│   ├── OperatorList/      # lista + OperatorRow + input de meta inline
+│   ├── BulkSelectButtons/ # Marcar todos / Desmarcar todos
+│   └── DeadlineInput/     # time picker + warning anti-passado
+├── routes/
+│   ├── NovaSprint/        # composer (Operadores + Deadline + botão Enviar stub)
+│   ├── Acompanhamento/    # placeholder W2 (BL-C2-008)
+│   └── Historico/         # placeholder W3 (BL-C2-010)
+├── stores/
+│   ├── useSprintComposerStore.ts  # draft + selectors puros
+│   ├── useOperatorsStore.ts       # cache (mock → fs-adapter em W1.C4)
+│   └── sprintComposerSchema.ts    # composerFormSchema Zod + selectFormPayload
+├── types/operator.ts      # Operator local (promover a @sprint/contracts quando C3/C4 consumir)
+├── data/operators.mock.ts # mock substituído pelo fs-adapter em W1.C4
+└── styles/global.css      # tokens CSS (cores ARTFLEXÍVEIS, espaçamentos, tipografia)
+```
+
+**Convenções específicas do Leader:**
+
+- **Selectors puros separados das stores** — `selectIsValid`,
+  `selectSelectedCount`, `selectFormPayload` são funções top-level (fora do
+  `create()`), recebem state e retornam derivações sem side effects.
+- **`composerFormSchema` (Zod) é fonte única de regras de forma** —
+  `selectIsValid` delega para `selectFormPayload(state) !== null`, alinhado com
+  schema-first ADR-005.
+- **Stores não validam** — `setMeta`, `setDeadline` guardam valor cru; validação
+  fica nos selectors. Permite UI armazenar valor parcial enquanto o usuário
+  digita.
+- **`react-hook-form` NÃO é usado** (decisão arquitetural em ADR-015) — a store
+  Zustand já é fonte única; RHF brilharia em forms estruturados, não em composer
+  dinâmico com `useFieldArray`. Reavaliar quando BL-C2-006 (W2) trouxer
+  customização de title/body via editor rico.
+- **Flag `DISPATCH_ENABLED = false` em `routes/NovaSprint/NovaSprint.tsx`** —
+  controla o botão "Enviar". **Remover quando BL-C2-007 (parte 2 da W1.C2)
+  integrar o dispatch real via `@sprint/fs-adapter`.**
 
 ---
 

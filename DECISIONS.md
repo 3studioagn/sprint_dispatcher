@@ -84,6 +84,8 @@ entradas em ordem cronológica crescente — mais recente no fim.
   Adapter port-and-adapter (hexagonal)
 - [ADR-014](#adr-014-sanitizacao-de-body_html-via-isomorphic-dompurify) —
   Sanitização de `body_html` via isomorphic-dompurify
+- [ADR-015](#adr-015-arquitetura-do-composer-da-app-lider-w1c2-parte-1) —
+  Arquitetura do composer da app Líder (W1.C2 parte 1)
 
 ---
 
@@ -1191,3 +1193,120 @@ manualmente), o Agent re-sanitiza e neutraliza.
   prévia de que schema não sanitiza)
 - <https://github.com/cure53/DOMPurify>
 - <https://github.com/kkomelin/isomorphic-dompurify>
+
+---
+
+## ADR-015: Arquitetura do composer da app Líder (W1.C2 parte 1)
+
+- **Status:** Accepted
+- **Data:** 2026-05-25
+- **Decisores:** Renan (3Studio)
+
+### Contexto
+
+A primeira sessão de UI real do Leader (BL-C2-002/003/004/005/011) precisa
+entregar o composer de sprint — tela "Nova Sprint" com lista de operadores,
+metas individuais, deadline e botão Enviar — antes de C4 (`@sprint/fs-adapter`)
+disponibilizar as operações de domínio (BL-C4-002..005). O dispatch real
+(BL-C2-007) fica para a parte 2, depois de C4 entregar `writePending`.
+
+Várias decisões arquiteturais precisaram ser tomadas em conjunto: roteamento em
+Electron, gerenciamento de estado, padrão de validação, localização do tipo
+`Operator`, e estratégia para o botão "Enviar" enquanto o dispatch real não
+existe.
+
+### Decisões
+
+1. **React Router em modo hash (`<HashRouter>`)** — o build de produção do
+   Electron carrega via `file://`, incompatível com `<BrowserRouter>` (history
+   API). Hash mode resolve sem proxy/middleware. 3 rotas: `/nova`,
+   `/acompanhamento` (placeholder W2), `/historico` (placeholder W3) +
+   `<Navigate>` em `/` e `*` para `/nova`.
+2. **Zustand para estado global, com selectors puros separados** —
+   `useSprintComposerStore` (draft: operadores+metas+deadline+title+body) e
+   `useOperatorsStore` (cache da lista). Selectors (`selectIsValid`,
+   `selectSelectedCount`, `selectFormPayload`) são funções top-level fora do
+   `create()`, recebem state e retornam derivações sem side effects. Lógica
+   derivada **não** é armazenada — sempre derivada via selector.
+3. **`composerFormSchema` (Zod) como fonte única de regras de forma** — alinhado
+   com schema-first ADR-005. `selectIsValid` delega para
+   `selectFormPayload(state) !== null`. Validação dispersa fica em um único
+   lugar, e o output do schema é o payload pronto para escrita em `pending/`
+   quando BL-C2-007 ativar o dispatch.
+4. **Não usar `react-hook-form` + `@hookform/resolvers`** — desvio explícito da
+   § 6.4 do prompt da sessão. Justificativa em "Alternativas rejeitadas" abaixo.
+5. **Tipo `Operator` definido localmente em
+   `apps/leader/src/renderer/types/operator.ts`** com TODO inline para promover
+   para `@sprint/contracts` quando C3 (Agent) ou C4 (read real via fs-adapter)
+   também precisarem. Mantém C1 congelado em W1.
+6. **Mock `data/operators.mock.ts`** com 5 operadores (4 ativos + 1 inativo
+   `rafael` para exercitar filtro de `ativo: true`). Substituído por leitura
+   real de `operators.json` via `@sprint/fs-adapter` em refactor de BL-C2-003
+   após C4 completar W1.
+7. **Flag `DISPATCH_ENABLED = false`** em `routes/NovaSprint/NovaSprint.tsx`
+   controla o botão "Enviar" — `disabled = !DISPATCH_ENABLED || !isFormValid`.
+   Tooltip estático aponta para BL-C2-007. Handler é `console.warn` stub
+   (permitido pela regra atual
+   `no-console: ['error', { allow: ['warn', 'error'] }]`). **Remover a flag e
+   substituir o handler em BL-C2-007.**
+
+### Alternativas rejeitadas
+
+| Alternativa                                                        | Por que rejeitada                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `<BrowserRouter>`                                                  | Incompatível com `file://` no build de produção do Electron.                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Redux Toolkit                                                      | Overkill para o escopo; Zustand cobre com API mínima e menos boilerplate. ADR-007/stack §6.2 já preferia Zustand.                                                                                                                                                                                                                                                                                                                                                                                     |
+| `useState` local nas telas                                         | Re-render desnecessário ao navegar entre rotas; perderia persistência inter-rotas. Antecipar Zustand evita refactor.                                                                                                                                                                                                                                                                                                                                                                                  |
+| **`react-hook-form` + `zodResolver`** (proposto pelo prompt § 6.4) | Composer dinâmico com lista de N operadores exigiria `useFieldArray` + sincronização store ↔ form em `useEffect` (dual-source-of-truth frágil). A store Zustand já é fonte única; `composerFormSchema` valida; `aria-invalid` + mensagem inline cobrem UX de erro. RHF brilha em forms estruturados (login, settings), não em composer dinâmico. **Reavaliar** quando BL-C2-006 (W2) trouxer customização de title/body via editor rico — para campo único e estruturado, o benefício de RHF é maior. |
+| `Operator` em `@sprint/contracts` agora                            | C1 congelado em W1; nenhum consumer cross-component existe ainda. Promover quando C3/C4 também precisarem (ver "Decisão 5").                                                                                                                                                                                                                                                                                                                                                                          |
+| `date-fns` para `isDeadlineInPast`                                 | Função trivial (~10 linhas com `Date.setHours()` nativo); evita dep para "passado vs futuro".                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `lucide-react` no Sidebar/botões                                   | Sidebar e BulkSelectButtons usam texto puro nesta sessão. Ícones só viram necessidade em W2+ (polish).                                                                                                                                                                                                                                                                                                                                                                                                |
+
+### Consequências
+
+- **App navegável end-to-end** — Nova Sprint, Acompanhamento (placeholder),
+  Histórico (placeholder) renderizam e a sidebar persiste.
+- **Composer 100% funcional EXCETO pelo dispatch** — usuário pode marcar
+  operadores, preencher metas, mudar deadline, ver `aria-invalid` em campos
+  inválidos, ver status dinâmico ("Pronto para enviar"). Botão Enviar permanece
+  desabilitado mesmo com tudo válido (DISPATCH_ENABLED=false).
+- **Refactor previsto em BL-C2-007 (parte 2)**: substituir mock por fs-adapter;
+  remover flag DISPATCH_ENABLED; substituir `console.warn` do handler pelo
+  dispatch real via `selectFormPayload` + `writePendingSprint`.
+- **Stores 100% cobertura individual; agregado puxado para 93% pelo barrel
+  `index.ts`**. Componentes 96-100% individuais; rotas 93-100%. Cobertura
+  agregada do `sprint-leader`: ~96.6%.
+- **Padrão de selectors puros estabelecido** — repetível em futuras stores do
+  projeto. Documentado em CLAUDE.md §4 ("Estrutura interna do Leader").
+- **Padrão de teste de componente estabelecido** —
+  `@testing-library/{react,user-event,jest-dom}` como devDeps + `test-setup.ts`
+  com cleanup automático. Próximas sessões herdam.
+- **Acessibilidade básica aplicada** — `<label htmlFor>` em todos os inputs,
+  `aria-invalid` + `aria-describedby` no input de meta, `role="alert"` no
+  warning de deadline, `role="group"` no BulkSelectButtons, foco visível
+  (outline) em todos os elementos interativos.
+
+### Reabertura prevista
+
+- **Flag `DISPATCH_ENABLED`**: removida em BL-C2-007 (parte 2 desta sessão).
+- **Tipo `Operator`**: promover a `@sprint/contracts` quando o primeiro consumer
+  cross-component (C3 ou C4 real) precisar — sessão dedicada, fix de 1 commit
+  (mover + re-exportar + atualizar import no Leader).
+- **Mock `operators.mock.ts`**: substituído por leitura via `@sprint/fs-adapter`
+  em refactor de BL-C2-003 após C4 completar W1.
+- **`react-hook-form`**: reavaliar em BL-C2-006 (W2) quando customização de
+  title/body via editor rico entrar.
+
+### Referências
+
+- Backlog BL-C2-002, BL-C2-003, BL-C2-004, BL-C2-005, BL-C2-011
+- Backlog BL-C2-007 (dispatch real, parte 2 desta sessão — bloqueado por
+  BL-C4-002..005)
+- ADR-005 (schema-first com `z.infer`) — `composerFormSchema` segue o padrão
+- ADR-013 (filesystem adapter port-and-adapter) — futuro consumer em BL-C2-007
+- ADR-014 (sanitização de `body_html`) — `sanitizeBodyHtml` integra no BL-C2-007
+  antes da escrita em `pending/`
+- CLAUDE.md §4 ("Estrutura interna do Leader") — convenção de pastas e padrões
+  específicos
+- CLAUDE.md §12 G-014 — débito `rootDir` do Leader (fix de 1 linha pré-requisito
+  para BL-C2-007)

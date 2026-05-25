@@ -4,7 +4,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
-    setupFiles: [],
+    setupFiles: ['./src/renderer/test-setup.ts'],
     // Scaffold W0 ainda nao tem testes; W1+ adiciona. Evita exit 1 do vitest.
     passWithNoTests: true,
     include: ['src/**/*.test.{ts,tsx}'],
@@ -18,6 +18,7 @@ export default defineConfig({
         'src/preload/**', // testado via E2E em W3
         'src/renderer/main.tsx',
         'src/renderer/env.d.ts',
+        'src/renderer/test-setup.ts',
       ],
       // W0: scaffold sem lógica, sem threshold; W1+ define
     },

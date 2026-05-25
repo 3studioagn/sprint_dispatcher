@@ -66,6 +66,199 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 13 — 2026-05-25 — Wave 1, BL-C2-002/003/004/005/011 (Composer do Leader, parte 1)
+
+**Wave atual:** W1 **Método:** gate-by-gate com aprovação explícita entre gates
+**Duração estimada:** ~4h **Itens trabalhados:** [BL-C2-002, BL-C2-003,
+BL-C2-004, BL-C2-005, BL-C2-011]
+
+### Objetivo da sessão
+
+Dar vida visual e funcional à app do Líder: layout base com 3 rotas (Nova
+Sprint, Acompanhamento, Histórico) + sidebar persistente, stores Zustand com
+selectors puros, lista de operadores com checkbox + bulk select, input de meta
+inline com validação RN-07, deadline com warning anti-passado, e botão Enviar
+como stub controlado por flag. **Item explicitamente fora do escopo:** BL-C2-007
+(dispatch real) — fica para a parte 2 após C4 entregar `writePending`.
+
+### O que foi feito
+
+- **Roteamento (BL-C2-002):** `App.tsx` com `<HashRouter>` envolvendo 3 rotas
+  (`/nova`, `/acompanhamento`, `/historico`) + `<Navigate>` em `/` e `*` para
+  fallback; `Sidebar` com brand "Sprint Dispatcher / ARTFLEXÍVEIS" + 3 `NavLink`
+  v6 com state ativo via callback function; `Acompanhamento` e `Historico` como
+  placeholders estruturados ("Em desenvolvimento — Wave 2/3").
+- **Stores Zustand (BL-C2-011):** `useSprintComposerStore` (selectedOperators
+  como ReadonlyMap, deadline, title, body, ações imutáveis com `new Map(...)` em
+  cada update); `useOperatorsStore` (cache, `loadOperators` filtra
+  `ativo: true`); selectors puros top-level `selectSelectedCount`,
+  `selectIsValid`, `selectFormPayload` — funções top-level fora do `create()`,
+  sem side effects.
+- **Schema do composer (BL-C2-011):** `composerFormSchema` Zod (RN-07: meta
+  inteira positiva; deadline regex HH:MM 00–23) como fonte única de regras de
+  validação — `selectIsValid` delega para `selectFormPayload(state) !== null`,
+  alinhado com schema-first ADR-005.
+- **Lista de operadores (BL-C2-003):** `OperatorList` itera operadores ativos;
+  `OperatorRow` com checkbox + label `htmlFor` clicável + nome + hostname;
+  `BulkSelectButtons` "Marcar todos" / "Desmarcar todos" (desabilitam quando
+  lista vazia); mock `operators.mock.ts` com 5 operadores (4 ativos + 1 inativo
+  `rafael` para exercitar filtro); UI carrega via `useEffect` chamando
+  `loadOperators()` com guard `if (!isLoaded)`.
+- **Input de meta inline (BL-C2-004):**
+  `<input type="number" min={1} step={1} inputMode="numeric">` renderiza quando
+  `isSelected`; `Number.parseFloat` + schema valida inteiro (UX: usuário digita
+  "5.5", input mostra "5.5", botão fica disabled); `aria-invalid` +
+  `aria-describedby` + mensagem inline "Meta ≥ 1" quando inválida
+  (null/0/negativa/fracionária).
+- **Deadline (BL-C2-005):** `DeadlineInput` com `<input type="time">`, default
+  '18:00' da store; helper puro `isDeadlineInPast(deadlineHHMM, now?)` usando
+  `Date.setHours()` nativo (sem date-fns); warning visual `role="alert"` quando
+  passado, **não bloqueia o form**.
+- **Botão Enviar (parte do escopo da sessão):** stub controlado pela flag
+  `DISPATCH_ENABLED = false` em `NovaSprint.tsx`; tooltip estático "Aguardando
+  integração com filesystem adapter (BL-C2-007, parte 2)"; `console.warn` no
+  `onClick` (autorizado pela regra atual
+  `no-console: ['error', { allow: ['warn', 'error'] }]`); status dinâmico
+  ("Nenhum operador selecionado" / "1 operador selecionado" / "N operadores
+  selecionados" + linha "Pronto para enviar" verde / "Preencha todos os campos"
+  cinza).
+- **Tooling de teste de componente:** `@testing-library/react ^16.3`,
+  `@testing-library/user-event ^14.6`, `@testing-library/jest-dom ^6.9` como
+  devDeps; `test-setup.ts` com `import '@testing-library/jest-dom/vitest'` +
+  `cleanup()` em `afterEach`; `vitest.config.ts` aponta para o setup.
+- **84 testes em 7 arquivos** (era 0 no `sprint-leader`):
+  `useSprintComposerStore.test.ts` (36), `useOperatorsStore.test.ts` (4),
+  `BulkSelectButtons.test.tsx` (5), `OperatorList.test.tsx` (17),
+  `DeadlineInput.test.tsx` (9), `App.test.tsx` (6, smoke de routing +
+  persistência inter-rotas), `NovaSprint.test.tsx` (7, fluxo end-to-end até
+  `isFormValid=true` + verificação de que botão CONTINUA disabled).
+- **ADR-015** em `DECISIONS.md` (arquitetura do composer da app Líder — W1.C2
+  parte 1): React Router hash mode, Zustand + selectors puros, schema-first sem
+  RHF (justificativa em §"Alternativas rejeitadas"), `Operator` local (promover
+  quando C3/C4 consumir), mock que vira fs-adapter em BL-C4-002+, flag
+  `DISPATCH_ENABLED`.
+- **CLAUDE.md §3** (tabela de stack) atualizada: zustand instalada **4.5.7**,
+  react-router-dom **6.30.3**, isomorphic-dompurify **2.36.0** (corrige
+  pendência da Sessão 12), Electron **42.2.0** (corrige stale 30.5.1 da Sessão
+  08), @testing-library/{react,user-event,jest-dom} **16.3.2 / 14.6.1 / 6.9.1**.
+- **CLAUDE.md §4** ganhou nova subseção "Estrutura interna do Leader (W1.C2
+  parte 1)" documentando organização do `renderer/` e convenções específicas
+  (selectors puros, schema-first, decisão de não usar RHF, flag
+  DISPATCH_ENABLED).
+- **README.md** tabela de componentes atualizada: C2 status "✅ Composer W1 (sem
+  dispatch)".
+- **CHANGELOG.md** `[Unreleased].Added` com entries do BL-C2-002/003/004/005/011
+  - ADR-015 + atualizações do CLAUDE.md.
+
+### Estado atual
+
+- **BL-C2-002:** ✅ concluído (router + sidebar + 3 rotas)
+- **BL-C2-011:** ✅ concluído (stores Zustand + selectors puros + schema)
+- **BL-C2-003:** ✅ concluído (OperatorList + checkbox + bulk select)
+- **BL-C2-004:** ✅ concluído (input de meta inline + aria-invalid)
+- **BL-C2-005:** ✅ concluído (DeadlineInput + warning anti-passado)
+- **BL-C2-007 (dispatch real):** ⏸️ diferido para parte 2 — depende de
+  BL-C4-002..005 (W1).
+
+Bateria final em `sprint-leader`: `type-check`, `lint`, `test:coverage`, `build`
+— todos exit 0. Smoke ao vivo via Claude Preview validou layout, navegação
+inter-rotas (Nova Sprint → Histórico → volta), persistência da seleção, marcação
+visual de `aria-invalid` nos inputs de meta. Janela Electron real (PID 32396
+confirmado) abre e fecha limpa, sem erros nos logs.
+
+Cobertura `sprint-leader`: **96.64% lines / 94.89% branches / 92.59% funcs /
+96.64% stmts** (agregado). Stores individuais 100% (índice de barrel puxa
+agregado para 93.33%); componentes 96-100%; rotas 93-100%. Threshold do spec ≥
+90% stores / ≥ 60% componentes — superado em todos.
+
+### Decisões tomadas
+
+- **ADR-015** (arquitetura do composer da app Líder) registrado.
+- **Não usar `react-hook-form`** nesta sessão — desvio explícito da § 6.4 do
+  prompt. Composer dinâmico com lista N exigiria `useFieldArray` + sync store ↔
+  form (dual-source-of-truth frágil). A store Zustand já é fonte única;
+  `composerFormSchema` valida; `aria-invalid` + mensagem inline cobrem UX de
+  erro. Documentado em ADR-015 (Alternativas rejeitadas). Reavaliar em BL-C2-006
+  (W2).
+- **Não instalar `date-fns`** — `isDeadlineInPast` usa `Date.setHours()` nativo,
+  ~10 linhas. Evita dep para "passado vs futuro" simples.
+- **Não instalar `lucide-react`** — Sidebar e botões usam texto puro nesta
+  sessão. Reduz bundle.
+- **`Operator` local em `apps/leader/src/renderer/types/`** (Gate 1 Opção 1).
+  Promover para `@sprint/contracts` quando C3 ou C4 consumir `operators.json`.
+  TODO inline.
+- **Sem changeset para `sprint-leader`** (Gate 1) — alinhado com ADR-001 (apps
+  Electron versionam via electron-builder).
+- **`tsconfig.json` do Leader NÃO alterado** (Gate 1) — débito G-014 fica como
+  pré-requisito de BL-C2-007 (que vai importar `sanitizeBodyHtml` do
+  `@sprint/contracts` antes do dispatch).
+- **`vitest.config.ts` ganhou `setupFiles: ['./src/renderer/test-setup.ts']`** —
+  habilita jest-dom matchers globalmente.
+- **`accent-color: var(--color-primary)` no checkbox** — tinta nativa em azul
+  ARTFLEXÍVEIS sem custom checkbox.
+- **Hostname visível ao lado do nome do operador** — escopo a mais que o spec,
+  mas operadores na fábrica podem ter nomes similares; hostname desambigua.
+  Pequeno, acessível (segunda linha em `--font-size-xs`).
+
+### Bloqueios encontrados
+
+Nenhum bloqueio funcional. Três fricções resolvidas inline:
+
+1. **Porta 5173** ocupada por PID 17776 (Vite de sessão anterior). Resolvido com
+   `Stop-Process` autorizado por Renan no Gate 2.
+2. **ESLint `import-x/order`** em `OperatorList.tsx`: ordem alfabética entre
+   `./OperatorList.module.css` e `./OperatorRow` — fix de 2 linhas no Gate 4.
+3. **ESLint `@typescript-eslint/no-unnecessary-type-assertion`** em
+   `DeadlineInput.test.tsx`: `as HTMLInputElement` redundante; trocado por
+   generic `getByLabelText<HTMLInputElement>(...)` no Gate 5.
+
+### Próximo passo
+
+Renan revisa o working tree (≈35 arquivos modificados/novos) e decide:
+
+1. Forma de consolidação (PR + review da §9.3 ou fast-forward conforme override
+   das Sessões 05/07/08/09/10/11/12).
+2. Próximo item da W1. **Recomendação técnica: BL-C4-002..005** (`writePending`,
+   `listAcks`, `writeAck`, `writeCancel`, `moveToArchive` — operações de domínio
+   em `@sprint/fs-adapter` consumindo `IFilesystemAdapter` do Gate W0
+   BL-C4-001/006/007). Sem essas operações, BL-C2-007 (parte 2 desta sessão)
+   fica bloqueado.
+
+### Observações para a próxima sessão
+
+- **Flag `DISPATCH_ENABLED = false` em
+  `apps/leader/src/renderer/routes/NovaSprint/NovaSprint.tsx`** precisa ser
+  removida em BL-C2-007 junto com a substituição do `console.warn` no
+  `handleDispatchClick` pela escrita real via `@sprint/fs-adapter`. Manter busca
+  por essa flag como checklist de fechamento da parte 2.
+- **Débito `rootDir` do Leader (G-014)** — fix de 1 linha em
+  `apps/leader/tsconfig.json` (`"./src"` → `"../.."`) é pré-requisito de
+  BL-C2-007 (a primeira importação real de `@sprint/contracts` no renderer vai
+  disparar TS6059). Pode ser Fase 0 de BL-C2-007 ou BL micro dedicado.
+- **Mock `operators.mock.ts`** será substituído por leitura real via
+  `@sprint/fs-adapter` em refactor de BL-C2-003 (sessão futura, depois de C4
+  completar W1 e o Leader integrar). Conversão da assinatura de `loadOperators`
+  de sync para async.
+- **`react-hook-form` ainda autorizado em § 5.1** — quando BL-C2-006 (W2)
+  trouxer customização de title/body com editor rico (formato), reavaliar a
+  decisão de ADR-015. Para campo único de texto rico, o benefício de RHF é
+  maior.
+- **`lucide-react` ainda autorizado** — primeira necessidade real virá com ícone
+  de status no acompanhamento (BL-C2-008, W2) ou no botão Enviar quando ativado.
+- **Layout em viewports estreitos**: observado durante smoke via Claude Preview
+  que o `OperatorRow` aperta quando área main < ~600px. Em janela Electron real
+  (mín. 1024×600 configurado em `main/index.ts`) o problema não se manifesta.
+  Polish opcional W2: media query.
+- **Warnings nos testes**: 4 warnings de React Router v7 future flags
+  (não-bloqueantes) e alguns "not wrapped in act(...)" do `OperatorRow` quando
+  teste atualiza store fora de `userEvent`. Silenciar com
+  `act(() => useSprintComposerStore.getState().setMeta(...))` em sessão futura —
+  não muda comportamento.
+- **DevDeps de teste adicionadas** (`@testing-library/*`) — padrão de teste de
+  componente estabelecido. Próximas sessões UI herdam.
+
+---
+
 ## Sessão 12 — 2026-05-25 — Wave 1, BL-C1-004 (sanitizeBodyHtml)
 
 **Wave atual:** W1 (primeira entrega) **Método:** gate-by-gate com aprovação

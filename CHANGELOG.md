@@ -130,6 +130,50 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
   `DECISIONS.md`
 - CLAUDE.md §7.9 (convenção de uso obrigatório de `sanitizeBodyHtml`
   em toda escrita e leitura de `body_html`)
+- `apps/leader`: layout base com 3 rotas (Nova Sprint, Acompanhamento,
+  Histórico) via `react-router-dom` ^6.30 em hash mode + sidebar persistente
+  com identidade ARTFLEXÍVEIS [BL-C2-002]
+- `apps/leader`: stores Zustand ^4.5 — `useSprintComposerStore` (draft do
+  composer com operadores + metas + deadline + title + body, ações
+  imutáveis) e `useOperatorsStore` (cache filtrando `ativo: true`); selectors
+  puros top-level `selectIsValid`, `selectSelectedCount`, `selectFormPayload`
+  [BL-C2-011]
+- `apps/leader`: `composerFormSchema` Zod (RN-07: meta inteira ≥ 1; deadline
+  regex HH:MM 00–23) como fonte única de regras do composer; `selectIsValid`
+  delega para `selectFormPayload(state) !== null` (schema-first ADR-005)
+  [BL-C2-011]
+- `apps/leader`: tela "Nova Sprint" com `OperatorList` (4 operadores ativos
+  do mock, filtro por `ativo: true`), `OperatorRow` com checkbox + label
+  clicável + nome + hostname, e `BulkSelectButtons` "Marcar todos" /
+  "Desmarcar todos" (desabilitam quando lista vazia) [BL-C2-003]
+- `apps/leader`: input numérico de meta inline em `OperatorRow` (renderiza
+  quando `isSelected`); `aria-invalid` + `aria-describedby` + mensagem
+  inline "Meta ≥ 1" quando inválida (null/0/negativa/fracionária) [BL-C2-004]
+- `apps/leader`: `DeadlineInput` com `<input type="time">`, default '18:00'
+  da store, warning visual `role="alert"` quando deadline está no passado
+  (não-bloqueante); helper puro `isDeadlineInPast(hhmm, now?)` exportado
+  para reuso [BL-C2-005]
+- `apps/leader`: botão "Enviar" como stub desabilitado, controlado pela flag
+  `DISPATCH_ENABLED = false` em `NovaSprint.tsx`; tooltip aponta para
+  BL-C2-007; `console.warn` de stub no handler (permitido pela regra atual).
+  **Ativação prevista em BL-C2-007 (parte 2 desta sessão) após C4 entregar
+  operações de domínio do fs-adapter**
+- `apps/leader`: tooling de teste de componente — `@testing-library/react`
+  ^16.3, `@testing-library/user-event` ^14.6, `@testing-library/jest-dom`
+  ^6.9 como devDeps; `test-setup.ts` com `cleanup()` em `afterEach` e
+  matchers globais via `jest-dom/vitest`
+- `apps/leader`: 84 testes unitários em 7 arquivos (era 0); cobertura
+  agregada **96.64% lines / 94.89% branches / 92.59% funcs**; stores
+  individuais 100%, componentes 96-100% individuais, rotas 93-100%
+- ADR-015 (arquitetura do composer da app Líder — W1.C2 parte 1) em
+  `DECISIONS.md`
+- CLAUDE.md §3 atualizada (tabela de stack): zustand **4.5.7**,
+  react-router-dom **6.30.3**, isomorphic-dompurify **2.36.0**, Electron
+  **42.2.0** (corrige stale), @testing-library/{react,user-event,jest-dom}
+- CLAUDE.md §4 ganhou nova subseção "Estrutura interna do Leader (W1.C2
+  parte 1)" documentando organização do `renderer/` e convenções
+  específicas (selectors puros, schema-first, flag DISPATCH_ENABLED,
+  decisão de não usar RHF)
 
 ### Changed
 

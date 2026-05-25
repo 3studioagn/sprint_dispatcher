@@ -87,17 +87,17 @@ do repositório**, gerenciados externamente por Renan.
 
 ## Componentes
 
-| ID  | Nome                                       | Tipo          | Status W0                  |
-| --- | ------------------------------------------ | ------------- | -------------------------- |
-| C0  | Foundation & Infrastructure                | Infra         | ✅ Wave 0                  |
-| C1  | Shared Contracts (`@sprint/contracts`)     | Library       | ✅ Wave 0                  |
-| C2  | Leader Application                         | Desktop App   | ✅ Scaffold (Wave 0)       |
-| C3  | Operator Agent                             | Desktop App   | ✅ Scaffold + config       |
-| C4  | Filesystem Adapter (`@sprint/fs-adapter`)  | Library       | ✅ Wave 0                  |
-| C5  | Installer & Deployment                     | Package       | ✅ Config validada         |
-| C6  | Observability & Logging (`@sprint/logger`) | Library       | ⏸️ Wave 1                  |
-| C7  | Documentation                              | Docs          | 🔄 Em fechamento da Wave 0 |
-| C8  | Quality Assurance                          | Cross-cutting | 🔄 Em fechamento da Wave 0 |
+| ID  | Nome                                       | Tipo          | Status W0                     |
+| --- | ------------------------------------------ | ------------- | ----------------------------- |
+| C0  | Foundation & Infrastructure                | Infra         | ✅ Wave 0                     |
+| C1  | Shared Contracts (`@sprint/contracts`)     | Library       | ✅ Wave 0                     |
+| C2  | Leader Application                         | Desktop App   | ✅ Composer W1 (sem dispatch) |
+| C3  | Operator Agent                             | Desktop App   | ✅ Scaffold + config          |
+| C4  | Filesystem Adapter (`@sprint/fs-adapter`)  | Library       | ✅ Wave 0                     |
+| C5  | Installer & Deployment                     | Package       | ✅ Config validada            |
+| C6  | Observability & Logging (`@sprint/logger`) | Library       | ⏸️ Wave 1                     |
+| C7  | Documentation                              | Docs          | 🔄 Em fechamento da Wave 0    |
+| C8  | Quality Assurance                          | Cross-cutting | 🔄 Em fechamento da Wave 0    |
 
 Detalhes operacionais de cada componente: ver os `README.md` em
 [`apps/leader`](./apps/leader/README.md),

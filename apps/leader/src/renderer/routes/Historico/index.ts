@@ -1,0 +1,1 @@
+export { Historico } from './Historico';

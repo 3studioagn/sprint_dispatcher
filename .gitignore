@@ -39,6 +39,9 @@ yarn-error.log*
 *.swo
 *~
 
+# Claude Code / Claude Preview — config local por dev
+.claude/
+
 # OS
 .DS_Store
 Thumbs.db
