@@ -245,26 +245,36 @@ não por credencial de aplicação.
 
 ### Alternativas consideradas
 
-| #      | Arquitetura                           | Stack                          | Veredito                                             |
-| ------ | ------------------------------------- | ------------------------------ | ---------------------------------------------------- |
-| **A1** | Backend cloud + WebSocket             | FastAPI + Postgres + WebSocket | Inviável por política de segurança                   |
-| **A2** | Backend local + WebSocket             | FastAPI local + Postgres local | Exige servidor dedicado, abertura de porta, operação |
-| **A3** | **Pasta compartilhada SMB + polling** | EXEs + SMB share               | **Escolhida**                                        |
-| **A4** | Banco de dados local + polling        | Postgres + ODBC                | Exige licenciamento, gestão de credenciais           |
+| #      | Arquitetura                           | Stack                             | Veredito                                             |
+| ------ | ------------------------------------- | --------------------------------- | ---------------------------------------------------- |
+| **A1** | Backend cloud + WebSocket             | FastAPI + Postgres + WebSocket    | Inviável por política de segurança                   |
+| **A2** | Backend local + WebSocket             | FastAPI local + Postgres local    | Exige servidor dedicado, abertura de porta, operação |
+| **A3** | **Pasta compartilhada SMB + polling** | EXEs + SMB share                  | **Escolhida**                                        |
+| **A4** | Banco de dados local + polling        | Postgres + ODBC                   | Exige licenciamento, gestão de credenciais           |
+| **A5** | Mensageria (broker dedicado)          | RabbitMQ / MQTT / ActiveMQ + libs | Broker adicional para operar; overhead injustificado |
 
 Critérios de decisão (✓ = melhor, △ = neutro, ✗ = pior):
 
-| Critério                      | A1  | A2  | A3  | A4  |
-| ----------------------------- | --- | --- | --- | --- |
-| Aprovação TI / Segurança      | ✗   | △   | ✓   | △   |
-| Custo de infraestrutura       | △   | △   | ✓   | △   |
-| Velocidade de desenvolvimento | △   | △   | ✓   | ✗   |
-| Manutenibilidade              | △   | △   | ✓   | △   |
-| Extensibilidade futura        | ✓   | ✓   | △   | ✓   |
+| Critério                      | A1  | A2  | A3  | A4  | A5  |
+| ----------------------------- | --- | --- | --- | --- | --- |
+| Aprovação TI / Segurança      | ✗   | △   | ✓   | △   | ✗   |
+| Custo de infraestrutura       | △   | △   | ✓   | △   | ✗   |
+| Velocidade de desenvolvimento | △   | △   | ✓   | ✗   | △   |
+| Manutenibilidade              | △   | △   | ✓   | △   | ✗   |
+| Extensibilidade futura        | ✓   | ✓   | △   | ✓   | ✓   |
 
 A3 ganhou em 4 dos 5 critérios. O único trade-off — extensibilidade — é mitigado
 pelo §"Migração futura" do doc de requisitos: o formato JSON é preservado
 intacto entre filesystem e payload HTTP de eventual API REST (A1).
+
+**Notas adicionais sobre A5 (mensageria):** RabbitMQ/MQTT/ActiveMQ são padrão da
+indústria para comunicação assíncrona com filas duráveis e entrega real-time,
+mas pressupõem um broker rodando 24/7 — para a escala do MVP (3–10 estações
+operadoras na LAN da ARTFLEXÍVEIS) o overhead operacional do broker (deploy,
+monitoring, ACLs, backups da fila) excede o ganho. Operadores e TI ganham um
+sistema novo para entender que não substitui a pasta compartilhada já existente
+para artes/specs de produção. Reavaliação só faz sentido se o cenário escalar
+para múltiplos sites com latência abaixo de 1 s (não previsto).
 
 ### Consequências
 
@@ -290,6 +300,8 @@ intacto entre filesystem e payload HTTP de eventual API REST (A1).
   migração futura)
 - `CLAUDE.md` §1 (Missão), §2 (Princípios arquiteturais inegociáveis P-01 a
   P-05), §8.3 (Escrita atômica)
+- BL-C7-004 — formalização da seção de alternativas (entrada A5 mensageria
+  adicionada na sessão de fechamento da W0)
 
 ---
 
