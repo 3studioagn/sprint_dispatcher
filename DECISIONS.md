@@ -182,14 +182,15 @@ Win+L.
 
 ### Alternativas consideradas
 
-| Alternativa            | Por que rejeitada                                                                                                                               |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| **WPF (.NET/C#)**      | Time sem fluência. Tooling distinto do que usamos. Curva alta.                                                                                  |
-| **PyQt / PySide**      | Empacotamento Python no Windows é frágil (PyInstaller, py2exe). UI menos polida.                                                                |
-| **AutoHotkey**         | Suficiente pro overlay do Agent, mas Leader exige UI rica (forms, listas, validação). Stack dual seria pior.                                    |
-| **Tauri**              | Promissor (binário ~10x menor que Electron), mas em 2026 ainda imaturo pra TOPMOST robusto e tray. Re-avaliar em Tauri 2.x (estimado jan/2027). |
-| **Flutter Desktop**    | Quebra o single tech stack (Dart). Time não usa.                                                                                                |
-| **Native Win32 / C++** | Custo de desenvolvimento desproporcional ao escopo.                                                                                             |
+| Alternativa             | Por que rejeitada                                                                                                                                                                          |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **WPF (.NET/C#)**       | Time sem fluência. Tooling distinto do que usamos. Curva alta.                                                                                                                             |
+| **PyQt / PySide**       | Empacotamento Python no Windows é frágil (PyInstaller, py2exe). UI menos polida.                                                                                                           |
+| **AutoHotkey**          | Suficiente pro overlay do Agent, mas Leader exige UI rica (forms, listas, validação). Stack dual seria pior.                                                                               |
+| **Tauri**               | Promissor (binário ~10x menor que Electron), mas em 2026 ainda imaturo pra TOPMOST robusto e tray. Re-avaliar em Tauri 2.x (estimado jan/2027).                                            |
+| **Flutter Desktop**     | Quebra o single tech stack (Dart). Time não usa.                                                                                                                                           |
+| **Native Win32 / C++**  | Custo de desenvolvimento desproporcional ao escopo.                                                                                                                                        |
+| **Web (PWA / browser)** | Incompatível com requisitos: tray icon impossível, sem TOPMOST sobre janelas nativas (RF-07), sem auto-start no boot do Windows (RF-19), sem acesso a HKCU Run / scheduled tasks via APIs. |
 
 ### Consequências
 
@@ -210,6 +211,8 @@ Win+L.
 - Stack §5.1 (Electron), §16.2 (Quando reavaliar)
 - Requisitos §3.1 (Componentes), §3.2 P-03 (Agent residente)
 - `CLAUDE.md` §8.1 (segurança obrigatória), §8.2 (overlay TOPMOST)
+- BL-C7-005 — formalização da seção de alternativas (entrada Web/PWA adicionada
+  na sessão de fechamento da W0)
 
 ---
 
