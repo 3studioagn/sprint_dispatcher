@@ -265,6 +265,27 @@ Context para estado mutável** (apenas pra injeção de dependência).
 - Nome descreve comportamento, não implementação
 - Cobertura mínima: C1, C4, C6 ≥ 80%; C2, C3 ≥ 60%
 
+#### 7.7.1. Coverage thresholds por package
+
+Thresholds materializados nos `vitest.config.ts` de cada workspace. `pnpm test`
+(raiz) e `pnpm test:coverage` (raiz) orquestram via Turborepo.
+
+| Package                        | Lines | Functions | Branches | Statements |
+| ------------------------------ | ----: | --------: | -------: | ---------: |
+| `@sprint/contracts`            |   95% |       95% |      90% |        95% |
+| `@sprint/fs-adapter`           |   95% |       95% |      90% |        95% |
+| `sprint-operator-agent` (main) |   90% |       90% |      85% |        90% |
+| `sprint-leader`                |   n/a |       n/a |      n/a |        n/a |
+
+Cobertura realmente exercida (Sessão 11): `@sprint/contracts` 100/100/100/100,
+`@sprint/fs-adapter` 99.05/100/96.69/99.05, `sprint-operator-agent`
+100/100/100/100.
+
+`sprint-leader` em W0 é scaffold sem lógica testável (main/preload via E2E em W3
+— Playwright). À medida que código de domínio for adicionado em W1+, thresholds
+serão introduzidos via PR dedicado. Reporters padronizados nos 4 workspaces:
+`['text', 'json', 'json-summary', 'html', 'lcov']`.
+
 ### 7.8. Commits (Conventional Commits)
 
 Formato:

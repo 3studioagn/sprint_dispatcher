@@ -12,6 +12,11 @@
       "outputs": ["coverage/**"],
       "inputs": ["$TURBO_DEFAULT$", "vitest.config.ts"]
     },
+    "test:coverage": {
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"],
+      "inputs": ["$TURBO_DEFAULT$", "vitest.config.ts"]
+    },
     "lint": {
       "outputs": [],
       "cache": true
