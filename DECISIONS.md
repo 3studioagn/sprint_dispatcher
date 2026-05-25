@@ -76,6 +76,10 @@ entradas em ordem cronológica crescente — mais recente no fim.
   IPC contract-first com tipos compartilhados main↔renderer
 - [ADR-010](#adr-010-upgrade-do-electron-para-a-linha-42x-remediacao-finding-001)
   — Upgrade do Electron para a linha 42.x (remediação FINDING-001)
+- [ADR-011](#adr-011-arquitetura-tray-resident-do-operator-agent) — Arquitetura
+  tray-resident do Operator Agent
+- [ADR-012](#adr-012-loader-de-configjson-com-fail-fast-validation) — Loader de
+  `config.json` com fail-fast validation
 
 ---
 
@@ -755,3 +759,169 @@ Tauri/WPF/etc.) — muda apenas o número da versão.
   (`pnpm.overrides.tar`)
 - Electron security / release cadence:
   <https://www.electronjs.org/docs/latest/tutorial/electron-timelines>
+
+---
+
+## ADR-011: Arquitetura tray-resident do Operator Agent
+
+- **Status:** Accepted
+- **Data:** 2026-05-25
+- **Decisores:** Renan (3Studio)
+
+### Contexto
+
+O Operator Agent (C3) não tem UI estacionária — diferente do Leader (C2), que
+tem janela principal onde o líder compõe sprints. O Agent precisa ficar sempre
+rodando em background na estação do operador, esperando sprints chegarem via
+polling (W1+). Quando chega uma sprint, exibe um overlay TOPMOST temporário;
+quando o operador dá ack ou cancel, o overlay fecha.
+
+Pergunta arquitetural: como o app fica "vivo" sem janela aberta?
+
+### Decisão
+
+Adotamos **arquitetura tray-resident**:
+
+1. O main process inicia e cria o tray icon (única interface persistente).
+2. **Não cria janela principal** — o overlay é criado/destruído sob demanda
+   (W1+).
+3. `app.on('window-all-closed', () => { /* não chama app.quit() */ })` — basta
+   **subscrever** ao evento; só de existir o listener, o quit automático do
+   Electron é cancelado. **O evento `window-all-closed` NÃO recebe `event` nem
+   suporta `preventDefault()`** (tipagem `() => void` no Electron 42; ver
+   CLAUDE.md §12 G-013).
+4. Único caminho de quit: menu da tray → "Sair", ou `app.quit()` programático.
+5. Single instance lock via `app.requestSingleInstanceLock()` é obrigatório —
+   acks duplicados de múltiplas instâncias invalidariam tracking.
+
+### Alternativas consideradas
+
+1. **Janela principal escondida (`show: false` permanente):** funciona mas
+   desperdiça recursos (RAM alocada) e o operador pode acidentalmente abri-la
+   via taskbar (mesmo com `skipTaskbar: true`).
+2. **Processo background no Windows sem tray:** mais "puro" mas perde a tray
+   (interface visual mínima que o operador precisa para ver status e sair).
+3. **Headless via CLI + tray separado:** complexidade desnecessária pro MVP.
+
+### Consequências
+
+**Aceitas:**
+
+- App leve em RAM (sem janela principal alocada).
+- UX clara: tray = "está rodando"; sem tray = "fechei".
+- Single instance lock previne classe inteira de bugs (acks duplicados, polling
+  concorrente, tray duplicada).
+- Overlay temporário e descartável (criado/destruído por evento em W1+).
+
+**Trade-offs:**
+
+- Tray icon obrigatório — sistemas sem tray (alguns Linux DEs) não suportariam.
+  Não é problema para o escopo Windows da fábrica.
+- O listener de `window-all-closed` é **load-bearing**: deletar o listener faz o
+  app encerrar automaticamente quando a última janela fechar (default do
+  Electron). Documentado inline no `index.ts` e em G-013.
+
+### Referências
+
+- CLAUDE.md §8.1 (segurança Electron), §12 G-013 (window-all-closed)
+- Requisitos RF-07 (overlay temporário)
+- ADR-002 (Electron como runtime)
+- BL-C3-001 (scaffold do Agent)
+
+---
+
+## ADR-012: Loader de config.json com fail-fast validation
+
+- **Status:** Accepted
+- **Data:** 2026-05-25
+- **Decisores:** Renan (3Studio)
+
+### Contexto
+
+O Operator Agent lê `config.json` da estação ao iniciar (Requisitos Anexo F). O
+arquivo contém `user_id`, `hostname`, `shared_path`, `polling_interval_seconds`,
+etc. — dados críticos para identificar a estação no fluxo de sprints.
+
+Comportamentos possíveis quando o arquivo está ausente, mal-formado, ou fora do
+schema:
+
+- (a) Auto-criar template default e prosseguir.
+- (b) Falhar com mensagem clara e sair.
+- (c) Mostrar UI de setup inicial.
+
+### Decisão
+
+Adotamos **(b) fail-fast com diálogo informativo + erros tipados**:
+
+1. O loader retorna config válido OU lança um `ConfigError` tipado. Quatro
+   subclasses cobrem os modos de falha:
+   - `ConfigNotFoundError` (ENOENT)
+   - `ConfigReadError` (outros erros de I/O — permissão, EISDIR, etc.)
+   - `ConfigJsonError` (JSON inválido)
+   - `ConfigInvalidError` (JSON válido mas schema violado)
+2. O main process captura o erro → `dialog.showErrorBox(title, content)` com a
+   mensagem específica + o caminho do config → `app.quit()`.
+3. **Sem auto-criação, sem retry, sem fallback silencioso.**
+4. Validação via **`safeParseAgentConfig`** (parser não-lançador do
+   `@sprint/contracts`) em vez de `parseAgentConfig`+`try/catch`+`instanceof`.
+   Elimina um ramo defensivo
+   (`if (!instanceof ContractValidationError) throw err`) que `parseAgentConfig`
+   nunca exercita — branch inalcançável, não-testável, derruba coverage.
+5. Config cacheado em memória (`configCache: AgentConfig | null`); mudança no
+   arquivo exige restart do app.
+
+### Alternativas consideradas
+
+1. **(a) Auto-criar template:** requer saber valores que dependem do contexto
+   (`user_id`, `hostname`, `shared_path`). Auto-criar com `user_id: "TBD"` seria
+   pior do que falhar — o operador rodaria com identidade errada.
+2. **(c) UI de setup inicial:** legítimo para UX mas é trabalho de W2+ (lá vai
+   virar uma janela de configuração acessível pelo menu da tray). Em W0,
+   fail-fast é determinístico.
+
+### Consequências
+
+**Aceitas:**
+
+- Comportamento previsível (mesmo erro = mesma mensagem específica).
+- Diagnóstico fácil: o operador vê o path e a mensagem, copia para suporte.
+- Defensive parsing — o Zod cobre todos os edge cases (`user_id` vazio,
+  `polling_interval_seconds` fora de 1..60, campo extra com `.strict()`, etc.).
+- Cobertura: `config.ts` 100% lines/branches/funcs (13 testes unitários,
+  incluindo EISDIR via config-como-diretório); `single-instance.ts` 100% (2
+  testes).
+
+**Trade-offs:**
+
+- UX pior na primeira execução (sem auto-setup). Mitigação: o instalador pode
+  criar `config.example.json` em `/sprint-operator-agent/` e a documentação pede
+  ao operador renomear/preencher.
+- Cache em memória — config lido uma vez no boot; mudança exige restart.
+  Aceitável para MVP; W2+ pode adicionar reload via menu da tray.
+
+### Padrão de I/O estabelecido
+
+Este é o **primeiro código de produção do projeto com I/O em filesystem**. Usa
+`fs/promises` direto, marcado com `TODO(C4)` para refatoração quando C4
+(`@sprint/fs-adapter`) for entregue. A intenção: `loadAgentConfig` passa a usar
+`IFilesystemAdapter.readFile` em vez de `fs.readFile` direto, mantendo a mesma
+interface externa e os mesmos `ConfigError`s.
+
+### Defense-in-depth no IPC
+
+O handler `getConfig` (em `main/index.ts`) NÃO retorna o `AgentConfig` inteiro
+ao renderer — retorna apenas um **`SafeAgentConfigView`** (`user_id`,
+`user_nome_exibicao`, `hostname`). O renderer não precisa de `shared_path`,
+`polling_interval_seconds` nem `log_level`, e expor menos é defesa em
+profundidade caso o overlay seja comprometido em W1+.
+
+### Referências
+
+- Requisitos Anexo F (schema AgentConfig)
+- ADR-005 (schema-first com `z.infer`)
+- `packages/contracts/README.md` (recomendação de `safeParse*` para "validação
+  como parte do fluxo normal" / "arquivos potencialmente corrompidos")
+- CLAUDE.md §12 G-014 (TS6059 cross-package source-first), G-015 (`vi.mock`
+  hoisting)
+- BL-C3-002 (loader)
+- BL-C4-001 (interface `IFilesystemAdapter` — futuro)

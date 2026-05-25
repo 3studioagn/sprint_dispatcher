@@ -66,6 +66,151 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 09 — 2026-05-25 — Execução de C3 (Operator Agent scaffold + Config Loader) + BL-C5-002 · W0
+
+**Wave atual:** W0 **Duração estimada:** ~6h **Itens trabalhados:** [BL-C3-001,
+BL-C3-002, BL-C5-002]
+
+### Objetivo da sessão
+
+Executar a parte W0 do Componente C3 (Operator Agent) — scaffold do app
+Electron + loader de `config.json` — junto com BL-C5-002 (electron-builder do
+Agent), deixando uma aplicação Electron + React + TypeScript funcional,
+tray-resident, com config loader fail-fast e config de empacotamento validada
+(artefato `.exe` continua bloqueado pelo ESET, igual ao Leader).
+
+### O que foi feito
+
+- Workspace `apps/operator-agent` com Vite + Electron 42 + React 18 + TypeScript
+  (CJS, espelha o Leader com adaptações tray-resident).
+- Main process tray-resident: single instance lock, `window-all-closed` com
+  listener vazio (NÃO `preventDefault()` — ver G-013), tray icon + menu
+  Sobre/Sair (placeholder W0), `createOverlayWindow` declarado mas não chamado
+  em W0.
+- Loader de `config.json` (BL-C3-002): 4 `ConfigError` tipados (NotFound, Json,
+  Invalid, Read); validação via `safeParseAgentConfig`; I/O via `fs/promises`
+  com `TODO(C4)`; 13 testes unitários (fs temp real, incluindo EISDIR via
+  config-como-diretório); cobertura 100%.
+- Integração do loader no main: `bootstrap()` carrega config entre `whenReady` e
+  `createTray`; `handleConfigError` mostra diálogo e encerra; handler IPC
+  `getConfig` retorna apenas `SafeAgentConfigView` (defense-in-depth).
+- Preload + IPC contract-first: `AgentAPI` + `SafeAgentConfigView` em
+  `src/shared/ipc-types.ts`; type guard runtime; bridge via
+  `contextBridge.exposeInMainWorld`.
+- Renderer placeholder (React 18 StrictMode, CSP endurecida, tokens espelhando o
+  Leader).
+- `tray.ico` placeholder 16×16 32bpp BGRA (gerado via Node, validado por
+  `file`).
+- `electron-builder.yml` do Agent: portable + NSIS pt-BR, `runAfterFinish`, sem
+  desktop shortcut, `deleteAppDataOnUninstall: false`; bloco de code signing
+  comentado (espelha remediação audit-v1-FINDING-004 do Leader).
+- ADR-011 (tray-resident) e ADR-012 (loader fail-fast) em `DECISIONS.md`.
+- Gotchas G-013 (`window-all-closed` sem event/preventDefault), G-014 (TS6059
+  por `rootDir` com import source-first cross-package), G-015 (`vi.mock`
+  hoisting + prefixo `mock`) em CLAUDE.md §12.
+
+### Estado atual
+
+- **BL-C3-001:** ✅ concluído (scaffold + tray + single-instance + main +
+  preload + renderer + IPC)
+- **BL-C3-002:** ✅ concluído (config loader fail-fast + integração)
+- **BL-C5-002:** ⚠️ config concluída e validada (electron-builder parseou o yml
+  e drove packaging); **a geração do `.exe` não foi validada nesta sessão** —
+  bloqueada pelo ESET (G-009), igual ao BL-C5-001.
+- **BL-C3-003..007:** ⏸️ W1+ (polling, overlay real, ack, tray menu completo,
+  cancel)
+
+Cobertura: `@sprint/contracts` 100% (regressão zero); `operator-agent`
+`config.ts` 100% + `single-instance.ts` 100% (15 testes em 2 arquivos).
+
+Bateria final na raiz: `format:check`, `lint`, `type-check`, `test`, `build` —
+todos exit 0. `vite build` do Agent gera `dist/`, `dist-electron/main/index.js`
+(58.9 kB — `@sprint/contracts` + zod + ulid bundlados),
+`dist-electron/preload/index.js`.
+
+Smoke E2E validado ao vivo pelo Renan no Windows: ① config ausente → diálogo
+"Config inválido" + quit; ② config inválido → diálogo com issues do Zod + quit;
+③ config válido → ícone azul na tray, menu Sobre (versão) / Sair, encerra limpo.
+④ single instance lock coberto por testes unitários; validação real fica pra
+`.exe` via CI (em `dev` o Vite `strictPort` confunde).
+
+### Decisões tomadas
+
+- **ADR-011** (tray-resident) — `window-all-closed` é apenas subscrito (sem
+  `preventDefault()` que NÃO existe nesse evento); single-instance lock
+  obrigatório. Inversão consciente do default do Electron, documentada inline.
+- **ADR-012** (loader fail-fast) — 4 erros tipados, `safeParseAgentConfig`
+  (parser não-lançador) em vez de `parseAgentConfig` + try/catch + instanceof
+  (que criaria branch defensiva inalcançável), cache em memória, sem
+  auto-criação.
+- **Option A para o acoplamento Fase 3 ↔ 4** (decidido no início da Fase 3): o
+  `index.ts` da Fase 3 fica sem o import de `./config`; a Fase 4 cria
+  `config.ts` E edita `index.ts` para integrá-lo. Preserva atomicidade BL-C3-001
+  / BL-C3-002 e todo commit type-checka.
+- **Correção do `window-all-closed`** sobre o prompt §3.4: o evento NÃO recebe
+  `event` (tipagem `() => void` no Electron 42); `preventDefault()` no listener
+  seria type-error OU (via overload genérico de `EventEmitter`) compilaria mas
+  quebraria em runtime com `undefined.preventDefault()`. Forma correta: listener
+  com corpo comentado, sem chamar `app.quit()`.
+- **`rootDir: "../.."`** em `apps/operator-agent/tsconfig.json` — necessário
+  para `tsc --noEmit` aceitar a importação source-first de `@sprint/contracts`
+  (TS6059 surgia com `rootDir: "./src"`). Inócuo com `noEmit`. O Leader vai
+  precisar do mesmo ajuste quando importar `@sprint/contracts` em W1.
+- **`rfc3161TimeStampServer` comentado** no `electron-builder.yml` do Agent —
+  espelha a remediação audit-v1-FINDING-004 do Leader (signing diferido para
+  BL-C0-008 / W3).
+- **`safeParseAgentConfig` em vez de `parseAgentConfig`** — alinhado à
+  recomendação do README do C1 ("validação como parte do fluxo normal / arquivos
+  potencialmente corrompidos"). Elimina ramo defensivo não-cobrível.
+- **CSP endurecida** (`object-src 'none'; base-uri 'self';`) — usei a CSP atual
+  do Leader (pós-remediação audit-v1-FINDING-003), não a versão pré-hardening do
+  prompt §6.1.
+
+### Bloqueios encontrados
+
+- `pnpm package` (`.exe` / `win-unpacked`) bloqueado pelo ESET (G-009), idêntico
+  ao Leader. A config foi exercitada (electron-builder parseou o yml e foi até o
+  passo de unpack); o artefato precisa de runner CI limpo.
+- **Não existe `build-agent.yml`** no `.github/workflows/` — o Leader tem
+  `build-leader.yml` (criado na Sessão 06 a pedido do Renan). Sem um análogo, o
+  `.exe` do Agent não nasce em nenhum lugar. Decisão de adicionar fica para o
+  Renan; está fora do escopo de C3 W0.
+
+### Próximo passo
+
+Renan revisa as 7 branches encadeadas (scaffold → main → config → preload →
+renderer → electron-builder → close) e o resumo. Em seguida, abrir a sessão de
+**auditoria do C3** (mesmo padrão das auditorias C0/C1/C2 — auditor
+independente, foco em segurança Electron espelhada do Leader + fail-fast do
+loader + ADR-011/012).
+
+### Observações para a próxima sessão
+
+- **Numeração / Auditoria v2 do C2:** a Sessão 08 previa que a Sessão 09 seria
+  "Auditoria v2 do C2". Renan decidiu (no gate do protocolo desta sessão)
+  avançar com o C3 agora — então a Auditoria v2 do C2 fica para uma sessão
+  posterior. Não é bloqueador: a remediação v1 do C2 (mergeada em `develop`) era
+  pré-requisito declarado do C3 no próprio prompt.
+- **Placeholder do renderer no browser:** abrir `http://localhost:5174` num
+  browser normal mostra "Cannot read properties of undefined (reading 'ping')"
+  em vermelho — esperado em W0 (sem `BrowserWindow` no Electron, sem preload,
+  `window.api` undefined). Em W1, quando o overlay carregar o renderer dentro do
+  Electron, some sozinho. Polish opcional: detectar `window.api === undefined`
+  no `App.tsx` e mostrar mensagem mais simpática.
+- **Heads-up do Leader:** o `apps/leader/tsconfig.json` ainda tem
+  `rootDir: "./src"` — quando ele importar `@sprint/contracts` em W1 (telas
+  reais, dispatch), vai bater no mesmo TS6059. Trocar para `rootDir: "../.."`
+  igual ao Agent (ver G-014).
+- **CI para o Agent:** decidir se criar `.github/workflows/build-agent.yml`
+  análogo ao `build-leader.yml` — sem ele, o `.exe` do Agent depende de ambiente
+  local limpo (que aqui não temos pelo ESET).
+- **Tray icon definitivo (W3):** `apps/operator-agent/build/tray.ico` hoje é
+  placeholder 16×16 azul Windows (RGB 0,120,215). W3 substitui pelo ícone visual
+  proprietário da ARTFLEXÍVEIS.
+- **Defaults do `polling_interval_seconds`:** o schema usa
+  `Math.round(DEFAULT_POLLING_INTERVAL_MS / 1000) = 3`. Confirmar com Renan se 3
+  segundos é o intervalo desejado em produção (Requisitos RNF-04 falava 3–5 s).
+
 ## Sessão 08 — 2026-05-22 — Remediação pós-auditoria v1 de C2
 
 **Wave atual:** W0 (remediação) **Duração estimada:** ~3h **Itens trabalhados:**

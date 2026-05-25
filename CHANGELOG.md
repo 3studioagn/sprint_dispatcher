@@ -58,6 +58,27 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
   `requestExecutionLevel: user` [BL-C5-001]
 - ADR-008 (bundling com vite-plugin-electron) e ADR-009 (IPC contract-first) em
   `DECISIONS.md`
+- Workspace `apps/operator-agent`: app desktop Electron 42 tray-resident,
+  React 18 + TypeScript (CJS) [BL-C3-001]
+- Main process com single instance lock; `window-all-closed` apenas subscrito
+  (sem `preventDefault()` — ADR-011, G-013); tray icon + menu placeholder
+  Sobre/Sair; `tray.ico` 16×16 32bpp gerado via Node [BL-C3-001]
+- `createOverlayWindow` declarado (TOPMOST, `closable: false`, §8.1) para uso
+  em W1 [BL-C3-001]
+- Preload + bridge IPC contract-first; `AgentAPI` + `SafeAgentConfigView` em
+  `src/shared/ipc-types.ts` (defense-in-depth) [BL-C3-001]
+- Renderer placeholder React + CSS Modules; tokens espelham o Leader; CSP
+  estrita endurecida (`object-src 'none'`, `base-uri 'self'`) [BL-C3-001]
+- Loader de `config.json` fail-fast com 4 `ConfigError` tipados (NotFound,
+  Json, Invalid, Read); validação via `safeParseAgentConfig` do
+  `@sprint/contracts`; integração no `bootstrap` com diálogo + `app.quit()` em
+  erro; handler IPC `getConfig` expõe só `SafeAgentConfigView` [BL-C3-002]
+- 13 testes de `config.ts` + 2 de `single-instance.ts` (fs temp real, EISDIR
+  via path-como-diretório); cobertura 100% [BL-C3-002]
+- `electron-builder.yml` do Agent: portable + NSIS pt-BR, `runAfterFinish`,
+  sem desktop shortcut, preserva `config.json` na desinstalação [BL-C5-002]
+- ADR-011 (arquitetura tray-resident) e ADR-012 (loader fail-fast) em
+  `DECISIONS.md`
 
 ### Changed
 

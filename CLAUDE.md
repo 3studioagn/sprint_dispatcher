@@ -630,6 +630,84 @@ Descobertas durante o desenvolvimento que economizam tempo da próxima sessão.
 - **Descoberto em:** Sessão 08 (2026-05-22), Fase 6 da remediação
   audit-v1-FINDING-001.
 
+### G-013: `window-all-closed` no Electron NÃO recebe `event` nem suporta `preventDefault()`
+
+- **Sintoma:** o padrão "tray-resident" escrito como
+  `app.on('window-all-closed', (e) => e.preventDefault())` **crash em runtime**
+  com
+  `TypeError: Cannot read properties of undefined (reading 'preventDefault')` na
+  primeira vez que todas as janelas fecham — `e` é `undefined`. Em alguns casos
+  pode falhar em compile (overload específica rejeita), mas o overload genérico
+  herdado de `EventEmitter` permite compilar e estourar só em runtime.
+- **Causa:** a tipagem do Electron 42 é
+  `on(event: 'window-all-closed', listener: () => void): this;` — listener sem
+  parâmetros. A doc do próprio `electron.d.ts` (~linha 999) diz: _"by default,
+  if all windows are closed, the application quits. However, if you subscribe to
+  this event, you control whether the app quits or not"_. **Subscrever ao evento
+  já cancela o quit automático**; `preventDefault()` não faz parte do contrato.
+- **Solução:** listener com corpo comentado, sem chamar `app.quit()`:
+  ```ts
+  app.on('window-all-closed', () => {
+    // Agent tray-resident: NÃO encerra quando as janelas fecham.
+    // Subscrever já cancela o quit automático do Electron.
+  });
+  ```
+  O ponto "load-bearing" é a EXISTÊNCIA do listener — deletá-lo faz o app voltar
+  ao default (auto-quit). Documentar inline.
+- **Descoberto em:** Sessão 09 (2026-05-25), Fase 3 do BL-C3-001 — antes de
+  escrever o `index.ts` do Agent, ao auditar o snippet do prompt contra o
+  `electron.d.ts` instalado.
+
+### G-014: `tsc --noEmit` em app que importa `@sprint/*` source-first emite TS6059 com `rootDir` no pacote
+
+- **Sintoma:** ao importar `@sprint/contracts` num app, `tsc --noEmit` falha com
+  `error TS6059: File '…/packages/contracts/src/…' is not under 'rootDir' '…/apps/operator-agent/src'. 'rootDir' is expected to contain all source files.`
+  Acontece tanto com `rootDir: "./src"` explícito quanto sem `rootDir` (o tsc
+  infere `rootDir` como o dir do pacote — `references` ao `tsconfig.node.json`
+  composite parece forçar a checagem mesmo com `noEmit: true`).
+- **Causa:** o monorepo é source-first (Sessão 03 / `@sprint/contracts` com
+  `main: src/index.ts`, sem `dist`). O tsconfig do app aliasa
+  `@sprint/contracts` → `packages/contracts/src/index.ts` (path alias). Ao
+  type-checar, `tsc` puxa a fonte do contracts pro program; com `rootDir`
+  apontando para o dir do app, esses arquivos ficam fora.
+- **Solução:** `"rootDir": "../.."` no tsconfig do app (raiz do monorepo). Como
+  `noEmit: true`, `rootDir` só serve pra checagem TS6059 — apontar para a raiz
+  cobre todos os pacotes do monorepo. Alternativa "ortodoxa" (project references
+  com `composite: true` no contracts) é mudança arquitetural maior, deixada para
+  sessão futura. **O Leader vai precisar do mesmo ajuste quando importar
+  `@sprint/contracts` em W1.**
+- **Descoberto em:** Sessão 09 (2026-05-25), Fase 4 do BL-C3-002 —
+  `apps/operator-agent` é o primeiro app a importar `@sprint/contracts`.
+
+### G-015: `vi.mock` é hoisted; referências a vars externas precisam de prefixo `mock`
+
+- **Sintoma:** vitest em `transform` falha com
+  `There are some variables that are not allowed to be referenced inside vi.mock(...) factory because they are not hoisted. Variables need to be prefixed with 'mock'.`
+  quando a factory do `vi.mock` referencia uma variável declarada no escopo do
+  módulo.
+- **Causa:** vitest hoista as chamadas `vi.mock(...)` pro topo do arquivo (acima
+  dos imports). A factory é uma closure, mas vitest faz análise estática e
+  rejeita identificadores externos não-globais e não-prefixados com `mock` — pra
+  evitar TDZ bugs sutis.
+- **Solução:** prefixar a variável com `mock` (case-sensitive):
+
+  ```ts
+  // ✗ ruim — vitest barra no transform
+  const tmpRoot = path.join(os.tmpdir(), `…-${Date.now()}`);
+  vi.mock('electron', () => ({ app: { getPath: () => tmpRoot } }));
+
+  // ✓ ok — `mock*` é exemption explícito
+  const mockTmpRoot = path.join(os.tmpdir(), `…-${Date.now()}`);
+  vi.mock('electron', () => ({ app: { getPath: () => mockTmpRoot } }));
+  ```
+
+  A factory é chamada **lazily** (no 1º import do módulo mockado), então
+  `mockTmpRoot` já estará inicializada quando rodar — basta o nome calar a
+  checagem estática.
+
+- **Descoberto em:** Sessão 09 (2026-05-25), Fase 4 do BL-C3-002 — ao escrever
+  `config.test.ts` que mocka `electron.app.getPath` apontando pro tmp dir.
+
 ---
 
 ## 13. Como atualizar este arquivo
