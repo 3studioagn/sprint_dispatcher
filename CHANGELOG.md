@@ -11,6 +11,59 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ### Added
 
+<!-- ↓↓↓ Sessão 15 (2026-05-26) — W1.C2 parte 2: Leader MVP + redesign Renan ↓↓↓ -->
+
+- **`@apps/leader` — main process completo** (`main/config.ts`,
+  `main/services/operatorsService.ts`, `main/services/dispatchService.ts`,
+  `main/ipc.ts`) consumindo `@sprint/fs-adapter` (W1) e `@sprint/contracts`
+  (sanitize + parse + ULID). 5 `ConfigError` tipados com fail-fast espelhando
+  ADR-012. `rebuildDeps` callback destrava app sem restart após líder
+  corrigir `config.json` [BL-C2-007, Sessão 15 Gate 3]
+- **`@apps/leader` — integração renderer**: wrapper tipado
+  `renderer/services/api.ts`, `useOperatorsStore` async via IPC (substitui
+  `data/operators.mock.ts` deletado), `ConfigErrorScreen` para boot sem
+  config válida, `useDispatchStore` (status do dispatch + result),
+  discriminated union de boot state em `App.tsx` [Sessão 15 Gate 4]
+- **BL-C2-007 fechado — dispatch real**: `DispatchModal` (3 estados:
+  in_progress / completed / error), wire `Disparar evento` →
+  `selectDispatchRequest` → `api.dispatchSprint` → main `DispatchService` →
+  per-operator try/catch isolado em `PendingStore.writePendingSprint`. Reset
+  condicional do composer pós-fechamento (sucesso total reseta; falha
+  parcial preserva form para retry). Toasts de feedback com auto-dismiss.
+  Smoke real validado: 5 sprints disparadas em `dev-fixtures/shared/pending/`
+  com schema do Anexo C conferindo ponto-a-ponto [Sessão 15 Gate 5]
+- **Dev fixtures + setup**: `dev-fixtures/` formal (`.gitignore` para
+  runtime, `config-example.json`, `shared/operators.json` com 5 operadores,
+  `shared/{pending,acks}/`). `apps/leader/SETUP.md` com 8 seções
+  (pré-requisitos, config, dev, fixtures, smoke, QA checklist,
+  troubleshooting, próximos passos) [Sessão 15 Gate 6]
+- **Redesign visual do Leader (design Renan)**: dark theme + accent amarelo
+  `#EBC76A` + logo `3STUDIO` SVG inline. `components/Sidebar/` substituído
+  por `components/TopNav/` horizontal. Hero "Escolher pessoas / para rodada
+  de metas" com accent no fragmento `rodada de metas`. `OperatorList` em
+  grid 2-colunas. `OperatorRow` redesenhado (avatar com inicial + nome em
+  label clicável + counter inline + checkbox custom amarelo).
+  `DispatchModal` + `ConfigErrorScreen` + Toast adaptados ao dark theme.
+  Vocabulário UI: Sprint→Rodada, Operador→Usuário, Enviar→Disparar evento,
+  Horário limite→Horário. **Schema interno do `SprintPayload` e contratos
+  IPC permanecem inalterados** — só copy user-facing mudou [Sessão 15
+  Gate 7]
+- **ADR-017** em `DECISIONS.md` (arquitetura main process do Leader —
+  W1.C2 parte 2): composition root + fail-fast + IpcResult envelope +
+  GetConfigResult discriminated + rebuildDeps callback + LeaderAPI
+  property-with-arrow
+- **ADR-018** em `DECISIONS.md` (redesign visual do Leader — design Renan):
+  tokens dark + accent + Logo + TopNav + hero + 2-col grid +
+  vocabulário UI; documenta inconsistência intencional entre UI naming
+  ("Rodada", "Usuário", "Evento") e schema/código ("Sprint", "Operator",
+  "Dispatch")
+- **CLAUDE.md** ganhou (1) nova subseção em §4 "Estrutura interna do main
+  process do Leader (W1.C2 parte 2)" com convenções específicas + (2)
+  G-020 em §12 (jsdom/canvas externalize em `vite-plugin-electron`)
+- **README.md** status C2 atualizado para "✅ W1 MVP + redesign"
+
+<!-- ↑↑↑ Sessão 15 ↑↑↑ -->
+
 - Monorepo pnpm 10 + workspaces (`apps/*`, `packages/*`) com Turborepo 2.x
   (chave `tasks`) [BL-C0-001, BL-C0-002]
 - TypeScript strict (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`,

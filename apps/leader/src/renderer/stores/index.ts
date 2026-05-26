@@ -1,4 +1,5 @@
 export {
+  selectDispatchRequest,
   selectFormPayload,
   selectIsValid,
   selectSelectedCount,
@@ -13,3 +14,11 @@ export {
 } from './sprintComposerSchema';
 
 export { useOperatorsStore, type OperatorsState } from './useOperatorsStore';
+
+export {
+  selectHasFailures,
+  selectIsDispatching,
+  useDispatchStore,
+  type DispatchState,
+  type DispatchStatus,
+} from './useDispatchStore';

@@ -7,11 +7,11 @@ export function OperatorList() {
   const operators = useOperatorsStore((s) => s.operators);
 
   if (operators.length === 0) {
-    return <p className={styles.empty}>Nenhum operador ativo cadastrado.</p>;
+    return <p className={styles.empty}>Nenhum usuário ativo cadastrado.</p>;
   }
 
   return (
-    <ul className={styles.list} aria-label="Lista de operadores">
+    <ul className={styles.list} aria-label="Lista de usuários">
       {operators.map((op) => (
         <li key={op.user_id} className={styles.item}>
           <OperatorRow operator={op} />

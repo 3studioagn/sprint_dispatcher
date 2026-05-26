@@ -88,6 +88,10 @@ entradas em ordem cronológica crescente — mais recente no fim.
   Arquitetura do composer da app Líder (W1.C2 parte 1)
 - [ADR-016](#adr-016-domain-layer-do-sprintfs-adapter-w1) — Domain layer do
   `@sprint/fs-adapter` (W1)
+- [ADR-017](#adr-017-arquitetura-do-main-process-do-leader-w1c2-parte-2) —
+  Arquitetura do main process do Leader (W1.C2 parte 2)
+- [ADR-018](#adr-018-redesign-visual-do-leader-design-renan) — Redesign visual
+  do Leader (design Renan)
 
 ---
 
@@ -1453,3 +1457,339 @@ símbolo público e esqueceu de atualizar o barrel". Forma é equivalente a
   `@sprint/fs-adapter`")
 - CLAUDE.md §12 G-018 (caller faz `mkdir` antes de `writeFileAtomic` em paths
   aninhados), G-019 (Memory adapter normaliza só `/`) para BL-C2-007)
+
+---
+
+## ADR-017: Arquitetura do main process do Leader (W1.C2 parte 2)
+
+- **Status:** Accepted
+- **Data:** 2026-05-26
+- **Decisores:** Renan (3Studio)
+
+### Contexto
+
+A parte 1 da W1.C2 (Sessão 13, ADR-015) entregou o renderer do Leader — composer
+de sprint funcional mas com o botão "Enviar" como stub (flag `DISPATCH_ENABLED`
+false). O dispatch real (BL-C2-007) precisa do main process inteiro: carregar
+`leader-config.json`, ler `operators.json` da pasta compartilhada, orquestrar
+escrita atômica em `pending/` por operador, e expor tudo via IPC tipado ao
+renderer.
+
+Pré-requisitos disponíveis após Sessão 14 (ADR-016): `@sprint/fs-adapter` domain
+layer com `PendingStore.writePendingSprint`, sanitização, validação Zod em
+camada de domínio.
+
+### Decisão
+
+Adotamos **arquitetura tri-camada main process** alinhada ao padrão IPC
+contract-first (ADR-009) e ao port-and-adapter hexagonal do fs-adapter
+(ADR-013):
+
+1. **`main/config.ts`** — `loadLeaderConfig()` fail-fast com 5 `ConfigError`
+   tipados (`NotFound`, `JsonInvalid`, `SchemaInvalid`, `Read`,
+   `SharedPathInaccessible`). Espelha o padrão do Agent (ADR-012). Schema local
+   Zod (`leaderConfigSchema`) — não promovido para `@sprint/contracts` enquanto
+   o tipo for exclusivo do Leader.
+2. **`main/services/operatorsService.ts`** —
+   `OperatorsService(adapter, sharedPath).list()` lê
+   `<shared_path>/operators.json` via `IFilesystemAdapter.readFile`. Schema Zod
+   local (`operatorsFileSchema.strict()`). NÃO filtra `ativo:false` — renderer
+   filtra na renderização (separação de responsabilidade + facilita debug).
+3. **`main/services/dispatchService.ts`** —
+   `DispatchService(pendingStore, operatorsService, config).dispatch(request)`:
+   - Gera `sprint_id` (ULID) **uma única vez por sprint** — todos os operadores
+     compartilham.
+   - Resolve `deadline_at` ISO via `resolveDeadlineIso(hhmm, now)`: se HH:MM
+     passou >30min, avança para amanhã; senão usa hoje (decisão D1 do Gate 1).
+   - Substitui `{meta}` no body via `substituteMeta(body, meta)` **no main,
+     antes da sanitização** (decisão D2 do Gate 1) — agente fica "burro"
+     (renderiza HTML final).
+   - Sanitiza body via `sanitizeBodyHtml` (ADR-014).
+   - Valida payload final via `parseSprintPayload` (defense-in-depth).
+   - Escreve via `pendingStore.writePendingSprint(payload)` **em try/catch
+     isolado por operador** — falha de 1 não impede os outros 2. Retorna
+     `DispatchSprintResponse` com `per_operator[]` + `summary`.
+4. **`main/ipc.ts`** — `registerIpcHandlers(deps, rebuildDeps)` registra 3
+   handlers reais + smoke `ping`. Cada handler retorna `IpcResult<T>` (envelope)
+   ou discriminated union dedicada (`GetConfigResult` para `config:get` —
+   renderer precisa do `code` tipado para `ConfigErrorScreen`).
+5. **`main/index.ts`** — composition root. Instancia `NodeFilesystemAdapter` +
+   `PendingStore` + `OperatorsService` + `DispatchService` via `rebuildDeps()`.
+   Se config falha no boot, deps ficam `null`; handler `getConfig` invoca
+   `rebuildDeps` quando o renderer chama de novo (após `window.location.reload`)
+   — destrava app sem precisar matar o processo.
+
+### IpcResult envelope vs discriminated union dedicada
+
+- **`IpcResult<T>`** para `listOperators` e `dispatchSprint`:
+  `{ ok: true, data } | { ok: false, error: { code: string, message: string } }`.
+  Genérico o suficiente para handlers que apenas reportam sucesso/falha.
+- **`GetConfigResult`** dedicado para `config:get`:
+  `{ ok: true, config: LeaderConfigView } | { ok: false, error: { code: ConfigErrorCode, message, expectedPath } }`.
+  Renderer narra para `ConfigErrorScreen` que precisa de `expectedPath` e `code`
+  tipado (`NOT_FOUND` vs `JSON_INVALID` vs ...) para escolher mensagens
+  específicas.
+
+### `rebuildDeps` callback — destravar app sem restart
+
+Antes: se a config falhasse no boot, app só voltava ao normal após `pnpm dev`
+restart (matar processo + reabrir).
+
+Agora: `main/index.ts` mantém
+`deps: IpcDependencies = { operatorsService: null, dispatchService: null }`
+(mutável). Define `rebuildDeps()` que carrega config
+
+- instancia services + popula `deps`. Passa `rebuildDeps` para
+  `registerIpcHandlers`. O handler `getConfig` invoca `rebuildDeps()` quando
+  `deps.operatorsService === null` (boot falhou + agora a config talvez tenha
+  sido corrigida). Se rebuild sucede, deps populadas; próximas chamadas a
+  `listOperators`/`dispatchSprint` funcionam sem precisar reiniciar.
+
+UX: líder cria config.json → clica "Reabrir após criar configuração" na
+ConfigErrorScreen → `window.location.reload()` recarrega só o renderer →
+`api.getConfig()` chama o main → main rebuild deps → renderer renderiza a app
+funcional. Processo `pnpm dev` continua rodando.
+
+### `LeaderAPI` property-with-arrow (não method-shorthand)
+
+`@typescript-eslint/unbound-method` lint reclamava de `vi.mocked(window.api.X)`
+em testes do renderer porque o tipo declarado em `shared/ipc-types.ts` usava
+method-shorthand (`ping(): Promise<string>`). Mudamos para property-with-arrow
+(`ping: () => Promise<string>`) — funções soltas como propriedades, sem `this`,
+eliminam o falso positivo. Preload e wrapper (`renderer/services/api.ts`) seguem
+o mesmo padrão.
+
+### Alternativas consideradas
+
+| Alternativa                                                    | Por que rejeitada                                                                                                                                                                                             |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Operadores: ler via `fs/promises` direto no main               | Sem ganho concreto sobre `IFilesystemAdapter.readFile` (mesmo método sob o capô) e perde testabilidade com `MemoryFilesystemAdapter`. D4 do Gate 1 escolheu via adapter.                                      |
+| Config: ler via `IFilesystemAdapter`                           | Config é boot-state; o adapter ainda não tem `sharedPath` conhecido. `fs/promises` direto espelha ADR-012 (Agent precedent). Uniformizar é débito futuro (não pressa).                                        |
+| `LeaderConfig` em `@sprint/contracts`                          | YAGNI — tipo exclusivo do Leader. Promover quando outro consumer (instalador C5?) precisar.                                                                                                                   |
+| Filtrar `ativo:false` no `operatorsService`                    | Quebra debug ("por que operador X não aparece? Está com `ativo:false`?"). Filtragem na renderização preserva o service como espelho fiel do arquivo.                                                          |
+| Substituir `{meta}` no Agent na hora de renderizar             | Acopla Agent a template engine. Manter Agent burro (renderiza HTML pronto) é arquiteturalmente melhor. D2 do Gate 1.                                                                                          |
+| Deadline no passado: usar sempre hoje                          | Cenário típico: líder digita HH:MM fim do expediente. Se já passou +30min, o Agent vai descartar (não tem sentido enviar). Avançar para amanhã preserva intenção; ≤30min é tolerância de drift. D1 do Gate 1. |
+| Permitir dispatch quando config falhou (sem `CONFIG_REQUIRED`) | `dispatchSprint` precisa de `sharedPath` válido. Bloquear cedo é melhor que falhar tardiamente em `PendingStore.writePendingSprint`.                                                                          |
+| LeaderAPI com method-shorthand + cast nos testes               | `as unknown as` está proibido (CLAUDE.md §10). Mudar a tipagem do contrato é mais limpo que cast.                                                                                                             |
+
+### Consequências
+
+**Aceitas:**
+
+- BL-C2-007 fechado com smoke real validado (5 sprints disparadas em
+  `dev-fixtures/shared/pending/` durante dev; schema do Anexo C confere).
+- Coverage `main/config.ts` 100%; `main/services/*` 92-99%; `main/index.ts` +
+  `main/ipc.ts` excluídos (boot + envelope; testados via E2E em W3 com
+  Playwright).
+- Padrão de "config-recovery sem restart" estabelecido — replicável em C3
+  (Operator Agent W1) e W2+ se precisar de hot-reload de config.
+- 198 testes (13 files) sem flakes — `MemoryFilesystemAdapter` injetado em todos
+  os testes de service.
+
+**Trade-offs:**
+
+- Config-recovery via `getConfig` cria um path indireto (config loaded duas
+  vezes em alguns cenários — boot + getConfig após reload). Aceitável (config é
+  leve).
+- Renderer tem que tratar 3 estados de boot (loading / ok / error) com
+  discriminated union — código a mais que "assumir sempre OK". Justificado pelo
+  UX (mensagem clara em vez de crash).
+- `LeaderAPI` como property-with-arrow é menos idiomático que method shorthand,
+  mas necessário para lint clean em testes.
+
+### Referências
+
+- ADR-009 (IPC contract-first), ADR-012 (loader fail-fast — Agent precedent)
+- ADR-013 (filesystem adapter port-and-adapter), ADR-014 (sanitização body_html)
+- ADR-015 (composer Leader W1.C2 parte 1), ADR-016 (fs-adapter domain layer W1)
+- BL-C2-007 (dispatch real)
+- CLAUDE.md §4 (nova subseção "Estrutura interna do main process do Leader")
+- CLAUDE.md §12 G-020 (jsdom externalize em vite-plugin-electron)
+
+---
+
+## ADR-018: Redesign visual do Leader (design Renan)
+
+- **Status:** Accepted
+- **Data:** 2026-05-26
+- **Decisores:** Renan (3Studio, designer + stakeholder)
+
+### Contexto
+
+A W1.C2 parte 1 (Sessão 13) e parte 2 (Sessão 15 — Gates 2-6) entregaram o MVP
+funcional do Leader com identidade visual mínima (tokens light theme, azul como
+accent, Sidebar lateral vertical, copy genérica "Sprint", "Operadores",
+"Enviar"). Renan produziu um design no Figma com identidade da marca 3STUDIO —
+dark theme, accent amarelo, terminologia "Rodada de metas" / "Usuários" /
+"Disparar evento".
+
+### Decisão
+
+Aplicamos o redesign **sem tocar em arquitetura, schema ou comportamento** —
+mudanças confinadas a CSS Modules (visual), JSX (estrutura de componente), e
+copy de UI (strings user-facing). Schema, IPC, fs-adapter, stores Zustand e
+contratos JSON permanecem inalterados.
+
+**1. Tokens de design (`styles/global.css`):**
+
+- `--color-bg: #0a0a0a` (era `#ffffff`)
+- `--color-bg-elevated: #1c1c1c` (era `#f9fafb`)
+- `--color-surface: #2a2a2a` (novo — surfaces internas como counter/checkbox bg)
+- `--color-accent: #ebc76a` + `--color-accent-hover: #e0b955` +
+  `--color-accent-text: #0a0a0a` (novo bloco — substitui `--color-primary` azul)
+- `--color-text: #ffffff`, `--color-text-muted: #909090`,
+  `--color-text-subtle: #606060`
+- `--color-input-bg: #f5f5f5`, `--color-input-text: #0a0a0a` (novo — light
+  surface para Horário input, contraste deliberado no dark theme)
+- `--font-size-3xl: 48px` (novo — hero title)
+- `--radius-button: 14px` (novo — buttons; pill 9999px reservado para Toast e
+  elementos genuinamente circular-ended)
+
+**2. Sidebar vertical → TopNav horizontal:**
+
+`components/Sidebar/` deletado. `components/TopNav/` criado com:
+
+- Logo `3STUDIO` (SVG inline) à esquerda
+- 3 nav links à direita (`Nova rodada`, `Acompanhamento`, `Histórico`) com gap
+  `--space-12` (48px)
+- Link ativo: cor accent + underline; inativo: `#a8a8a8` font-weight 400
+
+`App.module.css` mudou de `display: grid; grid-template-columns: 240px 1fr` para
+`display: flex; flex-direction: column`.
+
+**3. `Logo` component (novo):**
+
+`components/Logo/` — SVG inline do "3STUDIO" logotype (path data exato do
+`logo.svg` fornecido por Renan). `fill="currentColor"` para versatilidade de cor
+por contexto.
+
+**4. Hero do `NovaSprint`:**
+
+```tsx
+<h1>
+  Escolher pessoas
+  <br /> para <span className={accent}>rodada de metas</span>
+</h1>
+```
+
+Title em 2 linhas com `<br>` explícito (max-width descartada). Font 48px, weight
+600, letter-spacing -0.02em, line-height 1.1. Inline com o título, à direita:
+`<DeadlineInput />` (pill light bg, "Horário") + botão "Disparar evento" (pill
+amarelo com seta SVG).
+
+**5. `OperatorList` em grid 2-colunas:**
+
+`grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3)`. Media
+query `(max-width: 720px)` colapsa para 1 coluna.
+
+**6. `OperatorRow` redesenhado:**
+
+```
+[avatar(initial)] [nome (label clicável)] [counter/input meta] [checkbox amarelo]
+```
+
+- Avatar: 36px quadrado com border-radius `--radius-sm`, primeira letra do nome
+  em uppercase.
+- Nome: dentro de `<label htmlFor={checkboxId}>` (clicar no nome marca o
+  checkbox — preserva teste de htmlFor association). Hostname agora só em
+  `title` attribute (não visível, acessível por hover).
+- Counter: span "0" quando não-selecionado (placeholder visual); input numérico
+  quando selecionado.
+- Checkbox: input nativo com `opacity: 0` sobre um `<span>` 32px amarelo com SVG
+  check icon quando `:checked` — preserva acessibilidade nativa + visual custom.
+
+**7. Vocabulário UI:**
+
+| Antes (parte 1)              | Depois (redesign)                    |
+| ---------------------------- | ------------------------------------ |
+| "Nova Sprint" (nav + h1)     | **Nova rodada** (nav) + hero próprio |
+| "Operadores" (h2)            | **Usuários**                         |
+| "N operadores selecionados"  | N usuários selecionados              |
+| "Enviar" (botão)             | **Disparar evento**                  |
+| "Enviando…" (em vôo)         | Disparando…                          |
+| "Horário limite"             | **Horário**                          |
+| "Sprint enviada com sucesso" | **Rodada disparada com sucesso**     |
+| "Enviando sprint…" (modal)   | Disparando rodada…                   |
+| "Resultado do envio"         | **Resultado da rodada**              |
+| "Erro no envio"              | **Erro ao disparar**                 |
+
+Schema interno (`sprint_id`, `criado_por`, IPC method `dispatchSprint`, internal
+vars como `useSprintComposerStore`) NÃO mudou — seria mudança de contrato com o
+Agent + bump em `SCHEMA_VERSION` + trabalho em `@sprint/contracts`. Só copy
+user-facing.
+
+**8. Outros componentes:**
+
+- `BulkSelectButtons`: text-link style sutil (sem border/bg) com `·` como
+  separador entre os dois botões. Movido para a direita do label "Usuários".
+- `DispatchModal`: dark surface (`--color-bg-elevated`), accent button no close,
+  summary item com strong color destacado (accent para sucesso, danger para
+  falha).
+- `ConfigErrorScreen`: dark surface, accent reload button. Tipografia/layout
+  preservados (cards com estrutura informativa).
+- `Toast`: cores semânticas (`--color-success` verde / `--color-warning` âmbar),
+  position fixed bottom-right, auto-dismiss em 4s.
+
+**9. Mensagem "Meta ≥ 1" → sr-only:**
+
+Visual de erro do input de meta é apenas `border-color: var(--color-danger)`
+(via `[aria-invalid='true']`). A mensagem "Meta deve ser maior ou igual a 1"
+fica sr-only (visualmente escondida) para leitores de tela via
+`aria-errormessage`.
+
+### Alternativas consideradas
+
+| Alternativa                                                          | Por que rejeitada                                                                                                                                                                                                                     |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Aplicar redesign + mudar schema interno para usar "rodada"/"usuário" | Mudaria contrato com Agent + `SCHEMA_VERSION` bump + trabalho em `@sprint/contracts`. Visual redesign não justifica essa onda. Schema é contrato técnico — copy é só apresentação.                                                    |
+| Manter "Operadores" como label técnico no UI                         | Inconsistência entre design (que diz "Usuários") e implementação. Renan é o cliente + designer; sua voz prevalece em copy.                                                                                                            |
+| Manter Sidebar lateral (preserva infraestrutura existente)           | Design do Renan é claro: top nav horizontal. Sidebar quebra a hierarquia visual.                                                                                                                                                      |
+| Cores claras com accent escuro                                       | Design é dark theme — não-negociável.                                                                                                                                                                                                 |
+| `--radius-pill` (9999px) em todos os buttons                         | Renan especificou `~14px` para Horário + Disparar evento. Pill 9999px ficou exclusivo para Toast (formato pill mais natural lá). Outros buttons (modal Close, ConfigError Reload) ficaram com `--radius-pill` até feedback contrário. |
+| Manter "Meta ≥ 1" como mensagem visível                              | Renan removeu do design — feedback visual fica apenas com borda vermelha. Sr-only preserva a11y sem clutter visual.                                                                                                                   |
+
+### Consequências
+
+**Aceitas:**
+
+- Aderência completa ao design no que se refere a cores, tipografia, layout do
+  hero, 2-col grid, top nav, vocabulário. Iteração rápida via comparação de
+  screenshots (sem Figma MCP Dev Mode habilitado).
+- 198 testes mantidos verde após atualização de copy (text assertions). Coverage
+  `sprint-leader` subiu de 96.68% para 96.88% (Logo + TopNav 100%).
+- Arquitetura, IPC e schema ZERO alteração — Agent W1 (próxima sessão) continua
+  consumindo o mesmo formato JSON. Schema (`SCHEMA_VERSION: '1.0'`) intocado.
+
+**Trade-offs:**
+
+- Inconsistência de naming entre UI (Rodada / Usuário / Evento) e código (Sprint
+  / Operator / Dispatch). Documentado neste ADR e em CLAUDE.md. Padrão:
+  schema/IPC = termos originais; UI = termos do design.
+- Sem Figma MCP, iteração visual requer screenshots manuais comparativos.
+  Habilitar Dev Mode MCP Server no Figma Desktop (sessão futura) destrava
+  pixel-perfect direto.
+- Modal Close + ConfigError Reload buttons permanecem com pill (9999px),
+  enquanto hero buttons mudaram para 14px. Inconsistência menor — se Renan
+  especificar diferente nesses, ajustar.
+
+### Próximas oportunidades de polish (W2 ou sessão dedicada)
+
+- Logo 3STUDIO em outras superfícies (instalador, splash screen quando C5 W3
+  entregar)
+- ConfigErrorScreen header com logo (atualmente texto puro)
+- DispatchModal com micro-animação no spinner / fade-in da resposta
+- Acompanhamento e Histórico (placeholders W2/W3) ainda usam tipografia básica —
+  vão precisar de design quando os conteúdos chegarem
+
+### Referências
+
+- Figma file (fornecido por Renan): `node-id=13-44`
+- Figma MCP setup futuro: Figma Desktop → Preferences → "Enable Dev Mode MCP
+  Server" + restart Claude Desktop
+- ADR-015 (composer Leader W1.C2 parte 1 — supersedido visualmente; lógica
+  preservada)
+- ADR-017 (arquitetura main process do Leader)
+- CLAUDE.md §4 ("Estrutura interna do Leader") — convenções continuam válidas
+  (selectors puros, schema-first, etc.)
+- BL-C2-006 (W2 — customização de title/body via editor rico) — vai precisar de
+  novos componentes de design quando chegar

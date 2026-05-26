@@ -1,0 +1,5 @@
+# Conteúdo runtime gerado pelo app — não committar.
+shared/pending/*.json
+shared/pending/*.tmp
+shared/acks/*.json
+shared/acks/*.tmp

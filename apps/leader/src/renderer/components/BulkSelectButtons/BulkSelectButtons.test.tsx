@@ -2,16 +2,30 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { TEST_OPERATORS } from '../../__test-fixtures__/operators';
 import { useOperatorsStore } from '../../stores/useOperatorsStore';
 import { useSprintComposerStore } from '../../stores/useSprintComposerStore';
 
 import { BulkSelectButtons } from './BulkSelectButtons';
 
+/**
+ * Pre-seed do store com operadores ativos — pula a chamada IPC e foca o
+ * teste em interação. Tests do fluxo async vivem em
+ * `useOperatorsStore.test.ts`.
+ */
+function seedActiveOperators(): void {
+  useOperatorsStore.setState({
+    operators: TEST_OPERATORS.filter((op) => op.ativo),
+    status: 'loaded',
+    error: null,
+  });
+}
+
 describe('BulkSelectButtons', () => {
   beforeEach(() => {
-    useOperatorsStore.setState({ operators: [], isLoaded: false });
+    useOperatorsStore.getState().reset();
     useSprintComposerStore.getState().reset();
-    useOperatorsStore.getState().loadOperators();
+    seedActiveOperators();
   });
 
   it('renderiza os dois botões com texto correto', () => {
@@ -60,7 +74,7 @@ describe('BulkSelectButtons', () => {
   });
 
   it('botões ficam disabled quando não há operadores carregados', () => {
-    useOperatorsStore.setState({ operators: [], isLoaded: true });
+    useOperatorsStore.setState({ operators: [], status: 'loaded', error: null });
     render(<BulkSelectButtons />);
     expect(screen.getByRole('button', { name: 'Marcar todos' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Desmarcar todos' })).toBeDisabled();

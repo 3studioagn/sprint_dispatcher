@@ -66,6 +66,317 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 15 — 2026-05-26 — Wave 1, C2 parte 2 (Leader MVP + redesign Renan)
+
+**Wave atual:** W1 **Método:** gate-by-gate com aprovação explícita entre gates
+**Duração estimada:** ~7-8h (sessão longa) **Itens trabalhados:** [BL-C2-007]
+(fechou) + redesign visual (ADR-018) + dev fixtures formais
+
+### Objetivo da sessão
+
+Fechar a parte 2 da W1.C2: dispatch real do Leader (BL-C2-007) integrando o
+`@sprint/fs-adapter` (W1.C4 da Sessão 14), construindo o main process inteiro
+(config loader, services, IPC tipado), integrando no renderer (api wrapper,
+`ConfigErrorScreen`, `useDispatchStore`, `DispatchModal`), e validando smoke
+real (arquivos `.json` em `dev-fixtures/shared/pending/` durante `pnpm dev`).
+Mid-sessão Renan enviou design da identidade 3STUDIO → Gate 7 dedicado para
+redesign visual sem tocar arquitetura/schema.
+
+### O que foi feito
+
+- **Gate 0 — commit Sessão 14.** Working tree estava sujo com toda a entrega do
+  fs-adapter domain layer (Sessão 14) ainda sem commit. Stage + commit `14faff2`
+  consolidando 22 arquivos (10 stores/tests + 12 docs+barrel). Working tree
+  limpo antes do Gate 2.
+- **Gate 1 — reconhecimento.** Lendo CLAUDE.md, DECISIONS.md, SESSION_LOG (#13 +
+  #14), packages contracts/fs-adapter exports, package.json do Leader, tsconfig,
+  electron-builder, vite.config, vitest.config, eslint flat config,
+  ipc-types.ts, App.tsx, NovaSprint.tsx, useSprintComposerStore,
+  useOperatorsStore, operator type, agent config.ts (template ouro pra leader
+  config), constants.ts, sprint-payload.schema.ts. **Descoberta crítica:** 5 dos
+  6 BLs do prompt original já fechados em Sessão 13 (BL-C2-002/003/004/005/011
+  ✅). Schema real difere do prompt (campos
+  `criado_por`/`criado_em`/`user_id`/`deadline_at` em vez de
+  `leader_id`/`created_at`/`recipient`/`deadline`); sem `leader_machine`.
+  ADR-015 rejeitou `react-hook-form`. Renan aprovou 4 decisões D1-D4 (regras de
+  deadline +30min, {meta} substitution no main, config em
+  app.getPath('userData'), operators read via fs-adapter).
+- **Gate 2 — fundação.** Movido `Operator` de `renderer/types/` para
+  `shared/types/` (acessível por main + renderer). Fix G-014 (rootDir do
+  `apps/leader/tsconfig.json` `./src` → `../..`). Adicionada dep workspace
+  `@sprint/fs-adapter: workspace:*`. Expandido `shared/ipc-types.ts` com
+  `IpcResult<T>` envelope + `GetConfigResult` discriminated + 9 tipos novos
+  (config, operators list, dispatch request/response). Criado `useDispatchStore`
+  (status 'idle'|'in_progress'|'completed'|'error' + result + globalError) com
+  18 testes (100% coverage).
+- **Gate 3 — main process completo.** `main/config.ts` (`leaderConfigSchema`
+  Zod + `loadLeaderConfig()` fail-fast com 5 ConfigError tipados, espelha
+  ADR-012 do Agent). `main/services/operatorsService.ts` (lê
+  `<shared_path>/operators.json` via `IFilesystemAdapter.readFile`, schema Zod
+  strict; **não filtra ativo:false** — renderer filtra na renderização).
+  `main/services/dispatchService.ts` (orquestra: gera sprint_id ULID 1×, resolve
+  deadline ISO via `resolveDeadlineIso` D1, substitui `{meta}` D2, sanitiza
+  body, valida com `parseSprintPayload`, escreve via
+  `PendingStore.writePendingSprint`, **try/catch isolado por operador**).
+  `main/ipc.ts` (`registerIpcHandlers(deps, rebuildDeps)` — 3 handlers reais
+  - smoke ping; envelope `IpcResult<T>` para listOperators/dispatchSprint;
+    `GetConfigResult` para getConfig). `main/index.ts` composition root com
+    `rebuildDeps()` callback — destrava app sem restart se config falhar no boot
+    e for corrigida depois. `preload/index.ts` expandido (4 métodos
+    arrow-property). 58 testes novos (20 config + 16 operatorsService + 22
+    dispatchService).
+- **Gate 4 — integração renderer.** `renderer/services/api.ts` wrapper tipado de
+  `window.api`. `ConfigErrorScreen` component (3 estados de boot). Refactor
+  `useOperatorsStore` para async via `api.listOperators`
+  (`status: 'idle'|'loading'|'loaded'|'error'` substitui boolean `isLoaded`).
+  `App.tsx` com boot check via discriminated union BootState. Deletado
+  `renderer/data/operators.mock.ts`. `test-setup.ts` agora define `window.api`
+  mock global como `vi.fn()` bag — `beforeEach` reseta defaults. `LeaderAPI`
+  mudou de method-shorthand para property-with-arrow para evitar lint
+  `unbound-method` em `vi.mocked(window.api.X)`.
+- **Gate 5 — BL-C2-007 dispatch real.** Removida flag `DISPATCH_ENABLED` de
+  `NovaSprint.tsx`. Criado `DispatchModal` com 3 estados (`in_progress` com
+  spinner / `completed` com per-operator + summary / `error` com mensagem
+  fatal). Wire do clique "Enviar" → `selectDispatchRequest` →
+  `api.dispatchSprint` → dispatchStore. Reset condicional pós-fechamento do
+  modal (sucesso total reseta composer; parcial preserva form para retry). Toast
+  verde / âmbar com auto-dismiss em 4s. 21 testes novos.
+- **Mid-sessão: erro jsdom/canvas no `pnpm dev`.** Após Gate 3 introduzir o
+  import transitivo de `sanitizeBodyHtml` no main, Vite bundlou jsdom + stub
+  canvas que lança em runtime. Fix:
+  `rollupOptions.external: ['electron', 'jsdom', 'canvas']` no
+  `apps/leader/vite.config.ts`. Bundle de 116 kB → 95 kB. **Registrado como
+  G-020 em CLAUDE.md §12.**
+- **Pre-Gate 6: config local + dev-fixtures puxadas pra adiantar smoke.** Renan
+  rodou `pnpm dev` e caiu em ConfigErrorScreen (esperado — sem config.json
+  local). Criei
+  `dev-fixtures/{.gitignore,config-example.json, shared/{operators.json,pending/,acks/}}` +
+  `config.json` real em `%APPDATA%\sprint-leader\`. Renan clicou "Reabrir após
+  criar configuração" → app destravou via `rebuildDeps` → composer apareceu com
+  4 operadores → ele disparou 4 sprints reais.
+- **Gate 6 — SETUP.md + QA + smoke real.** `apps/leader/SETUP.md` com 8 seções
+  (pré-req / config local / dev / dev-fixtures / smoke / QA checklist /
+  troubleshooting / próximos). `.prettierignore` atualizado para excluir
+  `dev-fixtures/shared/{pending,acks}/` (runtime JSONs). **Smoke real
+  ponta-a-ponta**: 5 arquivos JSON inspecionados em `pending/` — schema do Anexo
+  C confere (`schema_version: "1.0"`, `sprint_id` ULID compartilhado entre
+  operadores da mesma sprint, `criado_por: "Renan"`, `criado_em` ISO,
+  `body_html` com `{meta}` substituído + sanitizado, `deadline_at` ISO, defaults
+  aplicados). Bateria root: format:check/lint/type-check/test/build todos
+  exit 0.
+- **Gate 7 — redesign visual (design Renan).** Renan compartilhou design no
+  Figma + logo SVG. Aplicado: tokens dark theme + accent amarelo, `Logo` SVG
+  embedded, `Sidebar` → `TopNav` horizontal, hero
+  `<h1>Escolher pessoas<br> para rodada de metas</h1>` com accent em "rodada de
+  metas", `OperatorList` em 2-col grid, `OperatorRow` redesenhado (avatar +
+  counter + checkbox custom amarelo), `DeadlineInput` como pill 14px,
+  `Disparar evento` button como pill 14px com seta SVG. `DispatchModal` +
+  `ConfigErrorScreen` adaptados ao dark theme. Toast com cores semânticas.
+  Vocabulário UI: Sprint→Rodada, Operador→Usuário, Enviar→Disparar evento,
+  Horário limite→Horário. **Schema interno intocado** — só copy user-facing.
+  Múltiplas iterações pequenas (font size 48→40→42→48, border-radius 9999→14,
+  nav links cor/weight, title break via `<br>` explícito) com smoke visual via
+  screenshots do Renan. Removido visual "Meta ≥ 1" — mantido sr-only para a11y.
+- **Gate 8 — fechamento.** ADR-017 (arquitetura main process do Leader) +
+  ADR-018 (redesign visual). CLAUDE.md §4 nova subseção "Estrutura interna do
+  main process do Leader (W1.C2 parte 2)" + §12 G-020. CHANGELOG.md Sessão 15.
+  SESSION_LOG.md (esta entrada). README.md C2 status atualizado.
+  apps/leader/SETUP.md ajustado para nova copy. Commit final consolidado.
+
+### Estado atual
+
+- **BL-C2-002 (layout/router):** ✅ (Sessão 13, redesign Sessão 15 Gate 7)
+- **BL-C2-003 (lista operadores):** ✅ (Sessão 13 com mock; Sessão 15 refactor
+  para IPC real via `OperatorsService` + `api.listOperators`)
+- **BL-C2-004 (input meta):** ✅ (Sessão 13, visual redesenhado Sessão 15)
+- **BL-C2-005 (deadline):** ✅ (Sessão 13, visual redesenhado Sessão 15)
+- **BL-C2-007 (dispatch real):** ✅ concluído (Sessão 15 Gate 5)
+- **BL-C2-011 (stores Zustand):** ✅ (Sessão 13 + Sessão 15 add
+  useDispatchStore)
+- **BL-C2-006:** ⏸️ W2 (customização title/body via editor rico)
+- **BL-C2-008:** ⏸️ W2 (acompanhamento de acks)
+- **BL-C2-009:** ⏸️ W2 (cancelamento)
+- **BL-C2-010:** ⏸️ W3 (histórico)
+- **BL-C2-012:** ⏸️ W3 (validação líder via AD)
+
+Bateria final na raiz (Gate 6): `format:check`, `lint`, `type-check`, `test`,
+`test:coverage`, `build` — todos exit 0. Regressão zero em C0-C4.
+
+Cobertura `sprint-leader`: **96.88% lines / 94.51% branches / 93.65% funcs /
+96.88% stmts** (era 96.6% antes da Sessão 15; subiu pelo Logo + TopNav +
+ConfigErrorScreen + DispatchModal + useDispatchStore todos 100%). 13 test files,
+**198 testes** (era 84 no Sessão 13; +114 nesta sessão).
+
+Outros packages:
+
+- `@sprint/contracts`: 230 testes 100% (sem mudança)
+- `@sprint/fs-adapter`: 235 testes 99.61% lines (sem mudança, mas commitado em
+  Gate 0)
+- `sprint-operator-agent`: 15 testes 100% (sem mudança)
+
+### Decisões tomadas
+
+- **ADR-017** (arquitetura main process do Leader — W1.C2 parte 2): composition
+  root + 5 ConfigError + IpcResult envelope vs GetConfigResult dedicado +
+  `rebuildDeps` callback para destravar app sem restart + LeaderAPI
+  property-with-arrow.
+- **ADR-018** (redesign visual do Leader — design Renan): dark theme + accent
+  amarelo + Logo 3STUDIO + TopNav + grid 2-col + vocabulário UI
+  (Rodada/Usuário/Disparar evento). Schema intocado.
+- **D1 (deadline +30min):** se HH:MM passou >30min, avança para amanhã; ≤30min
+  ainda usa hoje (tolerância de drift). Helper `resolveDeadlineIso` testado
+  isoladamente.
+- **D2 ({meta} substitution):** no main, antes da sanitização. Agent fica
+  "burro" (não processa template). Helper `substituteMeta`.
+- **D3 (config path):** `app.getPath('userData')` cross-platform (Windows
+  resolve para `%APPDATA%\sprint-leader\config.json` em dev / `Sprint Leader` em
+  build).
+- **D4 (operators read):** via `IFilesystemAdapter.readFile`, testes com
+  `MemoryFilesystemAdapter`.
+- **Schema NÃO mudou no redesign** — só copy user-facing. Mudança de schema
+  exigiria bump `SCHEMA_VERSION` + ADR + trabalho em `@sprint/contracts` +
+  Agent. Inconsistência intencional documentada em ADR-018.
+- **LeaderAPI property-with-arrow** — evita falso positivo
+  `@typescript-eslint/unbound-method`.
+- **`rebuildDeps` no main** — config-recovery sem matar processo. Padrão
+  replicável em C3 W1.
+
+### Bloqueios encontrados
+
+3 fricções resolvidas inline:
+
+1. **Erro jsdom/canvas no `pnpm dev` após Gate 3** — Vite bundlou jsdom
+   transitivamente; `require('canvas')` interno não resolve em build-time. Fix:
+   externalize `jsdom`+`canvas` em `rollupOptions`. Documentado em G-020. Bundle
+   116→95 kB.
+2. **ConfigErrorScreen no boot inicial** — Renan rodou `pnpm dev` sem ter criado
+   config.json local. Era o comportamento esperado do novo `ConfigErrorScreen`,
+   mas precisei adiantar dev-fixtures do Gate 6 para ele poder testar Gate 5
+   (dispatch real).
+3. **Lint unbound-method** — `vi.mocked(window.api.X)` reclamava de método sem
+   `this:void`. Fix: mudar `LeaderAPI` de method-shorthand para
+   property-with-arrow. Touchou preload, services/api, test-setup, ipc-types.
+
+3 ajustes de teste pós-redesign:
+
+1. **getByText collide entre lista e modal** — "João Silva" aparecia 2× no DOM
+   após dispatch (lista de usuários + entry no modal). Fix:
+   `within(dialog).getByText(...)` para escopar.
+2. **DeadlineInput `getByLabelText(/Horário limite/i)`** — copy mudou para
+   "Horário"; fix de 1 linha via `replace_all`.
+3. **OperatorList hostname não visível** — design removeu visualmente; hostname
+   agora só em `title` attribute. Test "renderiza o hostname" atualizado para
+   asserir `.toHaveAttribute('title', ...)`.
+
+### Próximo passo
+
+Renan revisa o commit consolidado da Sessão 15 (~50 arquivos modificados/novos,
+~3500 linhas diff). Próxima sessão recomendada: **W1.C3 inteiro — Agente
+Operador** — destravado por esta Sessão (Agent consome o mesmo `pending/` que o
+Leader agora escreve, mais `AckStore.writeAck` do `@sprint/fs-adapter`). BLs:
+BL-C3-003 (polling), BL-C3-004 (overlay TOPMOST), BL-C3-005 (timer tray),
+BL-C3-006 (tray icon+menu), BL-C3-007 (writeAck), BL-C3-008 (histórico local).
+
+### Observações para a próxima sessão
+
+- **`PendingStore` consumido em produção** — Agent W1 pode usar
+  `pendingStore.listPending({ userId })` para polling. `deletePending` para
+  limpar após processar.
+- **`AckStore.writeAck` pronto** — Agent escreve
+  `<shared>/acks/<sprint>- <user>.ack.json` ao operador dar acknowledge. Schema:
+  `apps/leader/dev-fixtures/shared/acks/` está vazio ainda, vai começar a ser
+  populado em W1.C3.
+- **Smoke real do Leader já validado** — Agent vai consumir os 5 arquivos
+  `.json` reais que Renan deixou em `pending/` durante esta sessão. Test data
+  perfeita para BL-C3-003.
+- **Vocabulário UI vs schema** — copy do Leader é "Rodada/Usuário/Evento" mas o
+  JSON no `pending/` continua usando `sprint_id`/`user_id`. Quando Agent for
+  desenhado, decidir se overlay segue terminologia de design ou termos
+  genéricos. Schema é contrato — não muda.
+- **Figma MCP** — quando Renan habilitar Dev Mode MCP Server no Figma Desktop,
+  iterações visuais futuras (Acompanhamento/Histórico em W2/W3, overlay do Agent
+  em W1) podem usar `mcp__Figma__get_variable_defs` + `get_screenshot` +
+  `get_design_context` para pixel-perfect.
+- **Outros buttons (modal Close, ConfigErrorScreen Reload) ainda com pill
+  9999px** — Renan não especificou para esses; manter até feedback contrário.
+- **Sem novos changesets nesta sessão** — `sprint-leader` não versiona via
+  Changesets (ADR-001: apps Electron versionam via electron-builder no `.exe`).
+  Mudanças visuais + main process não tocaram em `@sprint/contracts` nem
+  `@sprint/fs-adapter` (já commitados em Gate 0 com seu changeset).
+- **Coverage `main/index.ts` e `main/ipc.ts` excluídos** — boot orchestration +
+  IPC envelope são testados via E2E em W3 (Playwright).
+- **Dev fixtures committed** — `dev-fixtures/.gitignore`, `config-example.json`,
+  `shared/operators.json` vão para o repo. Runtime contents (`pending/*.json`,
+  `acks/*.json`) ficam gitignored — Renan tem 5 sprints reais no FS local que
+  NÃO vão para o repo.
+
+**Arquivos modificados/novos:**
+
+- `apps/leader/src/shared/types/operator.ts` (movido de renderer/types/)
+- `apps/leader/src/shared/types/index.ts` (novo barrel)
+- `apps/leader/src/shared/ipc-types.ts` (expandido — 9 tipos + LeaderAPI
+  arrow-property)
+- `apps/leader/src/main/config.ts` (novo)
+- `apps/leader/src/main/config.test.ts` (novo, 20 testes)
+- `apps/leader/src/main/ipc.ts` (novo)
+- `apps/leader/src/main/index.ts` (rewrite — composition root + rebuildDeps)
+- `apps/leader/src/main/services/*.ts` (5 arquivos novos — operatorsService +
+  dispatchService + tests + barrel)
+- `apps/leader/src/preload/index.ts` (rewrite — arrow properties)
+- `apps/leader/src/renderer/components/Logo/` (novo — Logo.tsx + module.css +
+  index.ts)
+- `apps/leader/src/renderer/components/TopNav/` (novo — substitui Sidebar)
+- `apps/leader/src/renderer/components/Sidebar/` (DELETADO)
+- `apps/leader/src/renderer/components/ConfigErrorScreen/` (novo, 11 testes)
+- `apps/leader/src/renderer/components/DispatchModal/` (novo, 12 testes)
+- `apps/leader/src/renderer/components/OperatorList/*` (refactor visual + copy)
+- `apps/leader/src/renderer/components/OperatorRow/*` (rewrite — avatar +
+  counter + checkbox custom)
+- `apps/leader/src/renderer/components/DeadlineInput/*` (refactor — copy
+  "Horário" + dropdown style)
+- `apps/leader/src/renderer/components/BulkSelectButtons/*` (text-link subtle
+  style + separador)
+- `apps/leader/src/renderer/data/` (DELETADO — operators.mock.ts)
+- `apps/leader/src/renderer/types/` (DELETADO — operator movido)
+- `apps/leader/src/renderer/__test-fixtures__/operators.ts` (novo —
+  TEST_OPERATORS compartilhada)
+- `apps/leader/src/renderer/services/api.ts` (novo — wrapper de window.api)
+- `apps/leader/src/renderer/stores/useDispatchStore.ts` + .test.ts (novo, 18
+  testes)
+- `apps/leader/src/renderer/stores/useOperatorsStore.ts` (refactor — async via
+  IPC, status discriminado)
+- `apps/leader/src/renderer/stores/useOperatorsStore.test.ts` (rewrite — 12
+  testes async)
+- `apps/leader/src/renderer/stores/useSprintComposerStore.ts`
+  (+selectDispatchRequest)
+- `apps/leader/src/renderer/stores/useSprintComposerStore.test.ts` (+4 testes do
+  novo selector)
+- `apps/leader/src/renderer/stores/index.ts` (atualizado barrel)
+- `apps/leader/src/renderer/routes/NovaSprint/*` (rewrite — hero novo, wire
+  dispatch, copy, toast)
+- `apps/leader/src/renderer/App.tsx` + module.css (boot check + dark theme)
+- `apps/leader/src/renderer/App.test.tsx` (rewrite — boot states + nova copy)
+- `apps/leader/src/renderer/test-setup.ts` (window.api mock global + cleanup
+  condicional)
+- `apps/leader/src/renderer/styles/global.css` (rewrite — dark theme + accent
+  yellow + novos tokens)
+- `apps/leader/package.json` (+`@sprint/fs-adapter: workspace:*`)
+- `apps/leader/tsconfig.json` (rootDir `./src` → `../..`; +path aliases
+  fs-adapter)
+- `apps/leader/vite.config.ts` (rollupOptions.external +jsdom +canvas)
+- `apps/leader/vitest.config.ts` (coverage exclude refinado)
+- `apps/leader/SETUP.md` (novo, 8 seções)
+- `dev-fixtures/.gitignore` + `config-example.json` + `shared/operators.json`
+  (novos)
+- `.prettierignore` (+`dev-fixtures/shared/{pending,acks}/`)
+- `DECISIONS.md` (ADR-017 + ADR-018 + lista atualizada)
+- `CLAUDE.md` (§4 nova subseção parte 2 + §12 G-020)
+- `CHANGELOG.md` ([Unreleased].Added com bloco Sessão 15)
+- `README.md` (C2 status atualizado)
+- `SESSION_LOG.md` (esta entrada)
+
+---
+
 ## Sessão 14 — 2026-05-25 — Wave 1, C4 inteiro (domain layer do fs-adapter)
 
 **Wave atual:** W1 **Método:** gate-by-gate com aprovação explícita entre gates

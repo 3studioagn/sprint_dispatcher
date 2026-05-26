@@ -10,3 +10,10 @@ pnpm-lock.yaml
 
 # CHANGELOG.md eh gerenciado pelo Changesets — nao reformatar.
 CHANGELOG.md
+
+# Runtime do dispatch/ack — JSONs gerados pelo app em dev (Sprint Leader
+# escreve em pending/ ao despachar; Agent escrevera em acks/ em W1.C3).
+# O .gitignore ja exclui esses arquivos do versionamento; aqui evitamos
+# que o format:check do CI reclame deles.
+dev-fixtures/shared/pending/
+dev-fixtures/shared/acks/

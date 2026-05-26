@@ -14,7 +14,13 @@ export default defineConfig({
       include: ['src/**/*.{ts,tsx}'],
       exclude: [
         'src/**/*.test.{ts,tsx}',
-        'src/main/**', // testado via E2E em W3 (Playwright)
+        'src/**/__test-fixtures__/**', // fixtures só consumidas por testes
+        // main/config.ts e main/services/** TÊM testes unitários — incluem no
+        // coverage. main/index.ts (boot) e main/ipc.ts (envelope) ficam para
+        // E2E em W3 (Playwright) — chamar ipcMain.handle em unit test exigiria
+        // mock denso do Electron sem ganho real.
+        'src/main/index.ts',
+        'src/main/ipc.ts',
         'src/preload/**', // testado via E2E em W3
         'src/renderer/main.tsx',
         'src/renderer/env.d.ts',

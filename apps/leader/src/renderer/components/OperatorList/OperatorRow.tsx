@@ -1,12 +1,17 @@
 import type { ChangeEvent } from 'react';
 
+import type { Operator } from '../../../shared/types/operator';
 import { useSprintComposerStore } from '../../stores/useSprintComposerStore';
-import type { Operator } from '../../types/operator';
 
 import styles from './OperatorRow.module.css';
 
 interface OperatorRowProps {
   readonly operator: Operator;
+}
+
+/** Inicial para o avatar — primeira letra do nome em uppercase. */
+function getInitial(name: string): string {
+  return name.charAt(0).toUpperCase() || '?';
 }
 
 export function OperatorRow({ operator }: OperatorRowProps) {
@@ -33,22 +38,23 @@ export function OperatorRow({ operator }: OperatorRowProps) {
   const displayValue = meta === null ? '' : String(meta);
 
   return (
-    <div className={styles.row}>
-      <label htmlFor={checkboxId} className={styles.label}>
-        <input
-          id={checkboxId}
-          type="checkbox"
-          className={styles.checkbox}
-          checked={isSelected}
-          onChange={() => {
-            toggleOperator(operator.user_id);
-          }}
-        />
-        <span className={styles.info}>
-          <span className={styles.name}>{operator.user_nome_exibicao}</span>
-          <span className={styles.hostname}>{operator.hostname}</span>
+    <div className={`${styles.row} ${isSelected ? styles.rowSelected : ''}`}>
+      {/*
+        Dupla `<label htmlFor={checkboxId}>` aponta para o mesmo input — uma
+        cobre avatar + nome (clicar no nome marca o operador, preservando o
+        teste "clicar no label clica no checkbox"), outra cobre o quadrado
+        visual à direita. O input em si fica visualmente escondido dentro do
+        2º label (opacity:0 sobre o quadrado).
+      */}
+      <label htmlFor={checkboxId} className={styles.namePart}>
+        <span className={styles.avatar} aria-hidden="true">
+          {getInitial(operator.user_nome_exibicao)}
+        </span>
+        <span className={styles.name} title={operator.hostname}>
+          {operator.user_nome_exibicao}
         </span>
       </label>
+
       {isSelected ? (
         <div className={styles.metaField}>
           <label htmlFor={metaId} className={styles.metaLabel}>
@@ -64,16 +70,49 @@ export function OperatorRow({ operator }: OperatorRowProps) {
             value={displayValue}
             onChange={handleMetaChange}
             aria-invalid={metaInvalid ? 'true' : undefined}
-            aria-describedby={metaInvalid ? metaErrorId : undefined}
-            placeholder="—"
+            aria-errormessage={metaInvalid ? metaErrorId : undefined}
+            placeholder="0"
           />
-          {metaInvalid ? (
-            <span id={metaErrorId} className={styles.metaError}>
-              Meta ≥ 1
-            </span>
-          ) : null}
+          {/*
+            Mensagem de erro sr-only — visual fica só com borda vermelha
+            (aria-invalid="true" via .metaInput[aria-invalid='true']).
+            Mantida no DOM para acessibilidade: aria-errormessage aponta
+            para ela quando inválida.
+          */}
+          <span id={metaErrorId} className={styles.metaErrorSrOnly}>
+            {metaInvalid ? 'Meta deve ser maior ou igual a 1' : ''}
+          </span>
         </div>
-      ) : null}
+      ) : (
+        <span className={styles.metaPlaceholder} aria-hidden="true">
+          0
+        </span>
+      )}
+
+      <label htmlFor={checkboxId} className={styles.checkboxLabel}>
+        <input
+          id={checkboxId}
+          type="checkbox"
+          className={styles.checkbox}
+          checked={isSelected}
+          onChange={() => {
+            toggleOperator(operator.user_id);
+          }}
+          aria-label={operator.user_nome_exibicao}
+        />
+        <span className={styles.checkboxBox} aria-hidden="true">
+          <svg viewBox="0 0 24 24" className={styles.checkboxIcon}>
+            <path
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M5 12l5 5 9-11"
+            />
+          </svg>
+        </span>
+      </label>
     </div>
   );
 }

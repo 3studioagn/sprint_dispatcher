@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  selectDispatchRequest,
   selectFormPayload,
   selectIsValid,
   selectSelectedCount,
@@ -293,6 +294,48 @@ describe('selectFormPayload (selector puro)', () => {
     store.getState().setMeta('joao', 5);
     const before = store.getState();
     selectFormPayload(before);
+    const after = store.getState();
+    expect(after).toBe(before);
+  });
+});
+
+describe('selectDispatchRequest (selector puro)', () => {
+  beforeEach(() => {
+    store.getState().reset();
+  });
+
+  it('retorna null quando o draft é inválido', () => {
+    expect(selectDispatchRequest(store.getState())).toBeNull();
+  });
+
+  it('retorna DispatchSprintRequest com selected (não selectedOperators)', () => {
+    store.getState().toggleOperator('joao');
+    store.getState().setMeta('joao', 5);
+    store.getState().toggleOperator('maria');
+    store.getState().setMeta('maria', 10);
+
+    const request = selectDispatchRequest(store.getState());
+    expect(request).not.toBeNull();
+    expect(request?.selected).toEqual([
+      { user_id: 'joao', meta: 5 },
+      { user_id: 'maria', meta: 10 },
+    ]);
+    expect(request?.deadline).toBe('18:00');
+  });
+
+  it('preserva deadline customizado', () => {
+    store.getState().toggleOperator('joao');
+    store.getState().setMeta('joao', 1);
+    store.getState().setDeadline('20:30');
+    const request = selectDispatchRequest(store.getState());
+    expect(request?.deadline).toBe('20:30');
+  });
+
+  it('é puro — sem mutação do state', () => {
+    store.getState().toggleOperator('joao');
+    store.getState().setMeta('joao', 5);
+    const before = store.getState();
+    selectDispatchRequest(before);
     const after = store.getState();
     expect(after).toBe(before);
   });

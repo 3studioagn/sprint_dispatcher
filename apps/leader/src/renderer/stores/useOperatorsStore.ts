@@ -1,33 +1,73 @@
 /**
- * Cache da lista de operadores da fábrica (W1.C2 parte 1).
+ * Cache da lista de operadores da fábrica (W1.C2 parte 2).
  *
- * Nesta sessão a lista vem do mock `data/operators.mock.ts`. Em BL-C4-002+
- * (W1.C4), `loadOperators` passa a ler `operators.json` da pasta compartilhada
- * via `@sprint/fs-adapter` (assíncrono); a assinatura desta action vira async.
+ * Lê de `<shared_path>/operators.json` via IPC (`api.listOperators`) ao
+ * ser chamada `loadOperators`. A leitura real e a validação Zod
+ * acontecem no main (`operatorsService.list`) — o renderer apenas
+ * cacheia o resultado.
  *
- * Filtragem por `ativo === true` acontece aqui — UI consome apenas operadores
- * ativos. O mock inclui um inativo (`rafael`) justamente para exercitar.
+ * Filtragem `ativo: true` acontece **aqui** (mesma decisão da W1.C2
+ * parte 1) — o service retorna lista completa para auditing; a UI
+ * consome apenas ativos. O Rafael Costa do `operators.json` em
+ * `dev-fixtures/` permanece na fonte mas é escondido pela UI.
  *
- * @see DECISIONS.md ADR-015 (composer do Leader — W1.C2 parte 1)
+ * Status discriminado (`idle | loading | loaded | error`) substitui o
+ * boolean `isLoaded` da W1.C2 parte 1 — permite a UI distinguir
+ * "nunca tentei carregar" de "tentei e falhei" e mostrar mensagens
+ * apropriadas.
+ *
+ * @see DECISIONS.md ADR-015 (composer do Leader)
+ * @see DECISIONS.md ADR-013 (filesystem adapter port-and-adapter)
  */
 
 import { create } from 'zustand';
 
-import { MOCK_OPERATORS } from '../data/operators.mock';
-import type { Operator } from '../types/operator';
+import type { Operator } from '../../shared/types/operator';
+import { api } from '../services/api';
+
+export type OperatorsLoadStatus = 'idle' | 'loading' | 'loaded' | 'error';
 
 export interface OperatorsState {
   readonly operators: readonly Operator[];
-  readonly isLoaded: boolean;
-  /** Carrega a lista (atualmente do mock; async em W1.C4). */
-  loadOperators: () => void;
+  readonly status: OperatorsLoadStatus;
+  readonly error: string | null;
+  /**
+   * Carrega `operators.json` via IPC. Idempotente — pode ser chamado
+   * várias vezes (ex.: re-tentativa após erro). Em vôo, `status` fica
+   * `loading`; ao terminar, `loaded` com os operadores ou `error` com
+   * a mensagem.
+   */
+  loadOperators: () => Promise<void>;
+  /** Volta ao estado inicial — utility para testes e logout futuro. */
+  reset: () => void;
 }
 
-export const useOperatorsStore = create<OperatorsState>((set) => ({
+const INITIAL: Pick<OperatorsState, 'operators' | 'status' | 'error'> = {
   operators: [],
-  isLoaded: false,
-  loadOperators: () => {
-    const active = MOCK_OPERATORS.filter((op) => op.ativo);
-    set({ operators: active, isLoaded: true });
+  status: 'idle',
+  error: null,
+};
+
+export const useOperatorsStore = create<OperatorsState>((set) => ({
+  ...INITIAL,
+
+  loadOperators: async () => {
+    set({ status: 'loading', error: null });
+    try {
+      const result = await api.listOperators();
+      if (!result.ok) {
+        set({ status: 'error', error: result.error.message, operators: [] });
+        return;
+      }
+      const active = result.data.operators.filter((op) => op.ativo);
+      set({ status: 'loaded', operators: active, error: null });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      set({ status: 'error', error: msg, operators: [] });
+    }
+  },
+
+  reset: () => {
+    set(INITIAL);
   },
 }));

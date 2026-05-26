@@ -206,9 +206,90 @@ renderer/
   Zustand já é fonte única; RHF brilharia em forms estruturados, não em composer
   dinâmico com `useFieldArray`. Reavaliar quando BL-C2-006 (W2) trouxer
   customização de title/body via editor rico.
-- **Flag `DISPATCH_ENABLED = false` em `routes/NovaSprint/NovaSprint.tsx`** —
-  controla o botão "Enviar". **Remover quando BL-C2-007 (parte 2 da W1.C2)
-  integrar o dispatch real via `@sprint/fs-adapter`.**
+- ~~Flag `DISPATCH_ENABLED = false` em `routes/NovaSprint/NovaSprint.tsx`~~ —
+  removida em **Sessão 15 Gate 5** quando BL-C2-007 fechou. Dispatch real via
+  `api.dispatchSprint` → main process → `PendingStore.writePendingSprint`.
+
+> **Atualização Sessão 15 — visual + W1.C2 parte 2:**
+>
+> - `components/Sidebar/` foi substituído por `components/TopNav/` (redesign
+>   Renan, ADR-018) — top nav horizontal com logo `3STUDIO` SVG inline.
+> - `data/operators.mock.ts` deletado — `useOperatorsStore.loadOperators` agora
+>   é async via `api.listOperators` (IPC).
+> - `types/operator.ts` movido para `shared/types/operator.ts` (compartilhado
+>   main↔renderer).
+> - Novos componentes: `Logo`, `TopNav`, `ConfigErrorScreen`, `DispatchModal`.
+> - Novas stores: `useDispatchStore` (status do dispatch + result).
+> - Novo wrapper: `renderer/services/api.ts` (tipa `window.api`).
+> - Vocabulário UI mudou (ADR-018): "Sprint"→"Rodada", "Operadores"→"Usuários",
+>   "Enviar"→"Disparar evento". Schema/IPC permanecem com termos originais.
+> - As convenções desta subseção (selectors puros, schema-first, decisão de não
+>   usar RHF, tipo `Operator` local) continuam válidas após o redesign.
+
+### Estrutura interna do main process do Leader (W1.C2 parte 2)
+
+A app `sprint-leader` ganhou main process completo na Sessão 15 (Gate 3),
+consumindo o domain layer do `@sprint/fs-adapter` (W0+W1):
+
+```
+apps/leader/src/
+├── shared/
+│   ├── ipc-types.ts                # IpcResult<T> + LeaderAPI (property-with-arrow)
+│   └── types/operator.ts           # tipo compartilhado main↔renderer
+├── main/
+│   ├── index.ts                    # composition root + rebuildDeps
+│   ├── config.ts                   # loadLeaderConfig() fail-fast + 5 ConfigError
+│   ├── config.test.ts
+│   ├── ipc.ts                      # registerIpcHandlers(deps, rebuildDeps)
+│   └── services/
+│       ├── index.ts                # barrel
+│       ├── operatorsService.ts     # lê operators.json via IFilesystemAdapter
+│       ├── operatorsService.test.ts
+│       ├── dispatchService.ts      # orquestra dispatch (try/catch isolado por operador)
+│       └── dispatchService.test.ts # helpers resolveDeadlineIso + substituteMeta
+└── preload/index.ts                # contextBridge expõe window.api (arrow props)
+```
+
+**Convenções específicas do main process do Leader:**
+
+- **Composition root no `main/index.ts`** — `rebuildDeps()` instancia
+  `NodeFilesystemAdapter` (W0) → `PendingStore` (W1.C4) → `OperatorsService` →
+  `DispatchService`. Injeta tudo via `IpcDependencies` mutável.
+- **Padrão fail-fast espelhando o Agent (ADR-012)** — `loadLeaderConfig` usa
+  `fs/promises` direto (NÃO via `IFilesystemAdapter` — config é boot state).
+  Decisão consciente; uniformizar é débito futuro.
+- **5 ConfigError tipados** (`NotFound`, `JsonInvalid`, `SchemaInvalid`, `Read`,
+  `SharedPathInaccessible`) — cada um com `code: LeaderConfigErrorCode` que vai
+  literal no IPC para a `ConfigErrorScreen` discriminar mensagens específicas.
+- **`rebuildDeps` callback para config-recovery sem restart** — se config falha
+  no boot, `deps.operatorsService` e `deps.dispatchService` ficam `null`. O
+  handler `getConfig` invoca `rebuildDeps` quando o renderer chama de novo (após
+  `window.location.reload`) — destrava o app sem matar o processo. UX: líder
+  corrige config + clica "Reabrir" no ConfigErrorScreen → app funcional.
+- **`IpcResult<T>` envelope** para `listOperators` e `dispatchSprint`;
+  **`GetConfigResult` dedicado** para `getConfig` (renderer precisa de
+  `expectedPath` + `code` tipado).
+- **`LeaderAPI` é property-with-arrow, não method-shorthand** — evita lint
+  `@typescript-eslint/unbound-method` em `vi.mocked(window.api.X)` no
+  test-setup. Preload e wrapper seguem o mesmo padrão.
+- **`CONFIG_REQUIRED` é o code de bloqueio** — handlers retornam esse code
+  quando `deps.X === null`. Renderer pode mostrar ConfigErrorScreen via
+  `getConfig` que tenta de novo.
+- **Try/catch isolado por operador em `dispatchService.dispatch`** — falha de 1
+  (`writePendingSprint` lança) não impede os outros. Cada resultado vai em
+  `per_operator: DispatchSprintPerOperatorResult[]`.
+- **`resolveDeadlineIso(hhmm, now)`** — regra D1 da Sessão 15: se HH:MM
+  passou >30min, vira amanhã; senão hoje (tolerância de drift). Helper exportado
+  para testabilidade isolada.
+- **`substituteMeta(body, meta)`** — regra D2 da Sessão 15: substitui `{meta}`
+  no main antes da sanitização e da escrita. Agent fica "burro" (não processa
+  template). Helper exportado.
+- **`window.api` mock global em `test-setup.ts`** com `vi.fn(impl)` defaults —
+  `beforeEach` reseta cada vi.fn() entre testes. Pattern estabelecido na Sessão
+  15 Gate 4.
+- **Coverage**: `main/config.ts` 100%; `main/services/*` 92-99%;
+  `main/index.ts` + `main/ipc.ts` excluídos do coverage (boot + envelope;
+  testados via E2E em W3 com Playwright).
 
 ### Estrutura interna de `@sprint/fs-adapter` (W1 domain layer)
 
@@ -967,6 +1048,44 @@ Descobertas durante o desenvolvimento que economizam tempo da próxima sessão.
   ```
 - **Descoberto em:** Sessão 10 (2026-05-25), Fase 7 do BL-C4-001 (suite de
   contrato).
+
+### G-020: `jsdom`/`canvas` no bundle do Electron main exige externalize em vite-plugin-electron
+
+- **Sintoma:** ao rodar `pnpm dev` (ou ao iniciar o `.exe` empacotado), o
+  Electron mostra um dialog
+  `Uncaught Exception: Could not resolve "canvas" imported by "jsdom"`. Stack
+  trace aponta para `dist-electron/main/index.js` em runtime de module-load (não
+  no primeiro dispatch).
+- **Causa:** o main process importa `sanitizeBodyHtml` de `@sprint/contracts`
+  (via `dispatchService.ts` no Leader ou `PendingStore.writePendingSprint` que
+  sanitiza internamente — qualquer caminho que termine em
+  `@sprint/contracts/src/sanitize.ts`), que transitivamente importa
+  `isomorphic-dompurify` → `jsdom` → `canvas` (peer opcional). Vite/Rollup
+  bundla o `jsdom` mas o `require('canvas')` interno não resolve em build-time
+  porque `canvas` não está instalado (peer opcional do jsdom). Vite injeta um
+  stub que lança o erro acima quando o módulo é carregado em runtime.
+- **Solução:** externalizar `jsdom` e `canvas` no `rollupOptions.external` do
+  main em `apps/leader/vite.config.ts` (e em
+  `apps/operator-agent/vite.config.ts` quando BL-C3-004 W1 integrar
+  `sanitizeBodyHtml` no overlay do Agent):
+
+  ```ts
+  rollupOptions: {
+    external: ['electron', 'jsdom', 'canvas'],
+  }
+  ```
+
+  Em runtime, `require('jsdom')` resolve via `node_modules` (jsdom faz parte da
+  dep tree transitiva via `@sprint/contracts`). O `canvas` ausente é tratado
+  silenciosamente pelo jsdom (peer opcional → features de canvas desabilitadas,
+  log de warning). Bundle do main fica ~21 kB menor (era 116 kB com jsdom
+  inlined + stub canvas, virou 95 kB).
+
+- **Em produção (electron-builder):** `node_modules` é incluído automaticamente
+  — `require('jsdom')` em runtime tem acesso ao pacote sem mudanças adicionais.
+- **Descoberto em:** Sessão 15 (2026-05-26), Gate 3 do W1.C2 parte 2 — primeiro
+  consumer real de `sanitizeBodyHtml` no main process do Leader (via
+  `DispatchService` → `PendingStore` → `sanitizeBodyHtml`).
 
 ### Débitos técnicos pendentes
 

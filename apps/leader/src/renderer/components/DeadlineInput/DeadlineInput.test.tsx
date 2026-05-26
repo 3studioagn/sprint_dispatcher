@@ -40,14 +40,14 @@ describe('DeadlineInput', () => {
 
   it('exibe o valor da store no input (default 18:00)', () => {
     render(<DeadlineInput />);
-    const input = screen.getByLabelText<HTMLInputElement>(/Horário limite/i);
+    const input = screen.getByLabelText<HTMLInputElement>(/Horário/i);
     expect(input.value).toBe('18:00');
     expect(input.type).toBe('time');
   });
 
   it('atualiza a store ao mudar o horário', () => {
     render(<DeadlineInput />);
-    const input = screen.getByLabelText(/Horário limite/i);
+    const input = screen.getByLabelText(/Horário/i);
 
     fireEvent.change(input, { target: { value: '20:30' } });
 

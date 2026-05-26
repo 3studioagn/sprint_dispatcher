@@ -19,6 +19,9 @@ export function BulkSelectButtons() {
       <button type="button" className={styles.button} onClick={handleSelectAll} disabled={disabled}>
         Marcar todos
       </button>
+      <span className={styles.separator} aria-hidden="true">
+        ·
+      </span>
       <button type="button" className={styles.button} onClick={deselectAll} disabled={disabled}>
         Desmarcar todos
       </button>

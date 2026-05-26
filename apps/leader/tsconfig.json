@@ -1,7 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": "./src",
+    "rootDir": "../..",
     "outDir": "./dist",
     "noEmit": true,
     "composite": false,
@@ -10,7 +10,9 @@
     "paths": {
       "@/*": ["./src/*"],
       "@sprint/contracts": ["../../packages/contracts/src/index.ts"],
-      "@sprint/contracts/*": ["../../packages/contracts/src/*"]
+      "@sprint/contracts/*": ["../../packages/contracts/src/*"],
+      "@sprint/fs-adapter": ["../../packages/fs-adapter/src/index.ts"],
+      "@sprint/fs-adapter/*": ["../../packages/fs-adapter/src/*"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],

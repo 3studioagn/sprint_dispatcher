@@ -5,22 +5,56 @@
  * via `contextBridge.exposeInMainWorld('api', impl)`.
  *
  * O renderer acessa exclusivamente `window.api.*` — tipado pelo
- * `Window['api']` declarado em `src/renderer/env.d.ts`.
+ * `Window['api']: LeaderAPI` declarado em `src/renderer/env.d.ts`.
+ *
+ * Métodos são **arrow functions** (não method-shorthand) — alinha com a
+ * convenção do `LeaderAPI` (`shared/ipc-types.ts`) para que
+ * `vi.mocked(window.api.foo)` em testes não dispare a regra
+ * `unbound-method`.
+ *
+ * Os casts `as` em cada handler são necessários porque
+ * `ipcRenderer.invoke` retorna `Promise<any>`. O bridge tipado vive
+ * em `shared/ipc-types.ts` — o type checker garante que `LeaderAPI`
+ * casa entre preload e renderer.
  *
  * @see DECISIONS.md ADR-009 — IPC contract-first
  */
 
 import { contextBridge, ipcRenderer } from 'electron';
 
-import type { LeaderAPI } from '../shared/ipc-types';
+import type {
+  DispatchSprintRequest,
+  DispatchSprintResponse,
+  GetConfigResult,
+  IpcResult,
+  LeaderAPI,
+  OperatorsListResponse,
+} from '../shared/ipc-types';
 
 const api: LeaderAPI = {
-  async ping(): Promise<string> {
+  ping: async (): Promise<string> => {
     const result: unknown = await ipcRenderer.invoke('ping');
     if (typeof result !== 'string') {
       throw new TypeError('ping handler retornou tipo inesperado');
     }
     return result;
+  },
+
+  getConfig: async (): Promise<GetConfigResult> => {
+    return (await ipcRenderer.invoke('getConfig')) as GetConfigResult;
+  },
+
+  listOperators: async (): Promise<IpcResult<OperatorsListResponse>> => {
+    return (await ipcRenderer.invoke('listOperators')) as IpcResult<OperatorsListResponse>;
+  },
+
+  dispatchSprint: async (
+    request: DispatchSprintRequest,
+  ): Promise<IpcResult<DispatchSprintResponse>> => {
+    return (await ipcRenderer.invoke(
+      'dispatchSprint',
+      request,
+    )) as IpcResult<DispatchSprintResponse>;
   },
 };
 

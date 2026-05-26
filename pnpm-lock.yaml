@@ -62,6 +62,9 @@ importers:
       '@sprint/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@sprint/fs-adapter':
+        specifier: workspace:*
+        version: link:../../packages/fs-adapter
       react:
         specifier: ^18.3.0
         version: 18.3.1

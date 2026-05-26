@@ -1,14 +1,23 @@
 :root {
-  /* Cores ARTFLEXÍVEIS (Stack §6.3) */
-  --color-primary: #0066cc;
+  /* Cores — dark theme + accent amarelo (design Renan, Gate 7 W1.C2) */
+  --color-bg: #0a0a0a;
+  --color-bg-elevated: #1c1c1c;
+  --color-surface: #2a2a2a;
+  --color-accent: #ebc76a;
+  --color-accent-hover: #e0b955;
+  --color-accent-text: #0a0a0a;
   --color-success: #16a34a;
   --color-warning: #f59e0b;
-  --color-danger: #dc2626;
-  --color-bg: #ffffff;
-  --color-bg-elevated: #f9fafb;
-  --color-text: #111827;
-  --color-text-muted: #6b7280;
-  --color-border: #e5e7eb;
+  --color-danger: #ef4444;
+  --color-text: #ffffff;
+  --color-text-muted: #909090;
+  --color-text-subtle: #606060;
+  --color-border: #2a2a2a;
+  --color-border-strong: #404040;
+
+  /* Surfaces light (para dropdowns/inputs com contraste deliberado, ex.: Horario) */
+  --color-input-bg: #f5f5f5;
+  --color-input-text: #0a0a0a;
 
   /* Espaçamentos */
   --space-1: 4px;
@@ -16,8 +25,8 @@
   --space-3: 12px;
   --space-4: 16px;
   --space-6: 24px;
-  --space-8: 32px;
-  --space-12: 48px;
+  --space-8: 50px;
+  --space-12: 60px;
 
   /* Tipografia */
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
@@ -27,13 +36,16 @@
   --font-size-lg: 18px;
   --font-size-xl: 24px;
   --font-size-2xl: 32px;
+  --font-size-3xl: 48px;
 
   /* Bordas e sombras */
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-button: 14px;
+  --radius-pill: 9999px;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.6);
 }
 
 * {

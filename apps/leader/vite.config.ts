@@ -35,7 +35,12 @@ export default defineConfig(({ command }) => ({
             sourcemap: command === 'serve',
             outDir: 'dist-electron/main',
             rollupOptions: {
-              external: ['electron'],
+              // jsdom/canvas externalizados: dispatchService -> @sprint/contracts ->
+              // isomorphic-dompurify -> jsdom -> canvas (peer opcional). Bundlado, o
+              // require('canvas') interno do jsdom nao resolve em build-time, e o
+              // Vite injeta stub que joga em runtime. Externalizado, o jsdom carrega
+              // de node_modules em runtime e trata canvas como opcional (silencioso).
+              external: ['electron', 'jsdom', 'canvas'],
             },
           },
         },

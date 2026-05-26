@@ -1,113 +1,143 @@
 .page {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  padding: var(--space-8);
-  gap: var(--space-6);
+  padding: var(--space-6) var(--space-8) var(--space-8);
+  gap: var(--space-8);
+  min-height: 100%;
+  background: var(--color-bg);
 }
 
-.pageHeader {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding-bottom: var(--space-4);
-  border-bottom: 1px solid var(--color-border);
-}
-
-.pageTitle {
-  font-size: var(--font-size-2xl);
-  color: var(--color-text);
-}
-
-.pageSubtitle {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-}
-
-.composer {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
-  flex: 1;
-}
-
-.section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.sectionHeader {
+.hero {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  gap: var(--space-3);
+  align-items: flex-end;
+  gap: var(--space-6);
   flex-wrap: wrap;
+  padding-bottom: var(--space-2);
 }
 
-.sectionTitle {
-  font-size: var(--font-size-lg);
+.title {
+  font-size: var(--font-size-3xl);
   font-weight: 600;
   color: var(--color-text);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  /* Quebra de linha controlada por <br> explícito no JSX — não dependemos
+     mais de max-width para wrap automático. */
 }
 
-.footer {
+.titleAccent {
+  color: var(--color-accent);
+}
+
+.actions {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: var(--space-4);
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--color-border);
-  flex-wrap: wrap;
-}
-
-.status {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.statusCount {
-  font-size: var(--font-size-sm);
-  color: var(--color-text);
-  font-weight: 500;
-}
-
-.statusReady {
-  font-size: var(--font-size-xs);
-  color: var(--color-success);
-}
-
-.statusPending {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
+  gap: var(--space-3);
 }
 
 .dispatchButton {
-  padding: var(--space-3) var(--space-6);
-  background: var(--color-primary);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4) var(--space-3) var(--space-6);
+  background: var(--color-accent);
+  color: var(--color-accent-text);
   border: none;
-  border-radius: var(--radius-sm);
-  color: #ffffff;
-  font-size: var(--font-size-base);
+  border-radius: var(--radius-button);
+  font-size: var(--font-size-sm);
   font-weight: 600;
   cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
   transition:
     background-color 120ms ease,
-    filter 120ms ease;
+    color 120ms ease;
 }
 
 .dispatchButton:hover:not(:disabled) {
-  filter: brightness(0.9);
-}
-
-.dispatchButton:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
+  background: var(--color-accent-hover);
 }
 
 .dispatchButton:disabled {
-  background: var(--color-text-muted);
+  /* Preserva forma de pill clara mesmo desabilitado — antes opacity:0.4
+     fazia parecer "rounded square" em fundo escuro. */
+  background: rgba(235, 199, 106, 0.35);
+  color: rgba(10, 10, 10, 0.55);
   cursor: not-allowed;
-  opacity: 0.6;
+}
+
+.dispatchButton:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 4px;
+}
+
+.dispatchArrow {
+  display: inline-block;
+}
+
+.listSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.listHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.listLabelGroup {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.listLabel {
+  font-size: var(--font-size-base);
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+.listCount {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-subtle);
+}
+
+.statusReady {
+  font-size: var(--font-size-sm);
+  color: var(--color-accent);
+  margin-top: var(--space-2);
+}
+
+.statusPending {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-subtle);
+  margin-top: var(--space-2);
+}
+
+.toast {
+  position: fixed;
+  bottom: var(--space-6);
+  right: var(--space-6);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  max-width: 360px;
+  z-index: 999;
+}
+
+.toastSuccess {
+  background: var(--color-success);
+  color: #ffffff;
+}
+
+.toastWarning {
+  background: var(--color-warning);
+  color: var(--color-accent-text);
 }

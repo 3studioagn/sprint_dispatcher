@@ -14,6 +14,8 @@
 
 import { create } from 'zustand';
 
+import type { DispatchSprintRequest } from '../../shared/ipc-types';
+
 import { composerFormSchema, type ComposerFormOutput } from './sprintComposerSchema';
 
 const DEFAULT_DEADLINE = '18:00';
@@ -138,4 +140,21 @@ export function selectFormPayload(state: SprintComposerState): ComposerFormOutpu
  */
 export function selectIsValid(state: SprintComposerState): boolean {
   return selectFormPayload(state) !== null;
+}
+
+/**
+ * Retorna o `DispatchSprintRequest` pronto para o IPC, ou `null` se o
+ * draft é inválido. Mesma validação de `selectFormPayload`, só renomeia
+ * `selectedOperators` → `selected` para casar com o nome do campo no
+ * contrato IPC (`shared/ipc-types.ts`).
+ *
+ * Consumido por `NovaSprint.handleDispatchClick` no Gate 5 (BL-C2-007).
+ */
+export function selectDispatchRequest(state: SprintComposerState): DispatchSprintRequest | null {
+  const payload = selectFormPayload(state);
+  if (payload === null) return null;
+  return {
+    selected: payload.selectedOperators,
+    deadline: payload.deadline,
+  };
 }

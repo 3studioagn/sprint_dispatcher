@@ -34,7 +34,7 @@ export function DeadlineInput() {
   return (
     <div className={styles.field}>
       <label htmlFor="sprint-deadline" className={styles.label}>
-        Horário limite
+        Horário
       </label>
       <input
         id="sprint-deadline"
@@ -47,7 +47,7 @@ export function DeadlineInput() {
       />
       {isInPast ? (
         <p className={styles.warning} role="alert">
-          Atenção: o horário {deadline} já passou. A sprint ainda pode ser enviada, mas os agentes
+          Atenção: o horário {deadline} já passou. A rodada ainda pode ser disparada, mas os agentes
           que receberem após o limite irão descartá-la.
         </p>
       ) : null}
