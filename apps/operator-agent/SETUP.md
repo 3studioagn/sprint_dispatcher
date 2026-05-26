@@ -28,10 +28,19 @@ aguarde recovery automático via IPC `config:get` se o renderer for aberto).
 
 ### 2.1. Localização do `config.json`
 
-| Ambiente             | Caminho                                                                                             |
-| -------------------- | --------------------------------------------------------------------------------------------------- |
-| **Dev** (`pnpm dev`) | `%APPDATA%\sprint-operator-agent\config.json` — derivado do `name` no `package.json`                |
-| **Build packaged**   | `%APPDATA%\Sprint Operator Agent\config.json` — derivado do `productName` do `electron-builder.yml` |
+| Ambiente             | Caminho                                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------ |
+| **Dev** (`pnpm dev`) | `%APPDATA%\sprint-operator-agent\config.json` — derivado do `name` no `package.json`       |
+| **Build packaged**   | `%APPDATA%\sprint-operator-agent\config.json` — **mesmo path do dev** (G-022 no CLAUDE.md) |
+
+> **Nota (G-022):** apesar do `electron-builder.yml` definir
+> `productName: Sprint Operator Agent`, o `app.getName()` em runtime continua
+> retornando o `name` do package.json (`sprint-operator-agent`) porque o
+> `productName` afeta apenas o nome do executável + diretório de instalação, não
+> o `app.getName()` consumido pelo `app.getPath('userData')`. Pra ter
+> `%APPDATA%\Sprint Operator Agent\` (com espaço), seria necessário
+> `extraMetadata.productName: "Sprint Operator Agent"` no electron-builder.yml.
+> Polish W3.
 
 ### 2.2. Schema do `config.json`
 
@@ -479,9 +488,11 @@ Para cada operador (Otávio, Diemerson, André, etc.) repita em cada PC:
    }
    '@
 
-   # ATENÇÃO: instalador empacotado usa productName = "Sprint Operator Agent"
-   # (com espaço). Path do userData é DIFERENTE do dev ("sprint-operator-agent"):
-   $configPath = "$env:APPDATA\Sprint Operator Agent\config.json"
+   # ATENÇÃO (G-022): apesar do productName="Sprint Operator Agent" no
+   # electron-builder.yml, o app.getName() em runtime retorna o `name` do
+   # package.json (`sprint-operator-agent`) — mesmo path do modo dev.
+   # Se o app mostrar outro path na ConfigErrorScreen, USE o path mostrado.
+   $configPath = "$env:APPDATA\sprint-operator-agent\config.json"
    New-Item -ItemType Directory -Path (Split-Path $configPath) -Force | Out-Null
    [System.IO.File]::WriteAllText(
      $configPath, $config, [System.Text.UTF8Encoding]::new($false)

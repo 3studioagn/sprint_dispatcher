@@ -1238,6 +1238,33 @@ Descobertas durante o desenvolvimento que economizam tempo da próxima sessão.
   rejeitava. Solução documentada em `apps/operator-agent/SETUP.md` §2.3 e §6.6.3
   — operadores da fábrica vão cair nesse buraco se editarem via `Set-Content`.
 
+### G-022: `productName` do electron-builder.yml NÃO afeta `app.getName()` em runtime
+
+- **Sintoma:** docs do SETUP.md prometiam que o app empacotado usaria
+  `%APPDATA%\Sprint Leader\config.json` (com espaço), mas em runtime real o
+  ConfigErrorScreen mostra `%APPDATA%\sprint-leader\config.json` (lowercase do
+  `name` do package.json — mesmo do modo dev). Idem para o Agent
+  (`%APPDATA%\sprint-operator-agent\`).
+- **Causa:** `productName` no `electron-builder.yml` configura **apenas**:
+  - Nome do executável final (`SprintLeader.exe` / `Sprint Leader.exe`).
+  - Diretório de instalação (`Program Files\Sprint Leader\`).
+  - Atalho do Start Menu.
+  - **NÃO afeta** `app.getName()` em runtime — esse continua retornando o `name`
+    do package.json. E `app.getPath('userData')` usa `app.getName()`.
+- **Resultado:** path do userData é IDÊNTICO entre dev e build packaged (ambos
+  usam lowercase do package.json `name`).
+- **Fix correto (W3 polish):** adicionar `extraMetadata.productName` ao
+  `electron-builder.yml` — isso injeta `productName` no package.json final do
+  `.asar` e o Electron passa a usar como `app.getName()`. Aceito como débito
+  porque o comportamento atual funciona (paths apenas menos "polidos"
+  visualmente).
+- **Como o usuário descobre o path real:** `ConfigErrorScreen` (Leader) ou
+  balloon do tray (Agent) mostram o path EXATO esperado. Sempre confiar no que o
+  app diz, não no que a doc dizia.
+- **Descoberto em:** Sessão 16 (2026-05-26), pós-deploy do Leader empacotado no
+  PC do Otávio — ConfigErrorScreen mostrou `sprint-leader\` em vez do
+  `Sprint Leader\` documentado no SETUP.md.
+
 ### Débitos técnicos pendentes
 
 Itens conhecidos que **deveriam** existir mas dependem de pré-requisito ainda

@@ -25,10 +25,18 @@ declarado não existir. Espelha o padrão fail-fast do Operator Agent (ADR-012).
 
 ### 2.1. Localização do `config.json`
 
-| Ambiente             | Caminho                                                                                     |
-| -------------------- | ------------------------------------------------------------------------------------------- |
-| **Dev** (`pnpm dev`) | `%APPDATA%\sprint-leader\config.json` (Windows) — derivado do `name` no `package.json`      |
-| **Build packaged**   | `%APPDATA%\Sprint Leader\config.json` — derivado do `productName` do `electron-builder.yml` |
+| Ambiente             | Caminho                                                                                |
+| -------------------- | -------------------------------------------------------------------------------------- |
+| **Dev** (`pnpm dev`) | `%APPDATA%\sprint-leader\config.json` (Windows) — derivado do `name` no `package.json` |
+| **Build packaged**   | `%APPDATA%\sprint-leader\config.json` — **mesmo path do dev** (ver G-022 no CLAUDE.md) |
+
+> **Nota (G-022):** apesar do `electron-builder.yml` definir
+> `productName: Sprint Leader`, o `app.getName()` em runtime continua retornando
+> o `name` do package.json (`sprint-leader`) porque o `productName` afeta apenas
+> o nome do executável + diretório de instalação, não o `app.getName()`
+> consumido pelo `app.getPath('userData')`. Pra ter `%APPDATA%\Sprint Leader\`
+> (com espaço), seria necessário `extraMetadata.productName: "Sprint Leader"` no
+> electron-builder.yml. Polish W3.
 
 Outras plataformas (macOS/Linux) usam o equivalente de
 `app.getPath('userData')`, mas o Sprint Leader é Windows-only no MVP.
@@ -290,7 +298,8 @@ OU push em `develop` tocando `apps/leader/**`.
 **Instalação no PC do líder:**
 
 1. Roda o instalador. Aceita default `Program Files\Sprint Leader`.
-2. Cria `%APPDATA%\Sprint Leader\config.json` (productName com **espaço**) com:
+2. Cria `%APPDATA%\sprint-leader\config.json` (path lowercase do `name` do
+   package.json — G-022; o `productName` não afeta `app.getPath('userData')`):
 
    ```json
    {
