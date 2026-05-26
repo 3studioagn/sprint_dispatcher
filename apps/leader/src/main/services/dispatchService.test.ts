@@ -11,7 +11,7 @@ const SHARED = '/shared';
 const OPERATORS_JSON = {
   operators: [
     { user_id: 'joao', user_nome_exibicao: 'João Silva', hostname: 'PC-04', ativo: true },
-    { user_id: 'maria', user_nome_exibicao: 'Maria Souza', hostname: 'PC-05', ativo: true },
+    { user_id: 'mario', user_nome_exibicao: 'Mario Souza', hostname: 'PC-05', ativo: true },
     { user_id: 'carlos', user_nome_exibicao: 'Carlos Pereira', hostname: 'PC-06', ativo: true },
   ],
 };

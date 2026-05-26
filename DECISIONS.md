@@ -92,6 +92,8 @@ entradas em ordem cronológica crescente — mais recente no fim.
   Arquitetura do main process do Leader (W1.C2 parte 2)
 - [ADR-018](#adr-018-redesign-visual-do-leader-design-renan) — Redesign visual
   do Leader (design Renan)
+- [ADR-019](#adr-019-arquitetura-do-operator-agent-w1c3-inteiro) — Arquitetura
+  do Operator Agent (W1.C3 inteiro)
 
 ---
 
@@ -1793,3 +1795,160 @@ fica sr-only (visualmente escondida) para leitores de tela via
   (selectors puros, schema-first, etc.)
 - BL-C2-006 (W2 — customização de title/body via editor rico) — vai precisar de
   novos componentes de design quando chegar
+
+---
+
+## ADR-019: Arquitetura do Operator Agent (W1.C3 inteiro)
+
+- **Status:** Accepted
+- **Data:** 2026-05-26
+- **Decisores:** Renan (3Studio)
+
+### Contexto
+
+A Sessão 16 entrega o `sprint-operator-agent` inteiro de W1 — todos os BLs do
+componente C3 fechados em uma sessão de 9 gates: polling (BL-C3-003), overlay
+TOPMOST com re-sanitização defensiva (BL-C3-004), timer de minimização para tray
+(BL-C3-005), tray icon com 3 estados + menu (BL-C3-006), ack em 2 momentos
+(BL-C3-007), arquivamento local + dedup pós-restart (BL-C3-008). Pré-requisitos
+disponíveis após Sessão 14 (domain layer do `@sprint/fs-adapter`) e Sessão 15
+(`Leader` completo escrevendo em `<shared>/pending/`).
+
+Várias decisões arquiteturais precisaram ser tomadas em conjunto: state machine
+do overlay, pull pattern vs push race, fail-soft vs fail-fast no boot,
+orquestração do ack, dedup pós-restart, BOM no PowerShell, mock strategy para
+BrowserWindow em testes.
+
+### Decisões
+
+1. **State machine explícita no `overlayService`** —
+   `hidden | showing | minimized` como discriminated union. Transitions
+   documentadas:
+   - `hidden` → `showing` via `showSprint(item, queueLength)` (queueService emit
+     `nextSprint`).
+   - `showing` → `minimized` via timer `minimizeAfterMs` automático (default 30s
+     — D2 do Gate 1).
+   - `minimized` → `showing` via `restoreCurrent()` (tray click "Mostrar sprint
+     atual") — **reseta o timer** (D4 do Gate 1: operador "voltou para a tela,
+     dar tempo de novo").
+   - `showing` → `hidden` via `hide()` (ack final + fila vazia, Gate 6).
+
+2. **Pull pattern `sprint:request-current`** resolve race entre
+   `webContents.send` (do `overlayService.showSprint` ao criar BrowserWindow) e
+   o registro de listener do React (useEffect roda APÓS o primeiro paint).
+   Renderer pulla currentItem no mount; main mantém estado em
+   `overlayService.currentItem`. Push `sprint:incoming` cobre mudanças
+   subsequentes (ack → próxima sprint).
+
+3. **Boot fail-soft em vez de fail-fast** (D3 do Gate 1) — substitui o
+   comportamento W0 do ADR-012 (que terminava o app em `ConfigError`). Agora
+   tray fica vermelho + balloon de aviso, polling NÃO inicia, mas processo
+   persiste. Recovery via IPC `config:get` quando o renderer for aberto (segue
+   padrão `rebuildDeps` do ADR-017). Operador corrige config sem matar processo.
+
+4. **`handleAck` extraído para `main/handlers/`** — testabilidade.
+   `main/index.ts` faz `void bootstrap()` no top-level e não pode ser importado
+   em testes sem inicializar Electron. Função pura recebe `HandleAckDeps` com 5
+   services + logger opcional. main/index.ts vira wrapper thin que valida deps
+   não-null e delega.
+
+5. **Re-sanitização defensiva no renderer** — `SprintCard` chama
+   `sanitizeBodyHtml` mesmo sabendo que o Leader já sanitizou via
+   `PendingStore.writePendingSprint`. Defesa em profundidade contra adulteração
+   do JSON em trânsito (alguém editando manualmente o `pending/` via notepad).
+   Idempotência (ADR-014) garante que segundo passe não muta o output do
+   primeiro. 4 XSS adversariais no `SprintCard.test` confirmam: `<script>`,
+   `<iframe>`, `onclick`, atributos `class/id/data-*` todos removidos.
+
+6. **Dedup pós-restart via cache populado no boot** (D5 do Gate 1) —
+   `historyService.initializeFromDisk()` faz `fs.readdir` recursivo em
+   `<userData>/historico/<dia>/*.json` antes do `pollingService.start()`.
+   Filenames já arquivados ficam no `processedFilenames: Set<string>`. Polling
+   consulta `isAlreadyArchived(filename)` antes de enfileirar.
+
+7. **Campo `minimize_after_seconds` extra-schema** — `@sprint/contracts` é
+   imutável nesta sessão (§ 2.2 do prompt original). Solução: o `loadConfig` do
+   Agent extrai o campo via spread+rest ANTES de chamar `safeParseAgentConfig`
+   (que é `.strict()`). Validação 1-300 segundos acontece no `loadConfig` local.
+   Default 30s.
+
+8. **`OverlayService` com `BrowserWindow` real é o ÚNICO service não testável
+   via Memory adapter** — o resto (PendingStore, AckStore, QueueService,
+   HistoryService, AckService, PollingService) usa `MemoryFilesystemAdapter`
+   direto. Para `overlayService.test.ts` o `BrowserWindow` é mockado via
+   `vi.hoisted()` (G-015 atualizado — `vi.mock` é hoisted; `vi.hoisted` agrupa
+   declarações antes do hoisting). Para o integration test, `OverlayService`
+   inteiro é mockado com spies simplificados.
+
+9. **Polling com `setTimeout` recursivo, não `setInterval`** — evita overlap se
+   um ciclo demorar mais que o intervalo (rede SMB lenta). Cada `pollOnce` await
+   termina antes de agendar o próximo via
+   `setTimeout(this.pollAndSchedule, pollingIntervalMs)`.
+   `DirectoryNotFoundError` em `pending/` é benigno (primeiro boot pré-Leader) —
+   catch específico antes do log.error.
+
+10. **Workflow CI `build-agent.yml` espelhado de `build-leader.yml`** — mesmo
+    padrão (windows-latest, pnpm cache, `pnpm --filter ... run make`,
+    upload-artifact). Triggers paths-based em `apps/operator-agent/**` +
+    `packages/contracts/**` + `packages/fs-adapter/**` + lockfile + workflow.
+    Necessário porque o build local falha pelo ESET travando `app.asar` (G-009).
+
+### Alternativas consideradas
+
+| Alternativa                                                         | Por que rejeitada                                                                                                                                                                                         |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Adicionar `minimize_after_seconds` ao schema do `@sprint/contracts` | Proibido pela § 2.2 do prompt; também violaria SCHEMA_VERSION (campo opcional novo seria breaking pra parsers strict). Stripping via spread+rest mantém schema intocado.                                  |
+| Push immediate em `showSprint` antes do mount React                 | Race entre `webContents.send` e `useEffect` registration. Pull pattern via `sprint:request-current` é determinístico.                                                                                     |
+| `setInterval` no polling                                            | Risco de overlap se ciclo demorar — múltiplos polls concorrentes corrompem cache + duplicate enqueue. `setTimeout` recursivo serializa.                                                                   |
+| Fake timers no integration test                                     | Race com `void writeDisplayed` microtasks fire-and-forget — `vi.useFakeTimers` + `await new Promise(r => setTimeout(r, 5))` ficava pendurado. Real timers + `flushMicrotasks` helper resolveu sem flakes. |
+| `BrowserWindow` real em todos os testes                             | Exige runtime Electron + display. CI Linux/headless falharia. Mock via `vi.hoisted` cobre state machine + IPC sends sem dependência de Electron.                                                          |
+| `archive` na hierarquia do `IFilesystemAdapter`                     | Já rejeitado pelo ADR-013 (port mantém-se em 8 primitivos). Domain layer `historyService` consome `node:fs/promises` direto (mesmo padrão do `loadConfig` — ADR-012).                                     |
+| `cancel-*.json` handler ativo no W1                                 | BL-C3-009 é W2. Em W1, branch defensivo no `processEntry` apenas loga warn + skip. listPending com `userId` filter já remove cancels naturalmente; o branch só dispara via mock em testes.                |
+| Logger `@sprint/logger` no W1.C3                                    | BL-C6-001 é a próxima sessão. Em W1.C3, `console.warn`/`error` em main process com TODO. Build NSIS sem console visível é débito conhecido.                                                               |
+| `Sair` no tray menu                                                 | RN-04 (operador não pode fechar agente). Em W1, "Sair" oculto. W3 vai expor com senha de admin.                                                                                                           |
+
+### Consequências
+
+**Aceitas:**
+
+- Operator Agent funcional ponta-a-ponta no W1: dispatch via Leader → polling do
+  Agent → overlay TOPMOST → ack → archive → próxima sprint OU overlay hide.
+  Testado em integration test (4 cenários) + 186 testes unitários cobrindo state
+  machine, timer, ack flow, dedup, XSS defensivo.
+- Coverage: 97.76% lines / 91.47% branches / 95.4% funcs no
+  `sprint-operator-agent`. Threshold 70/65/70/70 (renderer floor) com folga.
+- Setup real em servidor SMB validado (`\\srv-alpha\TEMP\Metas_3Studio`): Leader
+  boota com UNC remoto, lê `operators.json`, escreve em `pending/`.
+- Workflow CI `build-agent.yml` permite distribuição via runner Windows limpo
+  (sem ESET local). Trigger paths-based + manual dispatch.
+- SETUP.md de ambos os apps documenta: setup dev, setup LAN 2 PCs, build via
+  Actions + deployment passo-a-passo, validação end-to-end, troubleshooting.
+
+**Trade-offs:**
+
+- Logs de produção (build NSIS) ficam silenciosos quando overlay não está
+  visível — débito até W1.C6 (`@sprint/logger` com pino-roll).
+- Hostnames em `operators.json` são apenas declarativos; o `SprintAck.hostname`
+  real vem do config local de cada Agent.
+- `cancel-*.json` handler é stub silencioso até BL-C3-009 (W2). Líder ainda não
+  tem botão "Cancelar".
+- Acompanhamento de acks em tempo real pelo Leader (BL-C2-008 W2) é a próxima
+  necessidade UX — hoje líder inspeciona manualmente `<shared>/acks/`.
+- `overlay.ts` legado W0 e `tray.ts` deletados (operação destrutiva intencional
+  — substituídos por `services/overlayService.ts` e `services/trayService.ts`).
+
+### Referências
+
+- Backlog BL-C3-003 a BL-C3-008 (todos fechados); BL-C3-009/010/011/012 (W2),
+  BL-C3-013/014 (W3)
+- ADR-004 (polling), ADR-009 (IPC contract-first), ADR-011 (tray-resident),
+  ADR-012 (fail-fast precedent — superseded em D3 para fail-soft), ADR-013
+  (port-and-adapter), ADR-014 (sanitize defesa em profundidade), ADR-016 (domain
+  layer fs-adapter W1), ADR-017 (rebuildDeps callback)
+- CLAUDE.md §4 (nova subseção "Estrutura interna do Operator Agent W1.C3")
+- CLAUDE.md §12 G-021 (BOM no PowerShell 5.1 quebra JSON.parse)
+- `apps/operator-agent/SETUP.md` (~530 linhas — guia completo dev + deployment)
+- `apps/operator-agent/src/main/handlers/handleAck.ts`
+- `apps/operator-agent/src/main/services/` (overlayService, ackService,
+  historyService, queueService, pollingService, trayService, trayStateService)
+- `.github/workflows/build-agent.yml`

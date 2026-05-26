@@ -14,7 +14,7 @@ const OPERATORS_PATH = `${SHARED}/operators.json`;
 const VALID_OPERATORS = {
   operators: [
     { user_id: 'joao', user_nome_exibicao: 'João Silva', hostname: 'PC-04', ativo: true },
-    { user_id: 'maria', user_nome_exibicao: 'Maria Souza', hostname: 'PC-05', ativo: true },
+    { user_id: 'mario', user_nome_exibicao: 'Mario Souza', hostname: 'PC-05', ativo: true },
     { user_id: 'rafael', user_nome_exibicao: 'Rafael Costa', hostname: 'PC-08', ativo: false },
   ],
 };

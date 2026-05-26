@@ -1,0 +1,63 @@
+name: Build Operator Agent
+
+# Builda o .exe do Sprint Operator Agent num runner Windows limpo do GitHub.
+# Necessário porque o ESET na máquina local trava o app.asar e impede o
+# electron-builder de gerar o instalador (ver CLAUDE.md §12 G-009).
+#
+# Saída: 2 artefatos no `release/` (configurado em apps/operator-agent/electron-builder.yml):
+# - `SprintOperatorAgent-<version>-x64-portable.exe` (portable, sem instalação)
+# - `SprintOperatorAgent-Setup-<version>.exe` (instalador NSIS pt-BR, com Start Menu shortcut)
+#
+# **Importante:** o Agent é tray-resident (ADR-011). Após instalar, o operador precisa
+# criar o `%APPDATA%\Sprint Operator Agent\config.json` manualmente antes do primeiro
+# boot, OU rodar com config inválido e ver tray vermelho até corrigir (fail-soft W1).
+# Em W3, o instalador C5 vai pré-gravar config.json com placeholders editáveis.
+on:
+  workflow_dispatch:
+  push:
+    branches: [develop]
+    paths:
+      - 'apps/operator-agent/**'
+      - 'packages/contracts/**'
+      - 'packages/fs-adapter/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/build-agent.yml'
+
+concurrency:
+  group: build-agent-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Sprint Operator Agent (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Agent (portable .exe + instalador NSIS)
+        run: pnpm --filter sprint-operator-agent run make
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: sprint-operator-agent-windows
+          path: apps/operator-agent/release/*.exe
+          if-no-files-found: error
+          retention-days: 14

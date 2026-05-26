@@ -250,6 +250,67 @@ fechado. Marque com ✅ conforme passar.
 
 ---
 
+## 6.5. Deployment em 2+ PCs (LAN)
+
+Para rodar Leader e Agent em PCs separados (cenário de produção real do MVP) em
+vez de tudo na mesma máquina via `dev-fixtures/shared/`, consulte
+[`apps/operator-agent/SETUP.md` §6.5](../operator-agent/SETUP.md#65-setup-em-2-pcs-lan--deployment-real-de-teste)
+— documento principal do setup multi-máquina (cobre criação do share SMB,
+configuração do `shared_path` UNC nos dois apps, permissões NTFS, firewall,
+considerações de latência).
+
+Resumo para o Leader:
+
+- O `config.json` do Leader usa o **mesmo `shared_path` UNC** do Agent (e.g.
+  `"\\\\NOME-DO-PC-HOST\\SprintDispatcher"` ou
+  `"\\\\srv-alpha\\TEMP\\Metas_3Studio"`).
+- O `criado_por` do Leader vai literal no campo `criado_por` de cada
+  `SprintPayload` gravado em `<shared>/pending/`.
+- Múltiplos líderes (futuro W2+) podem compartilhar a mesma pasta — cada um com
+  `criado_por` distinto.
+
+---
+
+## 6.6. Build via GitHub Actions
+
+Para gerar o `.exe` do Sprint Leader sem o problema do antivírus ESET local
+bloquear o `app.asar` (CLAUDE.md §12 G-009), use o workflow CI em runner Windows
+do GitHub.
+
+**Trigger:** GitHub UI → **Actions** → **"Build Leader"** → **"Run workflow"**
+OU push em `develop` tocando `apps/leader/**`.
+
+**Artefatos:** após ~5-10 min, download em **Actions** → run "Build Leader" →
+**Artifacts** → `sprint-leader-windows`. Conteúdo:
+
+- `SprintLeader-0.0.0-x64-portable.exe` — portable, roda direto.
+- `SprintLeader-Setup-0.0.0.exe` — instalador NSIS pt-BR, com Start Menu
+  shortcut + uninstaller.
+
+**Instalação no PC do líder:**
+
+1. Roda o instalador. Aceita default `Program Files\Sprint Leader`.
+2. Cria `%APPDATA%\Sprint Leader\config.json` (productName com **espaço**) com:
+
+   ```json
+   {
+     "shared_path": "\\\\srv-alpha\\TEMP\\Metas_3Studio",
+     "criado_por": "Renan"
+   }
+   ```
+
+3. UTF-8 **sem BOM** — use `[System.IO.File]::WriteAllText` ou Notepad "Save As
+   → UTF-8 (sem BOM)". `Set-Content -Encoding utf8` do PowerShell 5.1 adiciona
+   BOM e quebra `JSON.parse`.
+4. Roda via Start Menu → "Sprint Leader". App abre. `operators.json` é lido do
+   share, composer pronto.
+
+**Para deploy do Agent nos PCs dos operadores**, ver
+[`apps/operator-agent/SETUP.md` §6.6](../operator-agent/SETUP.md#66-build-via-github-actions-distribui%C3%A7%C3%A3o-em-produ%C3%A7%C3%A3o)
+(processo análogo, mas com configs distintas por operador).
+
+---
+
 ## 7. Troubleshooting
 
 ### "Could not resolve 'canvas' imported by 'jsdom'" no boot

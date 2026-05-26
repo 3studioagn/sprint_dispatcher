@@ -92,7 +92,7 @@ do repositório**, gerenciados externamente por Renan.
 | C0  | Foundation & Infrastructure                | Infra         | ✅ Wave 0                  |
 | C1  | Shared Contracts (`@sprint/contracts`)     | Library       | ✅ Wave 0                  |
 | C2  | Leader Application                         | Desktop App   | ✅ W1 MVP + redesign       |
-| C3  | Operator Agent                             | Desktop App   | ✅ Scaffold + config       |
+| C3  | Operator Agent                             | Desktop App   | ✅ W1 MVP (Sessão 16)      |
 | C4  | Filesystem Adapter (`@sprint/fs-adapter`)  | Library       | ✅ Domain W1 (Pending+Ack) |
 | C5  | Installer & Deployment                     | Package       | ✅ Config validada         |
 | C6  | Observability & Logging (`@sprint/logger`) | Library       | ⏸️ Wave 1                  |

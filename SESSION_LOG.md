@@ -66,6 +66,375 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 16 — 2026-05-26 — Wave 1, C3 inteiro (Operator Agent MVP)
+
+**Wave atual:** W1 **Método:** gate-by-gate com aprovação explícita entre gates
+**Duração estimada:** ~6-7h (sessão longa, 9 gates) **Itens trabalhados:**
+[BL-C3-003, BL-C3-004, BL-C3-005, BL-C3-006, BL-C3-007, BL-C3-008] (todos
+fecharam) + workflow CI `build-agent.yml` + setup real em servidor SMB
+
+### Objetivo da sessão
+
+Fechar W1.C3 inteiro — Operator Agent funcional ponta-a-ponta: polling de
+`<shared>/pending/` filtrado por userId, overlay TOPMOST fullscreen com
+re-sanitização defensiva de `body_html`, timer de minimização para tray, tray
+icon com 3 estados (idle/sprint_active/config_error) + menu completo, ack em 2
+momentos (`displayed_at` na exibição + `acknowledged_at` no click), arquivamento
+local em `<userData>/historico/YYYY-MM-DD/` + dedup pós-restart via cache.
+Estratégia de tipos: source-first do `@sprint/contracts` + `@sprint/fs-adapter`
+(W1) consumido pelo Agent; nenhuma modificação fora do operator-agent.
+
+Mid-sessão Renan trouxe o cenário real de deployment: usar o file server SMB da
+ARTFLEXÍVEIS (`\\srv-alpha\TEMP\Metas_3Studio`) para testar em 2 PCs distintos.
+Gate 8.5 adicionou: workflow CI `build-agent.yml` espelhando o
+`build-leader.yml`, seções §6.5 (LAN setup) e §6.6 (build via Actions +
+deployment passo a passo) em ambos os SETUP.md, e o `operators.json` real no UNC
+com 4 operadores (mario, otavio, diemerson, andre).
+
+### O que foi feito
+
+- **Gate 1 — reconciliação + 5 decisões.** Read CLAUDE.md, DECISIONS.md inteiro
+  (18 ADRs), SESSION_LOG #15, packages contracts/fs-adapter exports, scaffold W0
+  do operator-agent (main/{config,index,overlay, tray,single-instance},
+  shared/ipc-types, preload, renderer placeholder). Confirmei `deletePending`
+  existe em PendingStore (não na IFilesystemAdapter — ADR-013 mantém a
+  separação). D1 polling = 3000ms (alinhado a ADR-004, desviando do prompt §4.1
+  que sugeria 30s). D2 minimize = 30000ms (campo W1-extra
+  `minimize_after_seconds` fora do schema do contracts). D3 fail-soft com tray
+  vermelho + balloon (substitui fail-fast do W0 — D5 cache em memória populado
+  no boot via `initializeFromDisk` recursivo).
+- **Gate 2 — foundation.** Deps (zustand 4.5, lucide-react 0.380, date-fns 3.6,
+  zod 3.25, @testing-library/{react,user-event,jest-dom}, jsdom 26,
+  @sprint/fs-adapter workspace:\*). `shared/ipc-types.ts` reescrito com
+  property-with-arrow (ADR-017) + nested API `config/sprint/queue/overlay`
+  - 3 `ConfigErrorCode` (NOT_FOUND/INVALID/INACCESSIBLE) + `IpcResult<T>`
+    envelope + push event types. `main/config.ts` REWRITE fail-soft com 3
+    ConfigError tipados; `minimize_after_seconds` extraído via spread+rest ANTES
+    do `safeParseAgentConfig` (que é strict).
+    `main/services/ trayStateService.ts` puro (`computeTrayMenu`,
+    `computeTrayIconColor`, `computeTrayTooltip`) + `trayService.ts` integra
+    Electron Tray (boot/setState/displayConfigErrorBalloon/showAboutDialog).
+    `main/index.ts` REWRITE com `rebuildDeps()` pattern (ADR-017). 44 testes (25
+    config + 17 trayStateService + 2 single-instance).
+- **Gate 3 — BL-C3-003 polling.** `queueService.ts` (FIFO + dedup por
+  sprint_id|user_id + EventEmitter wrap com onNextSprint/onQueueUpdated +
+  unsubscribe). `historyService.ts` parcial (isAlreadyArchived, markProcessed;
+  archive/initializeFromDisk stubs pra Gate 6). `pollingService.ts` com
+  `setTimeout` recursivo (não setInterval — evita overlap), switch sobre
+  `PendingEntry.kind`, `DirectoryNotFoundError` tratado como benigno (boot
+  pré-Leader), logger opcional (default silent). +52 testes (21 queue + 10
+  history + 21 polling).
+- **Gate 4 — BL-C3-004 overlay + IPC push.** `overlayService.ts` (parcial) com
+  `showSprint(item, queueLength)` criando BrowserWindow TOPMOST fullscreen
+  - push `sprint:incoming` em chamadas subsequentes. **Pull pattern**
+    `sprint:request-current` resolve race entre `webContents.send` e useEffect
+    do React no mount. `main/index.ts` wire completo (queueService.onNextSprint
+    → showSprint; onQueueUpdated → sendQueueUpdate; pollingService.start).
+    Renderer redesenhado dark theme + accent yellow (espelha ADR-018): stores
+    Zustand (`useCurrentSprintStore`, `useQueueStore` com selectExtraInQueue),
+    hooks (`useIncomingSprint` pull+push, `useQueueUpdated` push only), 5
+    components (Overlay, SprintCard com **re-sanitização defensiva** via
+    `sanitizeBodyHtml`, AckButton stub, DeadlineBadge estático, QueueIndicator).
+    4 XSS adversariais no SprintCard.test (script/iframe/onclick/atributos
+    não-listados removidos). vite.config externalize jsdom+canvas (G-020 do
+    Leader replicado — bundle main 5.4MB → 100KB). +88 testes.
+- **Gate 5 — BL-C3-005 timer + BL-C3-006 tray completo.** `overlayService`
+  expansão completa: state machine `hidden|showing|minimized`, timer interno
+  resetado em cada `showSprint`, `minimize()` envia push `overlay:minimize` +
+  transiciona, `restoreCurrent()` reseta timer (D4),
+  `clearTimer()`/`hide()`/`destroy()`, `onStateChange` event emitter. Mock
+  BrowserWindow via `vi.hoisted()` (G-015 — `vi.mock` é hoisted; usar
+  `vi.hoisted` agrupa declaração junto). `historyService.ensureFolder()` cria
+  `<userData>/historico/` no boot. main/index.ts handleTrayAction wired
+  (show-current → restoreCurrent; open-history → shell.openPath histórico). +28
+  testes (24 overlayService + 4 ensureFolder).
+- **Gate 6 — BL-C3-007 ack + BL-C3-008 history archive.** `ackService.ts` com
+  `writeDisplayed(payload)` (não-throw em erro — overlay já visível) +
+  `writeAcknowledged(sprintId, userId)` que re-lê via listAcks pra preservar
+  `displayed_at` original (fallback now). `historyService.archive` full impl:
+  dia via date-fns format, mkdir recursivo, writeAtomic .tmp+rename com
+  randomBytes (G-017), markProcessed. `initializeFromDisk` scan recursivo.
+  AckButton funcional (loading + erro inline + key={sprint_id} remount em troca
+  de sprint). main/index.ts handleAck top-level orquestra (validates peek match
+  → clearTimer → writeAcknowledged throw → archive não-fatal → deletePending
+  não-fatal → dequeue → showSprint(next) + writeDisplayed OR hide). +26 testes.
+- **Gate 7 — integration test.** `handleAck` extraído para
+  `main/handlers/handleAck.ts` (testabilidade — não importa main/index.ts que
+  faz `void bootstrap()`). `main/services/integration.test.ts` com 4 cenários:
+  fluxo principal end-to-end (2 sprints pre-seeded → poll → ack → next sprint →
+  ack → queue vazia → hide; verifica 4 writeAck, 2 archives, 2 deletePending,
+  queue length transitions, clearTimer 2×), mismatch rejection, queue vazia
+  rejection, dedup pós-restart via cache. Real timers + `flushMicrotasks`
+  helper + OverlayService mock (BrowserWindow real exige Electron+display).
+  HistoryService ganhou `now?: () => Date` injectable para testes
+  determinísticos sem fake timers. +4 testes integrados.
+- **Gate 8 — dev fixtures + SETUP.md + QA checklist.**
+  `dev-fixtures/agent-config.example.json` com `_comment` removível + template
+  canônico. `apps/operator-agent/SETUP.md` com 9 seções (pré-req, config, dev,
+  dev-fixtures, histórico local, smoke E2E, QA checklist com 30+ items em 7
+  categorias, troubleshooting, próximos passos W2/W3). Atualização do SETUP do
+  Leader com seção cruzada §6.5. Build limpo (main 100KB → 127KB com archive +
+  ackService + handleAck adicionais).
+- **Gate 8.5 — SMB real + workflow + setup 2 PCs.** Mid-sessão Renan trouxe
+  deployment real. Confirmei UNC `\\srv-alpha\TEMP\Metas_3Studio` acessível, 3
+  subpastas (pending/acks/arquivo) já criadas. Criado `operators.json` no UNC (4
+  operadores: mario, otavio, diemerson, andre) via
+  `[System.IO.File]::WriteAllText` com UTF8 sem BOM (G-021). Atualizado
+  `%APPDATA%\sprint-leader\config.json` e
+  `%APPDATA%\sprint-operator-agent\config.json` pra apontar pro UNC. Leader
+  bootou OK com UNC remoto. Criado `.github/workflows/build-agent.yml`
+  espelhando `build-leader.yml`. Expandido SETUP.md (Leader + Agent) com §6.5
+  deployment 2 PCs (topologia, setup do host SMB, configs por PC, permissões,
+  latência, troubleshooting) + §6.6 build via GitHub Actions (trigger, artifacts
+  download, install passo-a-passo nos PCs operadores, validação end-to-end,
+  logs).
+- **Gate 9 — contexto + commit.** Esta entrada SESSION_LOG. ADR-019 (arquitetura
+  W1.C3 inteiro). CLAUDE.md §4 nova subseção "Estrutura interna do Operator
+  Agent (W1.C3)" + G-021 (BOM UTF-8 no PowerShell 5.1). CHANGELOG.md entrada da
+  sessão. README.md status C3 ✅. Commit consolidado.
+
+### Estado atual
+
+- **BL-C3-001 (scaffold W0):** ✅ (Sessão 09, mantido)
+- **BL-C3-002 (config loader W0):** ✅ (Sessão 09, refatorado para fail-soft em
+  Gate 2 desta sessão)
+- **BL-C3-003 (polling):** ✅ concluído (Gate 3)
+- **BL-C3-004 (overlay TOPMOST):** ✅ concluído (Gate 4)
+- **BL-C3-005 (timer minimize):** ✅ concluído (Gate 5)
+- **BL-C3-006 (tray icon + menu):** ✅ concluído (Gate 5)
+- **BL-C3-007 (writeAck):** ✅ concluído (Gate 6)
+- **BL-C3-008 (move processado pra histórico):** ✅ concluído (Gate 6)
+- **BL-C3-009 (cancel handler):** ⏸️ W2
+- **BL-C3-010 (re-exibição automática):** ⏸️ W2
+- **BL-C3-011 (notificação sonora):** ⏸️ W2
+- **BL-C3-012 (countdown ao vivo):** ⏸️ W2
+- **BL-C3-013 (retry em SMB down):** ⏸️ W3
+- **BL-C3-014 (autostart Windows):** ⏸️ W3
+
+Bateria final na raiz: `format:check`, `lint`, `type-check`, `test`, `build` —
+todos exit 0. Zero regressão em outros packages.
+
+Coverage `sprint-operator-agent`: **97.76% lines / 91.47% branches / 95.4% funcs
+/ 97.76% stmts**. **190 testes** em 17 arquivos (era 15 no fim do W0 com só
+config + single-instance; +175 nesta sessão).
+
+Outros packages (cached — sem mudança):
+
+- `@sprint/contracts`: 230 testes 100%
+- `@sprint/fs-adapter`: 235 testes 99.61%
+- `sprint-leader`: 198 testes 96.88%
+
+**Total monorepo: 853 testes verde.**
+
+### Decisões tomadas
+
+- **ADR-019** (arquitetura W1.C3 inteiro do Operator Agent): polling + overlay +
+  tray + ack + history; state machine do overlay; pull pattern pra resolver race
+  do mount; orquestração via handleAck top-level no main; fail-soft no boot
+  (recovery sem restart via `rebuildDeps` callback — espelha ADR-017).
+- **D1 (polling 3s):** alinhado a ADR-004; sobrescrito do prompt §4.1 (que pediu
+  30s).
+- **D2 (minimize 30s):** `minimize_after_seconds` extraído do JSON cru ANTES de
+  `safeParseAgentConfig` — não modifica `@sprint/contracts` (proibido §10 do
+  prompt).
+- **D3 (fail-soft):** boot continua mesmo sem config; tray vermelho + balloon.
+  Recovery via `config:get` IPC quando renderer reabrir após config corrigida.
+- **D4 (restore reseta timer):** sim — operador "voltou para a tela, dar tempo
+  de novo". Testado isoladamente em overlayService.test.
+- **D5 (cache em memória populado no boot):**
+  `historyService.initializeFromDisk` scan recursivo no
+  `<userData>/historico/<dia>/*.json` antes do polling iniciar. Dedup
+  pós-restart sem I/O por entry no polling loop.
+- **`handleAck` extraído para `main/handlers/`** — testabilidade. Composition
+  root (`main/index.ts`) faz `void bootstrap()` no top-level e não pode ser
+  importado por testes sem inicializar Electron.
+- **`now: () => Date` injetável** em ackService + historyService +
+  pollingService — testes integrados determinísticos sem `vi.useFakeTimers` (que
+  dá race com `void writeDisplayed` microtasks).
+- **OverlayService mockado no integration test** — real exige Electron runtime +
+  display. Fronteira limpa: domain real (PendingStore, AckStore, QueueService,
+  HistoryService, AckService, PollingService, Memory adapter), Electron Window
+  mockada.
+- **`vi.hoisted()` para BrowserWindow mock** — `vi.mock` é hoisted; usar
+  `vi.hoisted` agrupa declarações antes do hoisting. Atualiza G-015.
+- **Re-sanitização defensiva no renderer** — `SprintCard` chama
+  `sanitizeBodyHtml` mesmo sabendo que Leader já sanitizou no
+  `writePendingSprint`. ADR-014 (idempotente) + defesa em profundidade.
+- **`vi.fn(() => Promise.resolve())` variance vs `ReturnType<typeof vi.fn>`** —
+  TypeScript estrito rejeita atribuir Mock<[], Promise<void>> a interface com
+  Mock<any[], unknown>. Fix: deixar inferência via
+  `function ... { return {...} }` no `vi.hoisted` em vez de tipar com interface
+  MockWin.
+- **`build-agent.yml` espelhado de `build-leader.yml`** — mesmo padrão
+  (windows-latest, pnpm, electron-builder make, upload-artifact). Triggers
+  paths-based, manual dispatch.
+- **`operators.json` real no UNC** com 4 operadores (mario, otavio, diemerson,
+  andre) — passados pelo Renan. Hostnames placeholders `PC-<NOME>` que Renan
+  ajusta depois.
+- **`%APPDATA%\sprint-leader\config.json` e
+  `%APPDATA%\sprint-operator-agent\config.json`** do PC dev de Renan migrados de
+  `dev-fixtures/shared/` para `\\srv-alpha\TEMP\Metas_3Studio`. Leader bootou
+  OK; smoke validado.
+
+### Bloqueios encontrados
+
+8 fricções resolvidas inline:
+
+1. **Renderer fora do Electron com `window.api` undefined** — App.tsx
+   placeholder de Gate 2 falhava com "Cannot read properties of undefined
+   (reading 'config')" se aberto em browser regular. Fix: detecção defensiva no
+   useEffect com mensagem explicativa.
+2. **BOM UTF-8 no PowerShell 5.1** (G-021) — `Set-Content -Encoding utf8`
+   adiciona BOM invisível, `JSON.parse` rejeita. Fix:
+   `[System.IO.File]::WriteAllText(path, content, [System.Text.UTF8Encoding]::new($false))`.
+3. **`DirectoryNotFoundError` em pollingService era logado como `error`** —
+   cenário benigno (pasta `pending/` não criada ainda no primeiro boot). Fix:
+   catch específico antes do log.error.
+4. **`vi.useFakeTimers` + `setTimeout(real)` deadlock** em integration test —
+   `await new Promise(r => setTimeout(r, 5))` ficava pendurado. Fix: abandonar
+   fake timers no integration; usar `now` injetado + `pollOnce` manual +
+   `flushMicrotasks` helper de `Promise.resolve()` × 5.
+5. **`vi.mock` hoisting com factory referenciando vars externas** — G-015
+   atualizado. Fix: `vi.hoisted(() => { ... })`.
+6. **Variance Mock<[], Promise<void>>** em interface MockWin estática — TS
+   estrito rejeita. Fix: deixar inferência via function makeMockWindow.
+7. **Bundle main 5.4MB** após Gate 4 (sanitizeBodyHtml puxa jsdom + canvas) —
+   replicação de G-020 do Leader. Fix: rollupOptions.external em vite.config do
+   agent.
+8. **`tray.displayBalloon` aparecia e sumia** — comportamento esperado do
+   Windows tray notification (timer próprio do OS ~5-10s). Não é bug; tooltip
+   permanente continua sinalizando estado.
+
+### Próximo passo
+
+Renan revisa diff consolidado (~50 arquivos modificados/novos, ~5000 linhas),
+faz `git push origin develop`. Workflows `build-leader.yml` e `build-agent.yml`
+disparam automaticamente (paths matched). Em ~5-10min, artifacts disponíveis
+para download. Renan instala Leader no PC dele + Agent installer em cada PC
+operador (Otávio, Diemerson, André) seguindo SETUP.md §6.6.3. Cria config.json
+em cada PC com user_id apropriado. Smoke E2E entre 3+ PCs validando ciclo
+completo.
+
+**Próxima sessão sugerida:** W1.C6 inteiro — `@sprint/logger` (Pino) com write
+em `<userData>/logs/*.log`. Sessão pequena (1 item S — BL-C6-001). Após isso,
+refactor rápido de C2/C3 para usar o logger (substitui `console.warn`/`error`
+espalhados).
+
+### Observações para a próxima sessão
+
+- **Logs em produção (NSIS) sem console** — débito conhecido. Console do main
+  process só fica visível em modo dev (`pnpm dev`). Em build empacotado, logs do
+  polling/ack/handleAck são silenciosos. W1.C6 trará pino-roll escrevendo em
+  `<userData>/logs/agent-YYYY-MM-DD.log` com rotação diária. Quando entrar,
+  refactor de C2/C3 substitui todos os `console.warn`/`console.error` no main
+  por chamadas do logger.
+- **Hostnames placeholders em operators.json** — `PC-MARIO`, `PC-OTAVIO`, etc.
+  Renan deve editar pra refletir hostnames reais (provavelmente `ART-DESIGN-01`,
+  etc) — mas hostname no `operators.json` é apenas declarativo; o
+  `SprintAck.hostname` vem do config local de cada Agent.
+- **`build-agent.yml` ainda não foi exercitado** — primeira execução acontece no
+  push pra develop desta sessão. Pode dar bobeira do electron-builder no runner
+  Windows que não vimos localmente (e.g. Developer Mode não habilitado no runner
+  — mas G-008 indica que sim, windows-latest tem Developer Mode).
+- **Acompanhamento de acks pelo líder (BL-C2-008 W2)** é o próximo bloqueio
+  visual real do MVP. Sem ele, Renan tem que inspecionar manualmente o `acks/`
+  no UNC. Considerar bumping para próxima sessão se W1.C6 puder esperar.
+- **Antes do segundo PC bootar Agent**, Renan tem que copiar o `.exe` baixado do
+  Actions (não rodar direto do UNC `\\srv-alpha\TEMP\...` — Windows trata como
+  "untrusted").
+- **Hostname do PC do operador** — campo livre em cada config local, vai literal
+  no `SprintAck.hostname`. Útil em cenários onde mesmo `user_id` é compartilhado
+  por uma equipe que troca de PC (plantão).
+- **Coverage main/index.ts é zero** — composition root + lifecycle do Electron.
+  E2E em W3 com Playwright. Mesma situação do Leader (ADR-017).
+- **App.tsx (renderer) 0% coverage** — root component só compõe hooks + Overlay.
+  Smoke test simples cabe em Gate 8 polish; deixei pra futuro.
+
+### Arquivos modificados/novos
+
+**Workflow CI:**
+
+- `.github/workflows/build-agent.yml` (novo)
+
+**Operator Agent (`apps/operator-agent/`):**
+
+- `package.json` (+8 deps)
+- `vite.config.ts` (rollupOptions.external += jsdom+canvas — G-020)
+- `vitest.config.ts` (environmentMatchGlobs jsdom/node + coverage refinado)
+- `SETUP.md` (novo, ~530 linhas — 9 seções)
+- `src/shared/ipc-types.ts` (REWRITE — Api nested + property-with-arrow)
+- `src/shared/index.ts` (novo barrel)
+- `src/shared/types/queue.ts` (novo)
+- `src/main/config.ts` (REWRITE fail-soft + 3 ConfigError tipados)
+- `src/main/config.test.ts` (REWRITE — 25 testes)
+- `src/main/index.ts` (REWRITE composition root — 7-step boot ordenado)
+- `src/main/overlay.ts` (DELETADO — legado W0)
+- `src/main/tray.ts` (DELETADO — substituído por services/trayService.ts)
+- `src/main/handlers/handleAck.ts` (novo)
+- `src/main/services/index.ts` (novo barrel)
+- `src/main/services/trayStateService.ts` (novo)
+- `src/main/services/trayStateService.test.ts` (novo, 17 testes)
+- `src/main/services/trayService.ts` (novo)
+- `src/main/services/queueService.ts` (novo)
+- `src/main/services/queueService.test.ts` (novo, 21 testes)
+- `src/main/services/historyService.ts` (novo)
+- `src/main/services/historyService.test.ts` (novo, 22 testes)
+- `src/main/services/pollingService.ts` (novo)
+- `src/main/services/pollingService.test.ts` (novo, 21 testes)
+- `src/main/services/overlayService.ts` (novo)
+- `src/main/services/overlayService.test.ts` (novo, 24 testes)
+- `src/main/services/ackService.ts` (novo)
+- `src/main/services/ackService.test.ts` (novo, 10 testes)
+- `src/main/services/integration.test.ts` (novo, 4 testes)
+- `src/preload/index.ts` (REWRITE — Api nested + subscribePush helper)
+- `src/renderer/env.d.ts` (Api em vez de AgentAPI)
+- `src/renderer/test-setup.ts` (novo — window.api mock global)
+- `src/renderer/App.tsx` (REWRITE — placeholder Gate 2 → orquestra Overlay
+  Gate 4)
+- `src/renderer/App.module.css` (placeholder vazio — Overlay define layout)
+- `src/renderer/styles/global.css` (REWRITE — dark theme + accent yellow)
+- `src/renderer/__test-fixtures__/sprint.ts` (novo)
+- `src/renderer/stores/useCurrentSprintStore.ts` (+ test)
+- `src/renderer/stores/useQueueStore.ts` (+ test)
+- `src/renderer/stores/index.ts` (barrel)
+- `src/renderer/hooks/useIncomingSprint.ts` (+ test)
+- `src/renderer/hooks/useQueueUpdated.ts` (+ test)
+- `src/renderer/hooks/index.ts` (barrel)
+- `src/renderer/components/Overlay/` (+ test)
+- `src/renderer/components/SprintCard/` (+ test, com XSS adversarials)
+- `src/renderer/components/AckButton/` (+ test)
+- `src/renderer/components/DeadlineBadge/`
+- `src/renderer/components/QueueIndicator/` (+ test)
+
+**Leader (`apps/leader/`):**
+
+- `SETUP.md` (+ §6.5 deployment LAN cross-ref + §6.6 build via Actions)
+- `src/main/services/dispatchService.test.ts` (fixture maria→mario)
+- `src/main/services/operatorsService.test.ts` (fixture maria→mario)
+
+**Dev fixtures + raiz:**
+
+- `dev-fixtures/agent-config.example.json` (novo)
+- `pnpm-lock.yaml` (+8 deps)
+
+**Documentos de contexto (esta sessão):**
+
+- `DECISIONS.md` (+ ADR-019)
+- `CLAUDE.md` (+ §4 subseção C3 + G-021)
+- `CHANGELOG.md` ([Unreleased].Added — bloco Sessão 16)
+- `SESSION_LOG.md` (esta entrada)
+- `README.md` (C3 status ✅)
+
+**Servidor SMB (não-repo):**
+
+- `\\srv-alpha\TEMP\Metas_3Studio\operators.json` (criado fora do repo — 4
+  operadores reais)
+- `%APPDATA%\sprint-leader\config.json` (migrado para UNC)
+- `%APPDATA%\sprint-operator-agent\config.json` (migrado para UNC,
+  user_id=mario, hostname=PC-MARIO)
+
+---
+
 ## Sessão 15 — 2026-05-26 — Wave 1, C2 parte 2 (Leader MVP + redesign Renan)
 
 **Wave atual:** W1 **Método:** gate-by-gate com aprovação explícita entre gates

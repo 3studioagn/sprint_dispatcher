@@ -1,134 +1,333 @@
 /**
- * Sprint Operator Agent — Main process entrypoint.
+ * Sprint Operator Agent — Main process entrypoint (W1, Gate 6).
  *
- * Responsabilidades (W0):
- * - Single instance lock (impede 2 agents rodando)
- * - Carregar e validar o config.json (fail-fast)
- * - Criar o tray icon
- * - Registrar handlers IPC
+ * Responsabilidades:
  *
- * Em W0 NÃO há polling e NÃO há overlay ativo. O app carrega o
- * `config.json` da estação, fica residente na tray, e espera ser
- * comandado (W1+).
+ * - Single instance lock (impede 2 agents na mesma estação).
+ * - Boot do `TrayService` com estado `loading`.
+ * - Tenta `rebuildDeps()` — carrega config + instancia services + start
+ *   polling. Em sucesso atualiza tray; em falha vira `config_error` +
+ *   balloon. Fail-soft.
+ * - Wire eventos:
+ *   - `queueService.onNextSprint` → `overlayService.showSprint` + grava
+ *     ack inicial (`displayed_at`) via `ackService.writeDisplayed`.
+ *   - `queueService.onQueueUpdated` → `overlayService.sendQueueUpdate` +
+ *     `refreshTrayState`.
+ * - Registra handlers IPC:
+ *   - `config:get`, `sprint:request-current` (Gate 4)
+ *   - `sprint:acknowledge` (Gate 6 — orquestra ack final + archive +
+ *     deletePending + dequeue + próxima sprint)
  *
  * @see DECISIONS.md ADR-011 — arquitetura tray-resident
- * @see DECISIONS.md ADR-012 — config loader fail-fast
+ * @see DECISIONS.md ADR-017 — rebuildDeps callback no Leader (precedent)
  * @see CLAUDE.md §8.1 — segurança obrigatória Electron
  */
 
-import type { AgentConfig } from '@sprint/contracts';
-import { app, dialog, ipcMain } from 'electron';
+import path from 'node:path';
 
-import { ConfigError, getConfigPath, loadAgentConfig } from './config';
+import { NodeFilesystemAdapter, AckStore, PendingStore } from '@sprint/fs-adapter';
+import { app, ipcMain, shell } from 'electron';
+
+import type {
+  AcknowledgeSprintRequest,
+  AcknowledgeSprintResponse,
+  ConfigStatusResponse,
+  IncomingSprintEvent,
+  IpcResult,
+} from '../shared/ipc-types';
+
+import { ConfigError, loadConfig, type RuntimeConfig } from './config';
+import { handleAck as handleAckOrchestration } from './handlers/handleAck';
+import {
+  AckService,
+  HistoryService,
+  OverlayService,
+  PollingService,
+  QueueService,
+  TrayService,
+  type TrayActionHandler,
+} from './services';
 import { acquireSingleInstanceLock } from './single-instance';
-import { createTray } from './tray';
 
 const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
 const IS_DEV = Boolean(DEV_SERVER_URL);
 
-// Config lido uma vez no boot e mantido em memória. Não vaza para o
-// renderer — o handler `getConfig` expõe só os campos seguros. Ver ADR-012.
-let configCache: AgentConfig | null = null;
+// =============================================================================
+// Estado do processo
+// =============================================================================
+
+const trayService = new TrayService();
+
+let currentConfig: RuntimeConfig | null = null;
 
 /**
- * Bootstrap do main process.
- *
- * Sequência: single instance lock → app ready → config → tray → IPC.
- * Erro de config encerra o app via diálogo (fail-fast, ADR-012).
+ * Services instanciados no PRIMEIRO `rebuildDeps()` bem-sucedido.
+ * Pattern instantiate-once — recovery de config re-valida mas não recria.
  */
+let queueService: QueueService | null = null;
+let historyService: HistoryService | null = null;
+let overlayService: OverlayService | null = null;
+let pendingStore: PendingStore | null = null;
+let ackService: AckService | null = null;
+// pollingService é wired em Gate 5+ (`stop()` no `before-quit` lifecycle).
+// O timer interno mantém o ciclo via setTimeout recursivo independente.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+let pollingService: PollingService | null = null;
+
+// =============================================================================
+// Tray action wiring
+// =============================================================================
+
+const handleTrayAction: TrayActionHandler = (action) => {
+  switch (action) {
+    case 'about':
+      trayService.showAboutDialog();
+      return;
+    case 'open-history': {
+      void shell.openPath(path.join(app.getPath('userData'), 'historico'));
+      return;
+    }
+    case 'show-current':
+      overlayService?.restoreCurrent();
+      return;
+  }
+};
+
+/**
+ * Resincroniza estado visual do tray baseado em `queueService.length()`.
+ * Chamado em todo update da queue + ao fim de `rebuildDeps`.
+ */
+function refreshTrayState(): void {
+  if (queueService === null) return;
+  const length = queueService.length();
+  if (length === 0) {
+    trayService.setState({ kind: 'idle' });
+  } else {
+    trayService.setState({ kind: 'sprint_active', queueLength: length });
+  }
+}
+
+// =============================================================================
+// handleAck — orquestração extraída em `handlers/handleAck.ts` para testabilidade
+// =============================================================================
+
+async function handleAck(sprintId: string, userId: string): Promise<AcknowledgeSprintResponse> {
+  if (
+    queueService === null ||
+    historyService === null ||
+    overlayService === null ||
+    pendingStore === null ||
+    ackService === null
+  ) {
+    throw new Error('Services não inicializados — config inválida ou boot incompleto');
+  }
+  return handleAckOrchestration(
+    {
+      queueService,
+      historyService,
+      overlayService,
+      pendingStore,
+      ackService,
+      log: {
+        warn: (msg, ctx) => {
+          console.warn(`[ack] ${msg}`, ctx ?? '');
+        },
+      },
+    },
+    sprintId,
+    userId,
+  );
+}
+
+// =============================================================================
+// rebuildDeps
+// =============================================================================
+
+async function rebuildDeps(): Promise<RuntimeConfig> {
+  const config = await loadConfig();
+  currentConfig = config;
+
+  if (queueService === null) {
+    const adapter = new NodeFilesystemAdapter();
+    const pendingStoreLocal = new PendingStore(adapter, config.sharedPath);
+    const ackStoreLocal = new AckStore(adapter, config.sharedPath);
+
+    const queueLocal = new QueueService();
+    const historyLocal = new HistoryService(app.getPath('userData'));
+    const overlayLocal = new OverlayService({
+      minimizeAfterMs: config.minimizeAfterMs,
+    });
+    const ackLocal = new AckService({
+      ackStore: ackStoreLocal,
+      hostname: config.hostname,
+      agentVersion: app.getVersion(),
+      log: {
+        warn: (msg, ctx) => {
+          console.warn(`[ack] ${msg}`, ctx ?? '');
+        },
+      },
+    });
+    const pollingLocal = new PollingService({
+      pendingStore: pendingStoreLocal,
+      queueService: queueLocal,
+      historyService: historyLocal,
+      userId: config.userId,
+      pollingIntervalMs: config.pollingIntervalMs,
+      log: {
+        warn: (msg, ctx) => {
+          console.warn(`[polling] ${msg}`, ctx ?? '');
+        },
+        error: (msg, ctx) => {
+          console.error(`[polling] ${msg}`, ctx ?? '');
+        },
+      },
+    });
+
+    // Wire queueService → overlayService + ack + tray refresh.
+    queueLocal.onNextSprint((item) => {
+      overlayLocal.showSprint(item, queueLocal.length());
+      // Grava ack inicial (displayed_at) em paralelo — não bloqueia overlay.
+      // Não-fatal em erro (writeDisplayed retorna null + loga warn).
+      void ackLocal.writeDisplayed(item.payload);
+    });
+    queueLocal.onQueueUpdated((length) => {
+      overlayLocal.sendQueueUpdate(length);
+      refreshTrayState();
+    });
+
+    // Promove para module-level (consumidos por IPC handlers + handleAck).
+    queueService = queueLocal;
+    historyService = historyLocal;
+    overlayService = overlayLocal;
+    pendingStore = pendingStoreLocal;
+    ackService = ackLocal;
+    pollingService = pollingLocal;
+
+    // Garante <userData>/historico/ + popula cache do historyService
+    // a partir de arquivos pré-existentes (dedup pós-restart).
+    await historyLocal.ensureFolder();
+    await historyLocal.initializeFromDisk();
+
+    // Inicia polling — primeiro ciclo imediato.
+    await pollingLocal.start();
+  }
+
+  refreshTrayState();
+  return config;
+}
+
+// =============================================================================
+// IPC handlers
+// =============================================================================
+
+function registerIpcHandlers(): void {
+  // config:get — Gate 2 (discriminated union ConfigStatusResponse)
+  ipcMain.handle('config:get', async (): Promise<ConfigStatusResponse> => {
+    try {
+      const config = currentConfig ?? (await rebuildDeps());
+      return {
+        ok: true,
+        config: {
+          sharedPath: config.sharedPath,
+          userId: config.userId,
+          userNomeExibicao: config.userNomeExibicao,
+          hostname: config.hostname,
+          pollingIntervalMs: config.pollingIntervalMs,
+          minimizeAfterMs: config.minimizeAfterMs,
+        },
+      };
+    } catch (err) {
+      if (err instanceof ConfigError) {
+        return {
+          ok: false,
+          error: {
+            code: err.code,
+            message: err.message,
+            expectedPath: err.configPath,
+          },
+        };
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        ok: false,
+        error: {
+          code: 'INVALID',
+          message: `Erro inesperado: ${message}`,
+          expectedPath: '',
+        },
+      };
+    }
+  });
+
+  // sprint:request-current — Gate 4 — pull pattern do mount inicial do renderer
+  ipcMain.handle('sprint:request-current', (): IncomingSprintEvent | null => {
+    if (overlayService === null) return null;
+    return overlayService.getCurrentEvent();
+  });
+
+  // sprint:acknowledge — Gate 6 — orquestra ack final + archive + delete
+  ipcMain.handle(
+    'sprint:acknowledge',
+    async (
+      _event,
+      req: AcknowledgeSprintRequest,
+    ): Promise<IpcResult<AcknowledgeSprintResponse>> => {
+      try {
+        const data = await handleAck(req.sprint_id, req.user_id);
+        return { ok: true, data };
+      } catch (err) {
+        const code = err instanceof Error ? err.name : 'UNKNOWN';
+        const message = err instanceof Error ? err.message : String(err);
+        console.error('[ack] handleAck falhou', { sprint_id: req.sprint_id, code, message });
+        return { ok: false, error: { code, message } };
+      }
+    },
+  );
+}
+
+// =============================================================================
+// Bootstrap
+// =============================================================================
+
 async function bootstrap(): Promise<void> {
-  // 1. Single instance lock — antes de qualquer outra coisa.
   const isPrimary = acquireSingleInstanceLock(app);
   if (!isPrimary) {
     app.quit();
     return;
   }
 
-  // 2. Aguarda o Electron ficar pronto.
   await app.whenReady();
 
-  // 3. Carrega e valida o config.json (fail-fast — ADR-012).
+  trayService.boot({ kind: 'loading' }, handleTrayAction);
+
   try {
-    configCache = await loadAgentConfig();
+    await rebuildDeps();
   } catch (err) {
-    handleConfigError(err);
-    return; // o app já foi encerrado dentro de handleConfigError
+    if (!(err instanceof ConfigError)) {
+      throw err;
+    }
+    trayService.setState({ kind: 'config_error', reason: err.message });
+    trayService.displayConfigErrorBalloon(err.message);
   }
 
-  // 4. Cria o tray icon.
-  try {
-    createTray();
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    dialog.showErrorBox(
-      'Sprint Operator Agent — Erro ao iniciar',
-      `Não foi possível criar o ícone da tray:\n\n${message}`,
-    );
-    app.quit();
-    return;
-  }
-
-  // 5. Registra os handlers IPC.
   registerIpcHandlers();
 }
 
-/**
- * Registra os handlers IPC do Agent.
- *
- * W0: `ping` (smoke do bridge) e `getConfig` (campos seguros do config).
- * W1+ trará os handlers de overlay.
- */
-function registerIpcHandlers(): void {
-  ipcMain.handle('ping', () => 'pong');
+void bootstrap();
 
-  // Expõe ao renderer apenas os campos seguros do config — sem
-  // shared_path, polling_interval ou log_level (defense-in-depth).
-  ipcMain.handle('getConfig', () => {
-    if (configCache === null) {
-      throw new Error('Config não carregado');
-    }
-    return {
-      user_id: configCache.user_id,
-      user_nome_exibicao: configCache.user_nome_exibicao,
-      hostname: configCache.hostname,
-    };
-  });
-}
-
-/**
- * Trata erros do config loader: mostra um diálogo e encerra o app.
- *
- * Fail-fast — não há "modo degradado" (ADR-012). Um `ConfigError` rende
- * uma mensagem específica; qualquer outro erro cai no ramo genérico.
- */
-function handleConfigError(err: unknown): void {
-  if (err instanceof ConfigError) {
-    dialog.showErrorBox(
-      'Sprint Operator Agent — Config inválido',
-      `${err.message}\n\nCaminho do config:\n${getConfigPath()}`,
-    );
-  } else {
-    const message = err instanceof Error ? err.message : String(err);
-    dialog.showErrorBox(
-      'Sprint Operator Agent — Erro inesperado',
-      `Falha ao iniciar:\n\n${message}\n\nCaminho do config:\n${getConfigPath()}`,
-    );
-  }
-  app.quit();
-}
+// =============================================================================
+// Lifecycle hooks (tray-resident)
+// =============================================================================
 
 app.on('window-all-closed', () => {
   // Agent é tray-resident: NÃO encerra quando as janelas fecham.
-  // Subscrever a este evento já cancela o quit automático do Electron —
-  // basta não chamar app.quit() aqui. O overlay abre e fecha várias vezes
-  // ao dia; o app só sai via menu da tray ("Sair"). Ver ADR-011.
+  // Subscrever cancela o quit automático. Ver ADR-011 e G-013.
 });
 
-// Hardening: bloqueia navegação externa em qualquer webContents criado.
 app.on('web-contents-created', (_event, contents) => {
   contents.on('will-navigate', (event, url) => {
     if (IS_DEV && url.startsWith(DEV_SERVER_URL ?? '')) {
-      return; // permite navegação no dev server
+      return;
     }
     event.preventDefault();
   });
@@ -136,9 +335,5 @@ app.on('web-contents-created', (_event, contents) => {
 });
 
 app.on('second-instance', () => {
-  // O single instance lock garante que só a primária roda. Quando uma
-  // segunda instância tenta subir, este evento dispara aqui. W1+ vai
-  // focar o overlay ativo; em W0 não há janela, então nada a fazer.
+  // Single instance lock garante primária única.
 });
-
-void bootstrap();

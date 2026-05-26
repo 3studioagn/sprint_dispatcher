@@ -11,6 +11,109 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ### Added
 
+<!-- ↓↓↓ Sessão 16 (2026-05-26) — W1.C3 inteiro: Operator Agent MVP ↓↓↓ -->
+
+- **`sprint-operator-agent` — MVP funcional ponta-a-ponta** [BL-C3-003,
+  BL-C3-004, BL-C3-005, BL-C3-006, BL-C3-007, BL-C3-008, Sessão 16]:
+  - **`main/services/pollingService.ts`** — loop `setTimeout` recursivo
+    (não setInterval) consumindo `PendingStore.listPending({ userId })`.
+    Switch sobre `PendingEntry.kind` (invalid/cancel/sprint), filtro de
+    deadline passado (RN-11), dedup via `historyService.isAlreadyArchived`,
+    `DirectoryNotFoundError` tratado como benigno. Logger opcional (default
+    silent).
+  - **`main/services/queueService.ts`** — FIFO array + `Set<string>` paralelo
+    para dedup O(1) por `sprint_id|user_id`. EventEmitter composto com API
+    tipada (`onNextSprint`, `onQueueUpdated`) + unsubscribe. `nextSprint`
+    emit apenas em fila vazia → não-vazia (overlay já mostrando uma sprint
+    não troca via push; muda só `queueUpdated`).
+  - **`main/services/overlayService.ts`** — state machine
+    `hidden|showing|minimized` + timer `minimizeAfterMs` (default 30s) +
+    push IPC `sprint:incoming`/`queue:updated`/`overlay:minimize`. Métodos:
+    `showSprint`, `minimize`, `restoreCurrent` (reseta timer — D4),
+    `clearTimer`, `hide`, `destroy`. `onStateChange` event emitter para
+    subscribers externos.
+  - **`main/services/trayStateService.ts` + `trayService.ts`** —
+    `trayStateService` puro (computeTrayIconColor/Menu/Tooltip sobre
+    `TrayState` discriminada) + `trayService` integra Electron Tray
+    (boot/setState/balloon/aboutDialog). Estados: idle (cinza),
+    sprint_active(N) (amarelo), config_error (vermelho), loading.
+    **`Sair` ausente** no menu (RN-04 W1).
+  - **`main/services/historyService.ts`** — cache em memória de filenames
+    processados. `ensureFolder` cria `<userData>/historico/` no boot.
+    `archive(payload, filename, rawContent)` grava em
+    `<userData>/historico/YYYY-MM-DD/<filename>` com escrita atômica
+    (`.tmp` + `randomBytes(6).hex` + rename — G-017). `initializeFromDisk`
+    scan recursivo populando cache no boot (dedup pós-restart — D5).
+  - **`main/services/ackService.ts`** — `writeDisplayed(payload)` (não-throw,
+    log warn) + `writeAcknowledged(sprintId, userId)` (throw, re-lê via
+    listAcks para preservar `displayed_at` original). Fallback `now` se
+    listAcks falhar.
+  - **`main/handlers/handleAck.ts`** — orquestra ack final extraído do
+    `main/index.ts` (testabilidade). Valida peek match → `clearTimer` →
+    `writeAcknowledged` (throw) → `archive` (não-fatal) → `deletePending`
+    (não-fatal) → dequeue → `showSprint(next)` + `writeDisplayed(next)`
+    OU `overlay.hide()`.
+  - **`main/index.ts`** — composition root com **rebuildDeps fail-soft**
+    espelhando ADR-017. Boot 7-step ordenado: single-instance →
+    `app.whenReady` → tray loading → `try rebuildDeps` → config_error
+    fallback → IPC handlers. 3 IPC handlers tipados: `config:get`,
+    `sprint:request-current` (pull pattern), `sprint:acknowledge`.
+  - **`main/config.ts`** REWRITE — fail-soft com 3 ConfigError tipados
+    (`NotFound`/`Invalid`/`Inaccessible`) + campo extra-schema
+    `minimize_after_seconds` (1-300s, default 30) stripado antes de
+    `safeParseAgentConfig`.
+- **Renderer dark theme + accent yellow** (espelha ADR-018) [BL-C3-004,
+  Sessão 16 Gate 4]:
+  - Stores Zustand (`useCurrentSprintStore`, `useQueueStore` com
+    selectExtraInQueue), hooks (`useIncomingSprint` pull+push,
+    `useQueueUpdated`), 5 components (Overlay, SprintCard com
+    **re-sanitização defensiva** via `sanitizeBodyHtml`, AckButton
+    funcional com loading + erro inline + key remount, DeadlineBadge
+    estático, QueueIndicator condicional).
+  - `Api` interface nested (config/sprint/queue/overlay) com
+    property-with-arrow (ADR-017) — evita `unbound-method` em testes.
+- **Dev fixtures + SETUP** [Sessão 16 Gate 8]:
+  - `dev-fixtures/agent-config.example.json` (template com `_comment`
+    removível + campo W1-extra `minimize_after_seconds`).
+  - `apps/operator-agent/SETUP.md` (~530 linhas, 9 seções: dev,
+    LAN 2 PCs, build via GitHub Actions + deployment passo-a-passo, QA
+    checklist, troubleshooting).
+- **`.github/workflows/build-agent.yml`** [Sessão 16 Gate 8.5] —
+  workflow CI espelhado de `build-leader.yml`. Runner windows-latest, gera
+  portable + NSIS installer via `pnpm --filter sprint-operator-agent run make`.
+  Triggers paths-based + manual dispatch. Necessário pelo ESET local
+  (G-009).
+- **ADR-019** em `DECISIONS.md` — arquitetura W1.C3 inteiro. State machine
+  do overlay; pull pattern pra resolver mount race; boot fail-soft
+  superseding ADR-012 W0; handleAck extraído pra testabilidade;
+  re-sanitização defensiva; dedup pós-restart; campo extra-schema; mock
+  strategy (BrowserWindow via `vi.hoisted`, OverlayService inteiro
+  mockado em integration).
+- **CLAUDE.md §4 ganhou nova subseção** "Estrutura interna do Operator
+  Agent (W1.C3)" + §12 **G-021** (BOM no PowerShell 5.1 — `Set-Content
+  -Encoding utf8` adiciona `EF BB BF` que quebra `JSON.parse`; fix:
+  `[System.IO.File]::WriteAllText` com `UTF8Encoding($false)`).
+- **README.md** status C3 atualizado para "✅ W1 MVP".
+- **190 testes** em 17 arquivos no `sprint-operator-agent` (era 15 no W0).
+  Cobertura **97.76% lines / 91.47% branches / 95.4% funcs**. Inclui:
+  - 4 XSS adversariais no `SprintCard.test` (script, iframe, onclick,
+    atributos não-listados).
+  - 24 testes do `overlayService.test` (state machine, timer, IPC,
+    onStateChange) com mock `BrowserWindow` via `vi.hoisted()`.
+  - 4 testes integrados em `integration.test.ts` (fluxo E2E real com
+    `MemoryFilesystemAdapter` + OverlayService mockado): 2 sprints
+    pre-seeded → poll → ack → ack → queue vazia + verificações de
+    filesystem state (4 writeAck, 2 archives, 2 deletePending,
+    clearTimer 2×).
+- **Migrate dev configs para o servidor SMB real** — Sessão 16 Gate 8.5:
+  `%APPDATA%\sprint-leader\config.json` e
+  `%APPDATA%\sprint-operator-agent\config.json` apontam para
+  `\\srv-alpha\TEMP\Metas_3Studio` (Renan + Mario + Otavio + Diemerson +
+  André em `operators.json` real no UNC). Leader bootou OK com UNC; smoke
+  validado.
+
+<!-- ↑↑↑ Sessão 16 ↑↑↑ -->
+
 <!-- ↓↓↓ Sessão 15 (2026-05-26) — W1.C2 parte 2: Leader MVP + redesign Renan ↓↓↓ -->
 
 - **`@apps/leader` — main process completo** (`main/config.ts`,

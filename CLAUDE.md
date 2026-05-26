@@ -353,6 +353,119 @@ packages/fs-adapter/src/
   Paridade Node↔Memory garantida pela contract suite W0; testes do domain layer
   usam Memory direto (sem tmpdir, sem flakiness).
 
+### Estrutura interna do Operator Agent (W1.C3 — Sessão 16)
+
+A app `sprint-operator-agent` entregou todos os BLs C3 (003-008) em uma única
+sessão (16). Arquitetura tri-camada Electron + state machine explícita no
+overlay + orquestração de ack centralizada em `main/handlers/handleAck.ts`.
+Pré-requisitos: contracts (W0/W1) + fs-adapter domain layer (W1).
+
+```
+apps/operator-agent/src/
+├── shared/                              # tipos main↔renderer
+│   ├── ipc-types.ts                     # Api nested (config/sprint/queue/overlay)
+│   ├── types/queue.ts                   # QueueItem + QueueSnapshot
+│   └── index.ts                         # barrel
+│
+├── main/
+│   ├── index.ts                         # composition root + rebuildDeps + boot 7-step
+│   ├── config.ts                        # loadConfig fail-soft + 3 ConfigError
+│   ├── config.test.ts
+│   ├── single-instance.ts               # W0 mantido
+│   ├── single-instance.test.ts
+│   ├── handlers/
+│   │   └── handleAck.ts                 # orquestração ack — extraído para testabilidade
+│   └── services/
+│       ├── index.ts                     # barrel
+│       ├── trayStateService.ts          # puro — computeTrayIconColor/Menu/Tooltip
+│       ├── trayStateService.test.ts
+│       ├── trayService.ts               # integra Electron Tray (boot/setState/balloon)
+│       ├── queueService.ts              # FIFO + dedup + EventEmitter
+│       ├── queueService.test.ts
+│       ├── historyService.ts            # cache + ensureFolder + archive + initializeFromDisk
+│       ├── historyService.test.ts
+│       ├── pollingService.ts            # setTimeout recursivo (não setInterval)
+│       ├── pollingService.test.ts
+│       ├── overlayService.ts            # state machine + timer + IPC push
+│       ├── overlayService.test.ts
+│       ├── ackService.ts                # writeDisplayed (não-throw) + writeAcknowledged (throw)
+│       ├── ackService.test.ts
+│       └── integration.test.ts          # E2E mock OverlayService + real domain
+│
+├── preload/
+│   └── index.ts                         # contextBridge expõe window.api = Api
+│
+└── renderer/
+    ├── App.tsx                          # orquestra hooks + <Overlay />
+    ├── env.d.ts                         # Window['api']: Api
+    ├── main.tsx                         # entry React + StrictMode
+    ├── test-setup.ts                    # window.api mock global + cleanup RTL
+    ├── styles/global.css                # dark theme + accent yellow + font-size-meta 160px
+    ├── __test-fixtures__/sprint.ts      # makePayload helper
+    ├── stores/                          # useCurrentSprintStore + useQueueStore + barrel
+    ├── hooks/                           # useIncomingSprint (pull+push) + useQueueUpdated
+    └── components/
+        ├── Overlay/                     # grid 3-rows (header + sprint + footer)
+        ├── SprintCard/                  # h1 + body sanitizado + meta gigante
+        ├── AckButton/                   # functional + loading + erro inline
+        ├── DeadlineBadge/               # HH:MM estático (countdown ao vivo é W2)
+        └── QueueIndicator/              # "+N aguardando" condicional
+```
+
+**Convenções específicas do Agent (W1.C3):**
+
+- **Boot 7-step** ordenado em `main/index.ts`: single-instance → `app.whenReady`
+  → `trayService.boot('loading')` → try `rebuildDeps()` → catch ConfigError vira
+  `config_error` + balloon → registerIpcHandlers → `pollingService.start()`
+  interno do rebuildDeps.
+- **`rebuildDeps()` instantiate-once** — pattern do Leader (ADR-017). Services
+  criados no primeiro sucesso; chamadas subsequentes (recovery) apenas validam
+  config e atualizam tray. Limitação conhecida: mudança de `shared_path` exige
+  restart do app.
+- **Fail-soft em vez de fail-fast** (D3 da sessão) — supersede ADR-012 W0 que
+  terminava o app. Agora tray vermelho + balloon, polling NÃO inicia, processo
+  persiste. Recovery via IPC `config:get` quando renderer reabrir.
+- **State machine do overlay** — `hidden | showing | minimized` com transitions
+  documentadas no `overlayService`. Timer resetado em
+  `showSprint`/`restoreCurrent`; cancelado em `minimize`/`hide`/
+  `clearTimer`/`destroy`. `notifyStateChange` via EventEmitter composto (não
+  estendido).
+- **Pull pattern `sprint:request-current`** — renderer pulla currentItem no
+  mount; resolve race entre `webContents.send` e useEffect register. Push
+  `sprint:incoming` cobre updates subsequentes (ack → próxima).
+- **Re-sanitização defensiva no renderer** (CLAUDE.md §7.9) — `SprintCard` chama
+  `sanitizeBodyHtml` mesmo sabendo que Leader já sanitizou via
+  `PendingStore.writePendingSprint`. Idempotência (ADR-014) garante segundo
+  passe não muta o output. 4 XSS adversariais no test confirmam.
+- **Campo `minimize_after_seconds` extra-schema** — `@sprint/contracts` é
+  imutável; `loadConfig` extrai via spread+rest ANTES de `safeParseAgentConfig`.
+  Validação 1-300s local; default 30s.
+- **Dedup pós-restart via cache** (D5 da sessão) —
+  `historyService.initializeFromDisk` faz `fs.readdir` recursivo no
+  `<userData>/historico/<dia>/*.json` no boot. Polling consulta
+  `isAlreadyArchived(filename)` antes de enfileirar.
+- **Ack em 2 momentos** (BL-C3-007) — `writeDisplayed` na exibição (não-throw,
+  log warn) + `writeAcknowledged` no "Recebi" (throw — operador precisa saber).
+  `writeAcknowledged` re-lê via `listAcks` para preservar `displayed_at`
+  original; fallback `now`.
+- **`handleAck` extraído em `main/handlers/`** — testabilidade. `main/index.ts`
+  faz `void bootstrap()` no top-level, importar daria side effect. Função pura
+  recebe `HandleAckDeps`.
+- **Polling com `setTimeout` recursivo, não `setInterval`** — evita overlap se
+  ciclo demorar. `DirectoryNotFoundError` em `pending/` é benigno (catch
+  específico, não loga error).
+- **`OverlayService` mockado em testes** — `BrowserWindow` real exige Electron
+  runtime + display. Para `overlayService.test.ts`, mock via `vi.hoisted()`
+  (G-015 atualizado). Para integration test, OverlayService inteiro é mockado.
+- **`now: () => Date` injetável** em ackService + historyService +
+  pollingService — integration test determinístico sem `vi.useFakeTimers` (que
+  dá race com `void writeDisplayed` microtasks).
+- **Tray "Sair" oculto** (RN-04 W1) — menu tem "Mostrar sprint atual" +
+  "Histórico local" + "Sobre". Fortificação com senha admin em W3.
+- **Workflow CI `build-agent.yml`** espelhando `build-leader.yml` — runner
+  windows-latest, `pnpm --filter ... run make`, upload-artifact. Build local
+  falha pelo ESET (G-009).
+
 ---
 
 ## 5. Componentes
@@ -1086,6 +1199,33 @@ Descobertas durante o desenvolvimento que economizam tempo da próxima sessão.
 - **Descoberto em:** Sessão 15 (2026-05-26), Gate 3 do W1.C2 parte 2 — primeiro
   consumer real de `sanitizeBodyHtml` no main process do Leader (via
   `DispatchService` → `PendingStore` → `sanitizeBodyHtml`).
+
+### G-021: `Set-Content -Encoding utf8` no PowerShell 5.1 adiciona BOM que quebra `JSON.parse`
+
+- **Sintoma:** `loadConfig` falha com `ConfigInvalidError` mesmo após gravar um
+  `config.json` com schema correto. Mensagem específica:
+  `Unexpected token '﻿', "﻿{\n  ..."` (note o `﻿` invisível antes do `{`).
+- **Causa:** Windows PowerShell 5.1 grava arquivos UTF-8 **com BOM** (`EF BB BF`
+  prefix de 3 bytes) por default em `Set-Content -Encoding utf8` e
+  `Out-File -Encoding utf8`. O `JSON.parse` do V8 trata BOM como caractere
+  inválido na primeira posição. O parser Zod nunca chega a ser chamado.
+- **Solução:**
+  ```powershell
+  [System.IO.File]::WriteAllText($path, $content, [System.Text.UTF8Encoding]::new($false))
+  ```
+  O `$false` no construtor do `UTF8Encoding` desabilita o BOM. Resultado: bytes
+  iniciais do arquivo viram `7B 0A 20` (`{`, `\n`, ` `) em vez de
+  `EF BB BF 7B 0A 20`.
+- **Alternativa em Notepad:** "Save As" → escolher "UTF-8" (não "UTF-8 with
+  BOM"). PowerShell 7+ resolveu — `Set-Content -Encoding utf8` é sem BOM por
+  default.
+- **Como verificar:** `[System.IO.File]::ReadAllBytes($path)[0..2]` deve
+  retornar `7B 0A 20` (ou os primeiros chars do JSON), NÃO `EF BB BF`.
+- **Descoberto em:** Sessão 16 (2026-05-26), Gate 4 do W1.C3 — primeiro smoke
+  real do `loadConfig` do Agent com config gravado via PowerShell. O config.json
+  existia, schema parecia OK no Notepad (BOM é invisível), mas `JSON.parse`
+  rejeitava. Solução documentada em `apps/operator-agent/SETUP.md` §2.3 e §6.6.3
+  — operadores da fábrica vão cair nesse buraco se editarem via `Set-Content`.
 
 ### Débitos técnicos pendentes
 

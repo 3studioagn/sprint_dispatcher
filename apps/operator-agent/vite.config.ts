@@ -35,7 +35,13 @@ export default defineConfig(({ command }) => ({
             sourcemap: command === 'serve',
             outDir: 'dist-electron/main',
             rollupOptions: {
-              external: ['electron'],
+              // jsdom + canvas externalizados: o sanitizeBodyHtml de @sprint/contracts
+              // carrega isomorphic-dompurify → jsdom transitivamente. Bundlar jsdom
+              // no main injeta um stub de `canvas` que lança em runtime de module-load.
+              // Em produção, node_modules é incluído pelo electron-builder, então
+              // `require('jsdom')` em runtime tem acesso ao pacote. Mesma decisão do
+              // Leader (G-020, ADR-017).
+              external: ['electron', 'jsdom', 'canvas'],
             },
           },
         },
@@ -51,7 +57,13 @@ export default defineConfig(({ command }) => ({
             sourcemap: command === 'serve' ? 'inline' : false,
             outDir: 'dist-electron/preload',
             rollupOptions: {
-              external: ['electron'],
+              // jsdom + canvas externalizados: o sanitizeBodyHtml de @sprint/contracts
+              // carrega isomorphic-dompurify → jsdom transitivamente. Bundlar jsdom
+              // no main injeta um stub de `canvas` que lança em runtime de module-load.
+              // Em produção, node_modules é incluído pelo electron-builder, então
+              // `require('jsdom')` em runtime tem acesso ao pacote. Mesma decisão do
+              // Leader (G-020, ADR-017).
+              external: ['electron', 'jsdom', 'canvas'],
             },
           },
         },
