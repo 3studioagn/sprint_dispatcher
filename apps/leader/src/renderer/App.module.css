@@ -5,6 +5,7 @@
   width: 100%;
   background: var(--color-bg);
   padding: 60px;
+  gap: var(--space-8);
 }
 
 .main {
