@@ -26,7 +26,7 @@
 import path from 'node:path';
 
 import { NodeFilesystemAdapter, AckStore, PendingStore } from '@sprint/fs-adapter';
-import { app, ipcMain, shell } from 'electron';
+import { app, dialog, ipcMain, shell } from 'electron';
 
 import type {
   AcknowledgeSprintRequest,
@@ -51,6 +51,44 @@ import { acquireSingleInstanceLock } from './single-instance';
 
 const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
 const IS_DEV = Boolean(DEV_SERVER_URL);
+
+// =============================================================================
+// Crash visibility — uncaughtException global (G-023)
+// =============================================================================
+//
+// Sem este handler, qualquer throw NÃO capturado durante boot (ex: Tray icon
+// ausente do asar, BrowserWindow falhando antes do tray, etc.) mata o processo
+// silenciosamente em prod — sem console visível, sem balloon, sem feedback.
+// O operador da fábrica abre o atalho e "nada acontece".
+//
+// dialog.showErrorBox é síncrono e funciona mesmo antes do app.whenReady em
+// muitas plataformas; é a única forma garantida de o usuário saber que houve
+// um erro fatal. Após exibir, encerramos com exit code 1 (não app.quit, que
+// passa pelo lifecycle window-all-closed que cancelaria o quit).
+
+process.on('uncaughtException', (err: Error) => {
+  const message = `${err.message}\n\n${err.stack ?? '(sem stack)'}`;
+  // showErrorBox não exige whenReady; é seguro em qualquer momento do boot.
+  try {
+    dialog.showErrorBox('Sprint Operator Agent — Erro fatal', message);
+  } catch {
+    // Última linha de defesa: console.error ao menos persiste em log do
+    // electron-builder quando inicia o app via "Run from console".
+    console.error('[fatal]', err);
+  }
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason: unknown) => {
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  const message = `Promise rejeitada sem catch: ${err.message}\n\n${err.stack ?? '(sem stack)'}`;
+  try {
+    dialog.showErrorBox('Sprint Operator Agent — Erro fatal', message);
+  } catch {
+    console.error('[fatal] unhandledRejection', err);
+  }
+  process.exit(1);
+});
 
 // =============================================================================
 // Estado do processo

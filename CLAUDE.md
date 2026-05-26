@@ -1265,6 +1265,52 @@ Descobertas durante o desenvolvimento que economizam tempo da próxima sessão.
   PC do Otávio — ConfigErrorScreen mostrou `sprint-leader\` em vez do
   `Sprint Leader\` documentado no SETUP.md.
 
+### G-023: `electron-builder.yml` com `files` explícito EXCLUI `build/` do asar — Tray icon ausente mata boot silencioso
+
+- **Sintoma:** Operator Agent instalado em PC de produção (`.exe` gerado via
+  Actions, instalado limpo via NSIS) abre e **nada acontece** — sem janela, sem
+  ícone tray na bandeja, sem balloon de erro, sem dialog. Apenas o processo
+  morre em background. Em dev (`pnpm dev`) funciona normalmente.
+- **Causa:** `trayService.ts` resolve o ícone via
+  `path.join(__dirname, '../../build/tray.ico')`. Em dev `__dirname` =
+  `apps/operator-agent/dist-electron/main/` → resolve para
+  `apps/operator-agent/build/tray.ico` ✓. Em prod empacotada, `__dirname` =
+  `resources/app.asar/dist-electron/main/` → resolve para
+  `resources/app.asar/build/tray.ico` que **não existe** porque o
+  `electron-builder.yml` declara `files` explicitamente (`dist/**/*`,
+  `dist-electron/**/*`, `package.json`, `node_modules/**/*`) e o default `**/*`
+  é **completamente substituído** — `build/` fica de fora. `new Tray()` joga
+  `Error: Failed to load image from path '...'`, throw escapa do bootstrap, mata
+  o processo. Sem `uncaughtException` handler global, é invisível pro operador.
+- **Por que `directories.buildResources: build` engana:** o `buildResources` do
+  electron-builder é a pasta de ícones do INSTALADOR (NSIS, .exe icon,
+  background do DMG) — **NÃO** vai pro asar. Pra arquivo ser acessível em
+  runtime via `__dirname + '../../build/X'`, ele precisa estar no `files` do
+  asar OU em `extraResources` (fora do asar, ao lado dele).
+- **Solução:** adicionar `'build/**/*'` ao array `files` do
+  `electron-builder.yml`. Aplica apenas ao Agent (Leader não tem tray em W1).
+  Replicar no Leader se ele algum dia precisar de ícones em runtime.
+  ```yaml
+  files:
+    - 'dist/**/*'
+    - 'dist-electron/**/*'
+    - 'build/**/*' # tray.ico — sem isso, new Tray() crash silencioso
+    - 'package.json'
+    - 'node_modules/**/*'
+  ```
+- **Defesa em profundidade adicionada na mesma sessão:**
+  `process.on('uncaughtException')` + `dialog.showErrorBox` no topo de
+  `main/index.ts`. Garante que qualquer throw não-capturado no boot vire popup
+  visível ao operador da fábrica — não morre silenciosamente nunca mais. Vale
+  também pra `unhandledRejection`.
+- **Como detectar em CI:** smoke test que extrai `.asar` gerado e verifica
+  presença de `build/tray.ico` (e qualquer outro asset esperado por
+  `__dirname + '../../...'` resolves). Débito pra W3 polish.
+- **Descoberto em:** Sessão 17 (2026-05-26), pós-deploy do Agent no PC do Otávio
+  — Renan reportou "Agent não fica em segundo plano e não mostra overlay".
+  Auditoria do `trayService.ts:57` + `electron-builder.yml:files` expôs a
+  inconsistência.
+
 ### Débitos técnicos pendentes
 
 Itens conhecidos que **deveriam** existir mas dependem de pré-requisito ainda

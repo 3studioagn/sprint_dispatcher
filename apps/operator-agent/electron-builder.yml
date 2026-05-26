@@ -14,9 +14,15 @@ directories:
 # vite.config (G-020) — eles ficam em node_modules em runtime. Sem este pattern
 # o app crasha com "Cannot find module 'tough-cookie'" (subdep do jsdom).
 # Electron-builder aplica filtro automático de production deps via package.json.
+#
+# build/**/* é necessário porque trayService.ts resolve tray.ico via
+# `path.join(__dirname, '../../build/tray.ico')`. Em prod empacotada, isso
+# resolve para resources/app.asar/build/tray.ico — se build/ não estiver no
+# asar, new Tray() crasha silenciosamente e o boot inteiro morre (G-023).
 files:
   - 'dist/**/*'
   - 'dist-electron/**/*'
+  - 'build/**/*'
   - 'package.json'
   - 'node_modules/**/*'
   - '!**/.{eslintrc,prettierrc}*'
