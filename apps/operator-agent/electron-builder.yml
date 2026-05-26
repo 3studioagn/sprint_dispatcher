@@ -10,16 +10,26 @@ directories:
   output: release
 
 # O que entra no pacote final
+# node_modules/**/* é necessário porque jsdom/canvas são externalizados no
+# vite.config (G-020) — eles ficam em node_modules em runtime. Sem este pattern
+# o app crasha com "Cannot find module 'tough-cookie'" (subdep do jsdom).
+# Electron-builder aplica filtro automático de production deps via package.json.
 files:
   - 'dist/**/*'
   - 'dist-electron/**/*'
   - 'package.json'
+  - 'node_modules/**/*'
   - '!**/.{eslintrc,prettierrc}*'
   - '!**/tsconfig*.json'
   - '!**/vite.config.*'
   - '!**/vitest.config.*'
   - '!**/*.{ts,tsx,map}'
   - '!**/*.test.*'
+  - '!**/*.md'
+  - '!**/CHANGELOG.md'
+  - '!**/LICENSE*'
+  - '!**/.bin'
+  - '!**/.cache'
 
 # Compilação do main process (e preload) já feita pelo Vite — não recompile
 asar: true

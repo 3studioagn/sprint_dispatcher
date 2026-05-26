@@ -1194,11 +1194,22 @@ Descobertas durante o desenvolvimento que economizam tempo da próxima sessão.
   log de warning). Bundle do main fica ~21 kB menor (era 116 kB com jsdom
   inlined + stub canvas, virou 95 kB).
 
-- **Em produção (electron-builder):** `node_modules` é incluído automaticamente
-  — `require('jsdom')` em runtime tem acesso ao pacote sem mudanças adicionais.
+- **Em produção (electron-builder):** `node_modules` é incluído NO `.asar` — mas
+  exige **2 ajustes adicionais** descobertos em produção (Sessão 16 pós-deploy):
+  1. `.npmrc` raiz com `shamefully-hoist=true` — pnpm default usa symlinks em
+     `.pnpm/` que electron-builder não navega; sem hoist, subdeps de `jsdom`
+     (e.g. `tough-cookie`) ficam fora do `.asar` e o app crasha em runtime com
+     `Cannot find module 'tough-cookie'`.
+  2. `electron-builder.yml` precisa de `'node_modules/**/*'` explícito no
+     `files` — o default `**/*` é substituído quando `files` é especificado,
+     então `node_modules/` precisa ser listado de novo (electron-builder aplica
+     filtro automático de production deps via package.json).
 - **Descoberto em:** Sessão 15 (2026-05-26), Gate 3 do W1.C2 parte 2 — primeiro
   consumer real de `sanitizeBodyHtml` no main process do Leader (via
-  `DispatchService` → `PendingStore` → `sanitizeBodyHtml`).
+  `DispatchService` → `PendingStore` → `sanitizeBodyHtml`). Os 2 ajustes de
+  produção (shamefully-hoist + node_modules em files) só apareceram na Sessão 16
+  ao tentar instalar o `.exe` empacotado num PC remoto que não tinha o
+  `node_modules` global de dev.
 
 ### G-021: `Set-Content -Encoding utf8` no PowerShell 5.1 adiciona BOM que quebra `JSON.parse`
 
