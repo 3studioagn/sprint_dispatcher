@@ -96,6 +96,8 @@ entradas em ordem cronológica crescente — mais recente no fim.
   do Operator Agent (W1.C3 inteiro)
 - [ADR-020](#adr-020-sprintlogger-com-pino-wrapper-enxuto-w1c6) —
   `@sprint/logger` com Pino — wrapper enxuto (W1.C6)
+- [ADR-021](#adr-021-expansao-da-suite-de-testes-para-production-grade-na-w1c8)
+  — Expansão da suíte de testes para production-grade na W1.C8
 
 ---
 
@@ -2087,3 +2089,156 @@ para flush.
 - `packages/logger/README.md`
 - [Pino docs](https://getpino.io)
 - [`pino-pretty` docs](https://github.com/pinojs/pino-pretty)
+
+---
+
+## ADR-021: Expansão da suíte de testes para production-grade na W1.C8
+
+- **Status:** Accepted
+- **Data:** 2026-05-27
+- **Decisores:** Renan (3Studio)
+
+### Contexto
+
+BL-C8-002 e BL-C8-003 (W1, sessão final da Wave 1) ampliam as suítes de testes
+de `@sprint/contracts` e `@sprint/fs-adapter` para qualidade production-grade
+antes do fechamento da W1. Cobertura inicial já estava alta (contracts
+100/100/100/100 e fs-adapter 99.61/98.03/100/99.61 lines/branches/funcs/stmts),
+mas faltavam três classes de teste insubstituíveis em manutenção futura:
+
+1. **Property-based testing** para invariantes universais (ex.:
+   `sanitizeBodyHtml` nunca produz `<script>` para qualquer string).
+2. **Curadoria adversarial** de vetores XSS (mutation, encoding, polyglot,
+   unicode, combining marks) — defesa documentada e expansível.
+3. **Paridade Node↔Memory** no domain layer (não só nos primitivos do port) e
+   **roundtrip cross-package** via property-based.
+
+Sem essas camadas, regressões em sanitização, race conditions ou divergência
+entre adapters só apareceriam em produção.
+
+### Decisão
+
+1. **`fast-check@^3.20.0` como devDependency** em ambos pacotes. Property-based
+   testing é insubstituível para invariantes universais — `numRuns: 50` por
+   padrão para CI rápido; 100 quando o cenário tolera (filenames roundtrip).
+2. **Curadoria de vetores XSS** em
+   `packages/contracts/src/__helpers__/ xssVectors.ts` — 21 vetores em 5
+   categorias com `reason` documentando o ataque defendido. Adicionar vetor novo
+   é trivial; remover exige passar guard rail de contagem mínima por categoria.
+3. **Arbitraries customizados** em
+   `packages/<pkg>/src/__helpers__/ arbitraries.ts` (excluídos da medição de
+   cobertura). `@sprint/contracts` tem o conjunto completo (ulid, userId,
+   isoDatetime, semver, sprintPayload, sprintAck, sprintCancel, agentConfig);
+   `@sprint/fs-adapter` re-cria localmente o que precisa (posixPath, ulid,
+   userId — cópia consciente, ver nota arquitetural).
+4. **Nota arquitetural — `@sprint/contracts/__helpers__/*` não exposto via
+   subpath exports.** O `package.json` do contracts declara apenas `"."`. Para
+   reutilizar arbitraries em fs-adapter, opções eram: (a) recriar localmente —
+   escolhida; (b) adicionar subpath `"./src/__helpers__/*"` aos exports —
+   rejeitada porque é modificação de production API (red line §10 da sessão);
+   (c) path relativo cross-package — quebra com mudanças de estrutura.
+5. **Thresholds elevados em `vitest.config.ts`** com folga generosa contra os
+   números reais:
+   - `@sprint/contracts`: **98/95/98/98** (real 100/100/100/100).
+   - `@sprint/fs-adapter`: **95/95/95/95** (real 100/99.53/100/100).
+
+   Build falha em regressão. Folga absorve flutuação razoável; quebra real exige
+   investigação.
+
+6. **Paridade cross-adapter na matriz `describeParity(label, factory)`** em
+   `integration/parity.test.ts`. Mesma sequência roda contra Node (tmp dir real)
+   e Memory (in-memory). Diferenças intencionais (G-019: Memory perde diretório
+   quando fica vazio) tratadas com `try/catch` aceitando ambos os outcomes.
+7. **Roundtrip cross-package em `integration/roundtrip.test.ts`** com
+   `safeSprintPayloadArbitrary` — body limitado a conteúdo que sobrevive
+   `sanitizeBodyHtml` byte-a-byte (texto plain sem `<`/`>`/`&`, ou whitelist
+   HTML pré-formado). Sem isso, roundtrip de body falha porque PendingStore
+   sanitiza antes de gravar (CLAUDE §7.9, ADR-014).
+8. **Adversarial tests em arquivos `*.adversarial.test.ts`** ao lado dos
+   `*.test.ts` originais — separa cenários enumeráveis (rápidos) de cenários
+   adversariais (race conditions, concorrência larga escala, mocks de
+   FileHandle).
+9. **`it.runIf(os.platform() !== 'win32')` para Linux/macOS only** — permission
+   revoked (chmod 0o000) e renames concorrentes ao mesmo path (Windows EPERM por
+   limitação do SO, não bug — issue conhecido nodejs/node#30075).
+10. **Cobertura defensiva via `vi.mock`** — node-adapter.ts lines 50-51 e 63-64
+    (catches de `handle.close()` em path de erro e em finally do path de
+    sucesso) atingidas mockando `node:fs/promises.open` para retornar
+    `FileHandle` com `close()` que rejeita. Subiu de 97.74% → 100% lines.
+
+### Política de bug-discovery (aceita para a sessão)
+
+- **Bug menor** (typo, off-by-one cosmético) → documentar no SESSION_LOG +
+  `test.fails`/`test.skip` com TODO. Não corrigir durante a sessão de testes.
+- **Bug crítico** (sanitizer deixa XSS passar, write não-atômico) → parar
+  sessão, reportar cenário reproduzível, aguardar decisão.
+- **Comportamento documentado mas surpreendente** → manter, adicionar teste
+  explícito + ADR documentando a decisão.
+
+**Bugs descobertos nesta sessão (categoria "surpresa cosmética"):**
+
+- Polyglot PortSwigger preserva `javascript:` raw como texto (não em href — não
+  executa). Heurística overzealous corrigida: vetor adaptado removendo o prefixo
+  cosmético, essência do polyglot preservada.
+- Windows EPERM em renames concorrentes → limite real do SO, `it.runIf` no
+  Linux/macOS.
+- `.tmp` files visíveis em `listDir` raw durante write → atomicidade é no
+  rename, não na invisibilidade; asserção corrigida para estado final.
+
+### Alternativas consideradas
+
+1. **Stryker (mutation testing).** Valor não justifica setup nesta fase —
+   property-based já cobre invariantes universais. Reavaliar em W4.
+2. **`@sprint/contracts` adicionar subpath exports `"./src/__helpers__/*"`.**
+   Mais limpo (single source of truth), mas é mudança de production API.
+   Rejeitado por red line §10. Cópia local em fs-adapter é o trade-off aceito.
+3. **Property-based com `numRuns: 200+`.** Mais cobertura empírica, mas CI
+   ficaria 4× mais lento. `numRuns: 50` é o balanço entre confiança e tempo.
+   Aumentar pontualmente em testes especialmente críticos.
+4. **Modificar `MemoryFilesystemAdapter` para incluir `injectFailure`,
+   `setLatencyMs`, `seedRawInvalid`** (mencionados no §6.2 do prompt original).
+   Rejeitado — `MemoryFilesystemAdapter` é production API exportada pelo barrel;
+   adicionar features de teste lá viola red line §10. Cenários de failure
+   injection são cobertos via `vi.spyOn` nos métodos do adapter instanciado, sem
+   mudança de API.
+
+### Consequências
+
+**Aceitas:**
+
+- `@sprint/contracts` cobertura **100/100/100/100** (era 100/100/100/100 —
+  mantida, mas com 87 testes novos exercitando invariantes que estavam apenas
+  implicitamente cobertos).
+- `@sprint/fs-adapter` cobertura **100/99.53/100/100** lines/branches/funcs/
+  stmts (era 99.61/98.03/100/99.61 — subiu node-adapter.ts de 97.74% para 100%
+  lines).
+- 230 → 317 testes em contracts (+87); 235 → 294 testes em fs-adapter (+59).
+- Build falha automaticamente em regressão de cobertura (thresholds
+  configurados).
+- Próximos consumers (W2/W3) podem confiar no comportamento documentado:
+  paridade Node↔Memory garantida, sanitização end-to-end exercitada,
+  property-based cobrindo invariantes universais.
+- Wave 1 oficialmente fechada com qualidade de produção.
+
+**Trade-offs:**
+
+- Suíte total demora ~25s (era ~3s) — overhead vem de inputs grandes (10MB no
+  sanitizer, 1900 chars no body roundtrip) e property-based runs. Aceitável para
+  CI.
+- `fast-check` adiciona ~1MB de devDeps em cada pacote. Aceitável.
+- Cópia local de `ulidArbitrary`/`userIdArbitrary` em fs-adapter — quando
+  contracts adicionar novos arbitraries (W2+), fs-adapter precisará re-copiar se
+  quiser. Comentário inline em `arbitraries.ts` documenta isso.
+
+### Referências
+
+- BL-C8-002 e BL-C8-003 (esta sessão, sessão 18 — fechamento da W1)
+- BL-C8-004 (Playwright E2E — W3); BL-C8-006 (Husky pre-commit — W3); BL-C8-007
+  (GitHub Actions CI — W4) — fora do escopo
+- ADR-014 (sanitização) — base para `xssVectors` curados
+- ADR-013 (port-and-adapter) — paridade Node↔Memory na matriz
+- CLAUDE.md §7.7.1 (coverage thresholds — tabela atualizada)
+- CLAUDE.md §12 G-022 será adicionado: Windows EPERM em renames concorrentes
+- `packages/contracts/src/__helpers__/{arbitraries,xssVectors}.ts`
+- `packages/fs-adapter/src/{__helpers__/{arbitraries,tmpFixtures},integration/{parity,roundtrip}}.ts`
+- [fast-check docs](https://fast-check.dev)

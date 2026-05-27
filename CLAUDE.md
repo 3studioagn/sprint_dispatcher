@@ -575,13 +575,13 @@ Backlog (perguntar a Renan se necessário).
 
 ## 6. Waves de Desenvolvimento
 
-| Wave | Nome                     | Duração est. | Status     |
-| ---- | ------------------------ | ------------ | ---------- |
-| W0   | Foundation               | 1 semana     | 🔄 atual   |
-| W1   | MVP Core                 | 2 semanas    | ⏸️ próxima |
-| W2   | Refinement               | 1 semana     | ⏸️         |
-| W3   | Production Readiness     | 1 semana     | ⏸️         |
-| W4   | Hardening & Future-proof | 1 semana     | ⏸️         |
+| Wave | Nome                     | Duração est. | Status       |
+| ---- | ------------------------ | ------------ | ------------ |
+| W0   | Foundation               | 1 semana     | ✅ concluída |
+| W1   | MVP Core                 | 2 semanas    | ✅ concluída |
+| W2   | Refinement               | 1 semana     | ⏸️ próxima   |
+| W3   | Production Readiness     | 1 semana     | ⏸️           |
+| W4   | Hardening & Future-proof | 1 semana     | ⏸️           |
 
 > **Atualize esta tabela ao fim de cada wave.**
 
@@ -672,14 +672,21 @@ Thresholds materializados nos `vitest.config.ts` de cada workspace. `pnpm test`
 
 | Package                        | Lines | Functions | Branches | Statements |
 | ------------------------------ | ----: | --------: | -------: | ---------: |
-| `@sprint/contracts`            |   95% |       95% |      90% |        95% |
-| `@sprint/fs-adapter`           |   95% |       95% |      90% |        95% |
+| `@sprint/contracts`            |   98% |       98% |      95% |        98% |
+| `@sprint/fs-adapter`           |   95% |       95% |      95% |        95% |
+| `@sprint/logger`               |   95% |       95% |      90% |        95% |
 | `sprint-operator-agent` (main) |   90% |       90% |      85% |        90% |
 | `sprint-leader`                |   n/a |       n/a |      n/a |        n/a |
 
-Cobertura realmente exercida (Sessão 11): `@sprint/contracts` 100/100/100/100,
-`@sprint/fs-adapter` 99.05/100/96.69/99.05, `sprint-operator-agent`
-100/100/100/100.
+Cobertura realmente exercida (Sessão 18 — pós W1.C8 expansion):
+`@sprint/contracts` **100/100/100/100** (230 → 317 testes; threshold 98/95/98/98
+com folga); `@sprint/fs-adapter` **100/99.53/100/100** (235 → 294 testes;
+threshold 95/95/95/95 com folga); `@sprint/logger` **100/100/100/100** (57
+testes); `sprint-operator-agent` **97.76/91.47/95.4/97.76** (190 testes);
+`sprint-leader` **96.89/94.51/93.84/96.89** (198 testes).
+
+**Total monorepo: 1056 testes verdes.** Thresholds materializados — build falha
+automaticamente se cobertura regredir.
 
 `sprint-leader` em W0 é scaffold sem lógica testável (main/preload via E2E em W3
 — Playwright). À medida que código de domínio for adicionado em W1+, thresholds
@@ -1396,6 +1403,22 @@ Descobertas durante o desenvolvimento que economizam tempo da próxima sessão.
   — Renan reportou "Agent não fica em segundo plano e não mostra overlay".
   Auditoria do `trayService.ts:57` + `electron-builder.yml:files` expôs a
   inconsistência.
+
+### G-024: Windows EPERM em renames concorrentes ao mesmo destino
+
+- **Sintoma:** `writeFileAtomic` rodando 10× em paralelo ao MESMO path no
+  Windows produz `EPERM: operation not permitted, rename ...`. 2 concorrentes
+  funcionam; 10 não.
+- **Causa:** `rename` no Win32 não tem a serialização atômica do POSIX. Sob alta
+  contenção, o destination file fica brevemente "locked" e renames concorrentes
+  falham com EPERM. Issue conhecido: nodejs/node#30075.
+- **Solução:** tests que exercitam alta contenção ao mesmo destino → marcar com
+  `it.runIf(os.platform() !== 'win32')`. Em produção, o caso de uso real (cada
+  operador grava no próprio filename = paths distintos) não dispara — o cenário
+  "mesmo path 10×" é apenas adversarial.
+- **Descoberto em:** Sessão 18 (2026-05-27), Gate 4 do BL-C8-003 — primeiro test
+  adversarial de 10 escritas simultâneas exibiu EPERM no Windows. Linux/macOS
+  passa.
 
 ### Débitos técnicos pendentes
 

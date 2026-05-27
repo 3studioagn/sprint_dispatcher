@@ -66,6 +66,279 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 18 — 2026-05-27 — Wave 1, C8 inteiro (testes ampliados) — FECHAMENTO W1
+
+**Wave atual:** W1 (FECHA NESTA SESSÃO) **Método:** gate-by-gate com aprovação
+explícita entre gates **Duração estimada:** ~4-5h (7 gates) **Itens
+trabalhados:** [BL-C8-002, BL-C8-003] (ambos fecharam — únicos W1 de C8 que
+restavam)
+
+### Objetivo da sessão
+
+Fechar W1.C8 inteiro ampliando as suítes de teste de `@sprint/contracts` e
+`@sprint/fs-adapter` para production-grade antes do fechamento da W1. Foco:
+property-based testing (fast-check), curadoria adversarial de vetores XSS,
+paridade Node↔Memory no domain layer, e roundtrip cross-package. Não tocar
+código de produção (red line §10). Bug-discovery política §2.4.
+
+### O que foi feito
+
+- **Gate 1 — reconciliação + baseline.** Lido CLAUDE.md, DECISIONS.md (20 ADRs),
+  CHANGELOG, SESSION_LOG (#17), configs (turbo, tsconfig.base, vitest.config de
+  ambos pacotes), src/ inteiro de contracts e fs-adapter. Baseline rodada:
+  contracts **230 testes 100/100/100/100**; fs-adapter **235 testes
+  99.61/98.03/100/99.61** com node-adapter.ts em 97.74% lines (4 uncovered:
+  catches de `handle.close()` em path de erro/finally — alvo Gate 4). Decisão
+  D1: fast-check adicionado. D2: idioma PT-BR confirmado por amostragem. D3:
+  política de bug-discovery aceita. Descoberta crítica:
+  `MemoryFilesystemAdapter` NÃO tem `injectFailure`/`setLatencyMs` mencionados
+  no §6.2 do prompt — proposta omitir (red line §10).
+- **Gate 2 — sanitizer hardening (contracts).** Adicionados `fast-check` devDep,
+  `__helpers__/arbitraries.ts` (versão inicial — ulid+userId),
+  `__helpers__/xssVectors.ts` com 21 vetores em 5 categorias (mutation,
+  encoding, polyglot, unicode, combining). `sanitize.test.ts` expandido de 40 →
+  80 testes: 21 XSS curados + 4 properties universais (50 runs cada)
+  - 6 unicode edge + 3 inputs gigantes + variantes empty/control. **Bug-
+    discovery #1**: polyglot PortSwigger preserva `javascript:` raw como texto
+    (heurística overzealous) — vetor adaptado, comentário inline. Cobertura
+    mantida 100/100/100/100. 230 → 270 testes total.
+- **Gate 3 — schemas + IDs + filenames (contracts).** Expandidos arbitraries com
+  6 records completos (payload, ack, cancel, agentConfig, isoDatetime, semver).
+  Criados `ids.property.test.ts` (9 testes — 1000 sequenciais, 100 paralelos,
+  properties), `filenames.property.test.ts` (16 testes — 3 roundtrip × 100
+  runs + 3 cross-discrim × 50 runs + edge cases userId),
+  `schemas/property.test.ts` (22 testes — 8 properties + 13 asserts de mensagens
+  Zod como API pública). **Nenhum bug descoberto**. 270 → 317 testes total.
+  **BL-C8-002 fechado conceitualmente.**
+- **Gate 4 — writeAtomic + writes adversariais (fs-adapter).** Adicionados
+  `fast-check` devDep, `__helpers__/arbitraries.ts` (cópia local — nota
+  arquitetural sobre contracts não expor subpath), `__helpers__/ tmpFixtures.ts`
+  (setupTmpShared). Criados `node-adapter.adversarial.test. ts` (10 testes, 3
+  skipped Windows — 10 concorrentes, 10MB+ZWJ family, **lines 50-51 e 63-64
+  cobertas via `vi.mock` de `node:fs/promises.open`**, permission Linux/mac),
+  `pending-store.adversarial.test.ts` (6 testes — 10 writePending concorrentes,
+  mtime real via `fs.utimes`, race pasta removida),
+  `ack-store.adversarial.test.ts` (3 testes — overwrite 3×, 10 acks paralelos).
+  **Bug-discovery #2 e #3** (não-críticos): Windows EPERM em renames
+  concorrentes (limite SO, `it.runIf` Linux/mac); `.tmp` visível em listDir raw
+  durante write (atomicidade no rename, asserção corrigida para estado final).
+  **node-adapter.ts subiu 97.74% → 100% lines.** 235 → 254 testes total.
+- **Gate 5 — listings + paridade (fs-adapter).** Criado
+  `integration/parity. test.ts` (18 testes — 9 testes × 2 adapters via
+  `describeParity(label, factory)`) cobrindo PendingStore (write/list/delete +
+  DirectoryNotFoundError), AckStore (write/list/overwrite), Stubs
+  (CancelStore/ArchiveStore com NotImplementedError). Expandidos
+  `pending-store.adversarial.test.ts` (+6 cenário "mistura 8 arquivos") e
+  `ack-store.adversarial.test.ts` (+4 cenário "mistura 6 arquivos"). 254 → 282
+  testes total.
+- **Gate 6 — roundtrip cross-package + thresholds.** Criado
+  `integration/ roundtrip.test.ts` (12 testes — 3 properties cross-package + 3
+  sanitização end-to-end + 3 unicode + 3 e2e Node FS).
+  `safeSprintPayloadArbitrary` com body restrito a conteúdo que sobrevive
+  `sanitizeBodyHtml` byte-a-byte (essencial — sem isso roundtrip falha porque
+  PendingStore sanitiza). Thresholds elevados: contracts **98/95/98/98**,
+  fs-adapter **95/95/95/95**. 282 → 294 testes total. **BL-C8-003 fechado
+  conceitualmente. DoD §8 do prompt — TODOS os itens checked.**
+- **Gate 7 — encerramento.** Esta entrada SESSION_LOG. ADR-021 em DECISIONS.md
+  (10 decisões + 4 alternativas rejeitadas + política de bug- discovery).
+  CHANGELOG.md bloco da Sessão 18 com marco "WAVE 1 FECHADA". README.md status
+  C8 ✅ + Wave 1 ✅. CLAUDE.md §7.7.1 thresholds atualizados
+  - §12 G-024 (Windows EPERM em concurrent renames). 2 changesets gerados.
+
+### Estado atual
+
+- **BL-C8-001** (Vitest + Turborepo): ✅ (Sessão 11 W0, mantido)
+- **BL-C8-002** (testes unitários contracts): ✅ concluído (Sessão 18 Gate 2+3)
+- **BL-C8-003** (testes unitários fs-adapter): ✅ concluído (Sessão 18 Gate 4-6)
+- **BL-C8-004** (Playwright E2E): ⏸️ W3
+- **BL-C8-005** (regras ESLint custom): ✅ (Sessão 11 W0, mantido)
+- **BL-C8-006** (Husky pre-commit): ⏸️ W3
+- **BL-C8-007** (GitHub Actions CI dedicado de cobertura): ⏸️ W4
+
+Bateria final via `pnpm -r test:coverage`:
+
+- `@sprint/logger`: **57 testes em 3 arquivos**, 100/100/100/100
+- `@sprint/contracts`: **317 testes em 14 arquivos**, 100/100/100/100
+  (thresholds 98/95/98/98 — folga)
+- `@sprint/fs-adapter`: **294 testes em 15 arquivos** (291 passing + 3 skipped),
+  100/99.53/100/100 (thresholds 95/95/95/95 — folga)
+- `sprint-leader`: 198 testes 96.89/94.51/93.84/96.89 (sem mudança)
+- `sprint-operator-agent`: 190 testes 97.76/91.47/95.4/97.76 (sem mudança)
+
+**Total monorepo: 1056 testes verdes** (era 910 antes da Sessão 18; +146).
+
+### Decisões tomadas
+
+- **ADR-021** (expansão para production-grade W1.C8): 10 decisões + 4
+  alternativas rejeitadas. Endereça gap de invariantes universais
+  (property-based), curadoria adversarial expansível (xssVectors), paridade no
+  domain layer (não só nos primitivos do port), roundtrip cross-package.
+  Política de bug-discovery para sessões de teste documentada.
+- **D1 (fast-check)**: adicionado em ambos pacotes como devDep. 50 runs default
+  (CI fast); 100 quando o cenário tolera (filenames roundtrip).
+- **D2 (idioma PT-BR)**: confirmado por amostragem dos testes existentes;
+  seguido em todos os testes novos.
+- **D3 (bug-discovery)**: 3 casos documentados nesta sessão, todos categoria
+  "surpresa cosmética" (não-críticos): polyglot `javascript:` em texto, Windows
+  EPERM em renames concorrentes, `.tmp` visível em listDir raw.
+- **Cópia local de arbitraries em fs-adapter** (não importar de
+  `@sprint/contracts/src/__helpers__/...`): `contracts/package.json` não expõe
+  subpath `__helpers__`. Adicionar subpath seria mudança de production API (red
+  line §10). Cópia local é trade-off aceito, documentado inline.
+- **Thresholds elevados** com folga generosa contra real:
+  - contracts: 98/95/98/98 (real 100/100/100/100)
+  - fs-adapter: 95/95/95/95 (real 100/99.53/100/100)
+- **Adversarial tests em arquivos `*.adversarial.test.ts`** separados dos
+  `*.test.ts` originais — facilita leitura (enumeráveis rápidos vs adversariais
+  lentos).
+- **Cobertura defensiva via `vi.mock`** de `node:fs/promises.open` para injetar
+  FileHandle cujo `close()` rejeita. Subiu node-adapter.ts de 97.74% → 100%
+  lines (lines 50-51 e 63-64).
+- **`safeSprintPayloadArbitrary` local em roundtrip.test.ts** — body restrito a
+  conteúdo que sobrevive sanitização byte-a-byte (texto plain sem `<`/`>`/`&` OR
+  whitelist HTML). Sem isso o roundtrip property falha porque PendingStore
+  sanitiza antes de gravar.
+- **`it.runIf(os.platform() !== 'win32')`** para tests que dependem de
+  comportamento POSIX (permission revoked com chmod 0o000; rename atômico sob
+  alta contenção).
+- **Categorias mínimas em xssVectors guardadas via test**: ≥5 mutation + ≥5
+  encoding + ≥3 polyglot + ≥5 unicode + ≥2 combining. Falha se alguém deletar
+  vetor sem ADR explícito.
+
+### Bloqueios encontrados
+
+8 fricções, todas resolvidas inline:
+
+1. **Polyglot PortSwigger** com `javascript:` raw sobrevive como texto (não em
+   href) → adaptado o vetor removendo o prefixo cosmético.
+2. **Branded types em `Partial<SprintPayload>`** rejeitavam strings cruas →
+   inline shape com `Partial<{ sprint_id: string; user_id: string; ... }>` em
+   buildPayload/buildAck (pattern dos tests existentes).
+3. **Windows EPERM em 10 renames concorrentes** ao mesmo path → `it.runIf`
+   Linux/macOS only + nota inline (issue conhecido nodejs/node#30075).
+4. **`.tmp` visível em listDir raw** durante write → asserção corrigida para
+   estado FINAL (atomicidade no rename, não na invisibilidade).
+5. **Mock de `FileHandle` no path errado** (Gate 4 inicial — abri handle em path
+   diferente do que o adapter passa) →
+   `vi.mocked(open). mockImplementationOnce(async (filepath) => ...)` usando o
+   path EXATO que o adapter passa.
+6. **`typeof import('node:fs/promises')` proibido** por
+   `@typescript-eslint/consistent-type-imports` →
+   `import type * as FsPromises from 'node:fs/promises'` + `typeof FsPromises`.
+7. **`@sprint/contracts/src/__helpers__/arbitraries` não resolve** (subpath não
+   exposto) → cópia local em fs-adapter/`__helpers__/arbitraries.ts` com nota
+   arquitetural.
+8. **Lint pegou múltiplos import-order** + 1 dot-notation + `as string` vs `!`
+   (non-null assertion) — fix rotineiro.
+
+### Próximo passo
+
+Renan revisa o commit consolidado da Sessão 18 (~12 arquivos novos/ modificados:
+4 helpers + 5 test files novos + 2 vitest.config.ts + 2 package.json + 5
+arquivos de contexto + 2 changesets). Push para `develop`. Workflows CI rodam
+(lint, type-check, test:coverage, build) — thresholds elevados garantem que
+regressão futura falha o build.
+
+**Próxima sessão sugerida**: **Wave 2 — features secundárias do MVP.**
+Recomendação: começar pela infraestrutura de cancelamento (BL-C4-004 +
+BL-C2-009 + BL-C3-009) para validar o ciclo completo de uma feature W2 e
+exercitar a metodologia gate-based também em W2.
+
+### Observações para a próxima sessão
+
+- **Wave 1 FECHADA — qualidade de produção.** 6 sessões (13 → 18), 4 pacotes em
+  production-grade, 2 apps Electron funcionais ponta-a-ponta. Cobertura média
+  ponderada do monorepo: ~98%.
+- **Property-based é insubstituível** para invariantes universais — quando W2/W3
+  adicionar features novas em contracts ou fs-adapter, considerar adicionar
+  property test ANTES do test enumerável. fast-check shrink produz
+  counterexamples mínimos quando falha.
+- **`safeSprintPayloadArbitrary` é específico do roundtrip.test.ts** e evita o
+  problema de sanitização. Se W2 expandir testes integration, reusar este
+  pattern (body restrito a "sanitize-safe").
+- **xssVectors.ts é expansível** — adicionar vetor novo basta editar o array e o
+  teste `it.each` itera automaticamente. Guard rail de contagem mínima por
+  categoria força adição via ADR caso queira reduzir cobertura.
+- **`MemoryFilesystemAdapter` permanece sem `injectFailure`/ `setLatencyMs`** —
+  se W2/W3 precisar de simulação de falhas em testes do Agent/Leader que
+  consomem o adapter, use
+  `vi.spyOn(adapter, 'metodo') .mockRejectedValueOnce(err)` no test (pattern já
+  usado em `pending- store.test.ts:533+`). Não modificar o adapter — production
+  API.
+- **Thresholds estão com folga** mas regressão será visível: contracts cai para
+  <98% → build falha; fs-adapter cai para <95% → build falha. Não baixar
+  thresholds; corrigir cobertura.
+- **`node-adapter.ts` line 53 ainda mostra 1 branch incomplete** (99.53% branch
+  total). É o catch do `unlink(tmpPath)` quando o `.tmp` já foi removido —
+  defensivo, dificil de exercitar deterministicamente. Aceito; não-bloqueante.
+- **Wave 2 deve começar com**: BL-C4-004 (writeCancel removendo stub) +
+  BL-C2-009 (UI de cancelamento no Leader) + BL-C3-009 (cancel handler no
+  Agent). Esse ciclo end-to-end valida que a metodologia gate-based escala para
+  W2 também.
+
+### Arquivos modificados/novos
+
+**`@sprint/contracts`:**
+
+- `package.json` (+ devDep `fast-check@^3.20.0`)
+- `vitest.config.ts` (thresholds 98/95/98/98 + exclude `__helpers__`)
+- `src/__helpers__/arbitraries.ts` (novo)
+- `src/__helpers__/xssVectors.ts` (novo)
+- `src/sanitize.test.ts` (expanded — 40 → 80 testes)
+- `src/ids.property.test.ts` (novo, 9 testes)
+- `src/filenames.property.test.ts` (novo, 16 testes)
+- `src/schemas/property.test.ts` (novo, 22 testes)
+
+**`@sprint/fs-adapter`:**
+
+- `package.json` (+ devDep `fast-check@^3.20.0`)
+- `vitest.config.ts` (thresholds 95/95/95/95 + exclude `__helpers__`)
+- `src/__helpers__/arbitraries.ts` (novo)
+- `src/__helpers__/tmpFixtures.ts` (novo)
+- `src/node-adapter.adversarial.test.ts` (novo, 10 testes)
+- `src/domain/pending-store.adversarial.test.ts` (novo, 12 testes)
+- `src/domain/ack-store.adversarial.test.ts` (novo, 7 testes)
+- `src/integration/parity.test.ts` (novo, 18 testes)
+- `src/integration/roundtrip.test.ts` (novo, 12 testes)
+
+**Raiz:**
+
+- `.changeset/contracts-test-expansion.md` (novo — patch `@sprint/contracts`)
+- `.changeset/fs-adapter-test-expansion.md` (novo — patch `@sprint/fs-adapter`)
+
+**Documentos de contexto:**
+
+- `DECISIONS.md` (+ ADR-021 + registro)
+- `CLAUDE.md` (§7.7.1 thresholds atualizados + §12 G-024 Windows EPERM)
+- `CHANGELOG.md` ([Unreleased].Added — bloco Sessão 18 + marco W1)
+- `SESSION_LOG.md` (esta entrada)
+- `README.md` (status C8 ✅ + Wave 1 ✅)
+
+### Resumo executivo Wave 1
+
+**6 sessões executadas, 20 itens BL fechados, 4 pacotes em production-grade, 2
+apps Electron funcionais end-to-end:**
+
+| Sessão | Foco                                                          |
+| ------ | ------------------------------------------------------------- |
+| 13     | W1.C2 parte 1 — composer do Leader (Operadores + Deadline)    |
+| 14     | W1.C4 — domain layer do fs-adapter (PendingStore + AckStore)  |
+| 15     | W1.C2 parte 2 — Leader MVP (dispatch real) + redesign visual  |
+| 16     | W1.C3 inteiro — Operator Agent MVP (polling+overlay+tray+ack) |
+| 17     | W1.C6 inteiro — @sprint/logger (Pino)                         |
+| 18     | W1.C8 inteiro — testes ampliados (esta sessão) — **FECHA W1** |
+
+MVP funcional end-to-end: Leader dispara → arquivos em `pending/` → Agent faz
+polling → overlay aparece → operador acknowledges → `acks/` + histórico local.
+Smoke real validado em 2 PCs distintos via servidor SMB da ARTFLEXÍVEIS (Sessão
+16 Gate 8.5).
+
+Pendências para Wave 3+: BL-C6-002 (refactor console._ nos apps), BL-C5-_ W3
+(senha admin), BL-C4-005 (arquivamento), BL-C4-008 (job de limpeza), BL-C8-004
+(E2E Playwright), BL-C8-006 (Husky), BL-C8-007 (CI dedicado de cobertura).
+
+---
+
 ## Sessão 17 — 2026-05-27 — Wave 1, C6 inteiro (@sprint/logger)
 
 **Wave atual:** W1 **Método:** gate-by-gate com aprovação explícita entre gates

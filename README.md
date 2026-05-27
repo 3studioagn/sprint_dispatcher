@@ -97,7 +97,7 @@ do repositório**, gerenciados externamente por Renan.
 | C5  | Installer & Deployment                     | Package       | ✅ Config validada         |
 | C6  | Observability & Logging (`@sprint/logger`) | Library       | ✅ W1 (Sessão 17)          |
 | C7  | Documentation                              | Docs          | 🔄 Em fechamento da Wave 0 |
-| C8  | Quality Assurance                          | Cross-cutting | 🔄 Em fechamento da Wave 0 |
+| C8  | Quality Assurance                          | Cross-cutting | ✅ W1 (Sessão 18)          |
 
 Detalhes operacionais de cada componente: ver os `README.md` em
 [`apps/leader`](./apps/leader/README.md),
@@ -156,15 +156,24 @@ Toda contribuição deve seguir os padrões definidos em
 
 ## Status do projeto
 
-**Wave atual:** W0 (fechamento em andamento — aguardando auditoria)
+**Wave atual:** W1 fechada (Sessão 18 — 2026-05-27); aguardando início de W2
 
-| Wave | Foco                                            | Status        |
-| ---- | ----------------------------------------------- | ------------- |
-| W0   | Foundation, contracts, scaffolds dos apps       | 🔄 Fechamento |
-| W1   | MVP Core (fluxo ponta-a-ponta dispatch → ack)   | ⏸️ Próxima    |
-| W2   | Refinement (ack tracking, cancelamento, polish) | ⏸️            |
-| W3   | Production readiness (installer, logs, E2E)     | ⏸️            |
-| W4   | Hardening (watchdog, perf, futuro-proof)        | ⏸️            |
+| Wave | Foco                                            | Status           |
+| ---- | ----------------------------------------------- | ---------------- |
+| W0   | Foundation, contracts, scaffolds dos apps       | ✅ Concluída     |
+| W1   | MVP Core (fluxo ponta-a-ponta dispatch → ack)   | ✅ **Concluída** |
+| W2   | Refinement (ack tracking, cancelamento, polish) | ⏸️ Próxima       |
+| W3   | Production readiness (installer, logs, E2E)     | ⏸️               |
+| W4   | Hardening (watchdog, perf, futuro-proof)        | ⏸️               |
+
+### Wave 1 — MVP Core (fechada na Sessão 18)
+
+- ✅ `@sprint/contracts` (W1.C1) — schemas Zod, sanitizer, IDs, filenames
+- ✅ `@sprint/fs-adapter` (W1.C4) — port-and-adapter + Pending/Ack domain stores
+- ✅ `@sprint/logger` (W1.C6) — Pino wrapper (pretty em dev, JSON em prod)
+- ✅ Leader (W1.C2) — composer + dispatch real + redesign visual
+- ✅ Operator Agent (W1.C3) — polling + overlay TOPMOST + tray + ack
+- ✅ Testes ampliados (W1.C8) — production-grade (1056 testes no monorepo)
 
 Histórico de sessões: [`SESSION_LOG.md`](./SESSION_LOG.md).
 

@@ -11,6 +11,96 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ### Added
 
+<!-- ↓↓↓ Sessão 18 (2026-05-27) — W1.C8 inteiro: testes ampliados — FECHA W1 ↓↓↓ -->
+
+- **`@sprint/contracts` — suíte ampliada para production-grade** [BL-C8-002,
+  Sessão 18]:
+  - `fast-check@^3.20.0` como devDependency.
+  - **`src/__helpers__/arbitraries.ts`** — 8 arbitraries reutilizáveis
+    (`ulidArbitrary`, `userIdArbitrary`, `isoDatetimeArbitrary`,
+    `semverArbitrary`, `sprintPayloadArbitrary`, `sprintAckArbitrary`,
+    `sprintCancelArbitrary`, `agentConfigArbitrary`).
+  - **`src/__helpers__/xssVectors.ts`** — 21 vetores XSS adversariais
+    curados em 5 categorias (mutation, encoding, polyglot, unicode,
+    combining) com `reason` documentando cada ataque defendido.
+  - **`src/sanitize.test.ts`** expandido de 40 → 80 testes (+40):
+    21 vetores XSS iterados via `it.each` + 4 properties universais
+    (`<script` ausente, `javascript:` ausente, `on*=` ausente,
+    idempotência — 50 runs cada) + 6 unicode edge cases + 3 inputs
+    gigantes (10MB) + variantes vazias/control.
+  - **`src/ids.property.test.ts`** (novo, 9 testes) — 1000 IDs
+    sequenciais únicos, 100 paralelos via `Promise.all`, properties
+    `isValidUlid` ↔ `ulidArbitrary`.
+  - **`src/filenames.property.test.ts`** (novo, 16 testes) — 3 roundtrip
+    properties (100 runs) + 3 cross-discriminação (50 runs) + edge
+    cases userId.
+  - **`src/schemas/property.test.ts`** (novo, 22 testes) — 8 properties
+    (parse + JSON roundtrip para 4 schemas) + 13 asserts sobre mensagens
+    de erro Zod específicas como API pública (`ULID`, `não pode ser
+    vazio`, `[a-z0-9_-]`, `ISO 8601`, `MAJOR.MINOR.PATCH`, `>= 1`,
+    `<= 60`).
+  - Thresholds elevados em `vitest.config.ts`: **98/95/98/98** (era
+    95/90/95/95). Cobertura real: **100/100/100/100**.
+  - **Total: 230 → 317 testes (+87) em 14 arquivos.**
+- **`@sprint/fs-adapter` — suíte ampliada com cenários adversariais,
+  paridade Node↔Memory e roundtrip cross-package** [BL-C8-003, Sessão 18]:
+  - `fast-check@^3.20.0` como devDependency.
+  - **`src/__helpers__/arbitraries.ts`** — `posixPathArbitrary`,
+    `ulidArbitrary`, `userIdArbitrary` (cópia local — `@sprint/contracts`
+    não expõe subpath `__helpers__/*` por design de production API).
+  - **`src/__helpers__/tmpFixtures.ts`** — `setupTmpShared(label)` cria
+    `<tmp>/pending,acks/` para integration tests.
+  - **`src/node-adapter.adversarial.test.ts`** (novo, 10 testes — 3
+    skipped no Windows) — concorrência 10 escritas, 10MB+ZWJ family,
+    **handle.close() catches (lines 50-51 e 63-64) cobertos via
+    `vi.mock` de `node:fs/promises.open`**, permission revoked Linux/mac.
+  - **`src/domain/pending-store.adversarial.test.ts`** (novo, 12 testes)
+    — 10 writePendingSprint concorrentes, mtime ordering com `fs.utimes`
+    real, race de pasta removida, cenário "mistura 8 arquivos" (3
+    sprint + 2 cancel + 1 invalid + 1 .tmp + 1 junk + 1 ack errado).
+  - **`src/domain/ack-store.adversarial.test.ts`** (novo, 7 testes) —
+    overwrite progressivo 3× (UC de re-exibição W2), 10 acks
+    concorrentes, cenário "mistura 6 arquivos".
+  - **`src/integration/parity.test.ts`** (novo, 18 testes — 9 × 2
+    adapters) — matriz `describeParity(label, factory)` cross-adapter
+    para PendingStore, AckStore, CancelStore stub, ArchiveStore stub
+    contra Node real FS + Memory mock.
+  - **`src/integration/roundtrip.test.ts`** (novo, 12 testes — cross-
+    package) — 3 properties (50 runs cada): writePendingSprint →
+    listPending preserva campos; AckStore idem; filtro userId universal.
+    3 testes sanitização end-to-end (`<script>`/`onerror`/clean
+    preservado). 3 testes unicode (acentos+emoji, ZWJ family, 1900
+    chars). 3 testes end-to-end Node real FS.
+  - **Subiu `node-adapter.ts` de 97.74% → 100% lines** via mock de
+    `FileHandle.close()` rejeitando (lines 50-51 e 63-64 — catches
+    defensivos em path de erro e em finally de path de sucesso).
+  - Thresholds elevados em `vitest.config.ts`: **95/95/95/95** (era
+    95/90/95/95). Cobertura real: **100/99.53/100/100**.
+  - **Total: 235 → 294 testes (+59; 291 passing + 3 skipped no Windows)
+    em 15 arquivos.**
+- **ADR-021** em `DECISIONS.md` — Expansão da suíte de testes para
+  production-grade na W1.C8. Documenta 10 decisões (fast-check como
+  devDep, curadoria XSS, arbitraries em `__helpers__`, nota arquitetural
+  sobre subpath não-exposto do contracts, thresholds elevados, matriz
+  de paridade, roundtrip com `safeSprintPayloadArbitrary`, adversarial
+  separation, `it.runIf` Linux/macOS, cobertura defensiva via `vi.mock`)
+  + política de bug-discovery + 4 alternativas rejeitadas (Stryker,
+  subpath exports, numRuns: 200+, modificar Memory adapter).
+- 2 changesets gerados (`contracts-test-expansion.md`,
+  `fs-adapter-test-expansion.md` — ambos `patch`).
+
+### Notes — Sessão 18
+
+- **WAVE 1 OFICIALMENTE FECHADA.** 6 sessões executadas (13 → 18); 4
+  pacotes (contracts, fs-adapter, logger, + workspace setup) e 2 apps
+  (Leader, Operator Agent) em production-grade.
+- Pendências W3+: BL-C8-004 (Playwright E2E), BL-C8-006 (Husky
+  pre-commit), BL-C8-007 (GitHub Actions CI dedicado de cobertura).
+- Próxima wave (W2) — cancelamento, acompanhamento de acks, custom
+  title/body, re-exibição, countdown.
+
+<!-- ↑↑↑ Sessão 18 ↑↑↑ -->
+
 <!-- ↓↓↓ Sessão 17 (2026-05-27) — W1.C6 inteiro: @sprint/logger ↓↓↓ -->
 
 - **`@sprint/logger` — pacote novo** (`packages/logger/`) [BL-C6-001,

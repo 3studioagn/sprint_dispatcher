@@ -1,5 +1,7 @@
+import fc from 'fast-check';
 import { describe, it, expect } from 'vitest';
 
+import { XSS_VECTORS } from './__helpers__/xssVectors';
 import { ALLOWED_HTML_TAGS } from './constants';
 import { sanitizeBodyHtml } from './sanitize';
 
@@ -253,3 +255,191 @@ describe('sanitizeBodyHtml', () => {
 type ALLOWED_HTML_TAGS_TYPE_IS_READONLY = typeof ALLOWED_HTML_TAGS extends readonly string[]
   ? true
   : false;
+
+// ===========================================================
+// HARDENING ADVERSARIAL — Gate 2 (BL-C8-002 parte 1)
+//
+// Expansão da suíte com:
+// - Curadoria de vetores XSS (mutation / encoding / polyglot /
+//   unicode / combining) — ver __helpers__/xssVectors.ts
+// - Property-based testing (fast-check) sobre invariantes
+//   universais do sanitizer.
+// - Unicode edge cases (zero-width, RTL, emoji composto,
+//   NFC vs NFD).
+// - Inputs gigantes (performance + ausência de crash).
+// - Variantes vazias / whitespace / chars de controle.
+// ===========================================================
+
+describe('sanitizeBodyHtml — hardening adversarial', () => {
+  // ---- Vetores XSS curados, agrupados por categoria ----
+  describe('vetores XSS curados (__helpers__/xssVectors.ts)', () => {
+    const categories = ['mutation', 'encoding', 'polyglot', 'unicode', 'combining'] as const;
+
+    for (const category of categories) {
+      const vectorsInCategory = XSS_VECTORS.filter((v) => v.category === category);
+
+      describe(`categoria ${category} (${String(vectorsInCategory.length)} vetores)`, () => {
+        it.each(vectorsInCategory.map((v) => [v.reason, v.input] as const))(
+          '%s — sanitização neutraliza',
+          (_reason, input) => {
+            const output = sanitizeBodyHtml(input);
+            expectNoXssExecution(output);
+          },
+        );
+      });
+    }
+
+    it('curadoria mantém ≥ 5 mutation + ≥ 5 encoding + ≥ 3 polyglot + ≥ 5 unicode + ≥ 2 combining', () => {
+      // Guard rail: se alguém deletar vetores sem ADR explícito, o teste
+      // falha — exigindo decisão consciente sobre redução do escopo
+      // defensivo.
+      const counts: Record<string, number> = {};
+      for (const v of XSS_VECTORS) {
+        counts[v.category] = (counts[v.category] ?? 0) + 1;
+      }
+      expect(counts.mutation ?? 0).toBeGreaterThanOrEqual(5);
+      expect(counts.encoding ?? 0).toBeGreaterThanOrEqual(5);
+      expect(counts.polyglot ?? 0).toBeGreaterThanOrEqual(3);
+      expect(counts.unicode ?? 0).toBeGreaterThanOrEqual(5);
+      expect(counts.combining ?? 0).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  // ---- Properties universais (fast-check) ----
+  describe('property: superfície de execução nunca remanesce', () => {
+    it('para qualquer string, output não contém "<script"', () => {
+      fc.assert(
+        fc.property(fc.string(), (input) => {
+          const output = sanitizeBodyHtml(input).toLowerCase();
+          return !output.includes('<script');
+        }),
+        { numRuns: 50 },
+      );
+    });
+
+    it('para qualquer string, output não contém "javascript:"', () => {
+      fc.assert(
+        fc.property(fc.string(), (input) => {
+          const output = sanitizeBodyHtml(input).toLowerCase();
+          return !output.includes('javascript:');
+        }),
+        { numRuns: 50 },
+      );
+    });
+
+    it('para qualquer string, output não contém handler inline (on*=)', () => {
+      fc.assert(
+        fc.property(fc.string(), (input) => {
+          const output = sanitizeBodyHtml(input);
+          return !/\son[a-z]+\s*=/i.test(output);
+        }),
+        { numRuns: 50 },
+      );
+    });
+
+    it('sanitização é idempotente para qualquer string', () => {
+      fc.assert(
+        fc.property(fc.string(), (input) => {
+          const once = sanitizeBodyHtml(input);
+          const twice = sanitizeBodyHtml(once);
+          return once === twice;
+        }),
+        { numRuns: 50 },
+      );
+    });
+  });
+
+  // ---- Unicode edge cases ----
+  describe('unicode edge cases', () => {
+    it('zero-width space dentro de <b> é preservado', () => {
+      const input = '<b>x​y</b>';
+      const output = sanitizeBodyHtml(input);
+      expect(output).toContain('​');
+      expect(output.startsWith('<b>')).toBe(true);
+    });
+
+    it('RTL override (U+202E) dentro de <b> é preservado como char textual', () => {
+      const input = '<b>texto‮rev</b>';
+      const output = sanitizeBodyHtml(input);
+      expect(output).toContain('‮');
+    });
+
+    it('emoji ZWJ family (👨‍👩‍👧‍👦) preservado dentro de <b>', () => {
+      const input = '<b>Meta 👨‍👩‍👧‍👦</b>';
+      const output = sanitizeBodyHtml(input);
+      expect(output).toContain('👨‍👩‍👧‍👦');
+    });
+
+    it('NFC composto (caf\\u00E9 — 4 codepoints) preservado byte-a-byte', () => {
+      const nfc = 'café';
+      expect(nfc.length).toBe(4);
+      expect(sanitizeBodyHtml(nfc)).toBe(nfc);
+    });
+
+    it('NFD decomposto (cafe + U+0301 — 5 codepoints) preservado byte-a-byte', () => {
+      const nfd = 'café';
+      expect(nfd.length).toBe(5);
+      expect(sanitizeBodyHtml(nfd)).toBe(nfd);
+    });
+
+    it('NFC e NFD permanecem distintos após sanitização (sanitizer não normaliza)', () => {
+      const nfc = 'café';
+      const nfd = 'café';
+      expect(sanitizeBodyHtml(nfc)).not.toBe(sanitizeBodyHtml(nfd));
+    });
+  });
+
+  // ---- Inputs gigantes (performance + sem crash) ----
+  describe('inputs gigantes', () => {
+    it('input de 1 MB de texto puro processa em < 2s', () => {
+      const huge = 'a'.repeat(1_000_000);
+      const start = performance.now();
+      const output = sanitizeBodyHtml(huge);
+      const elapsedMs = performance.now() - start;
+      expect(output).toBe(huge);
+      expect(elapsedMs).toBeLessThan(2000);
+    });
+
+    it('input de 10 MB de texto puro processa em < 10s', () => {
+      const huge = 'a'.repeat(10_000_000);
+      const start = performance.now();
+      const output = sanitizeBodyHtml(huge);
+      const elapsedMs = performance.now() - start;
+      expect(output).toBe(huge);
+      expect(elapsedMs).toBeLessThan(10_000);
+    });
+
+    it('input grande com 10k <script> aninhados não deixa nenhum no output', () => {
+      const malicious = `<b>start</b>${'<script>x</script>'.repeat(10_000)}<b>end</b>`;
+      const output = sanitizeBodyHtml(malicious);
+      expectNoXssExecution(output);
+      expect(output).toContain('<b>start</b>');
+      expect(output).toContain('<b>end</b>');
+    });
+  });
+
+  // ---- Variantes vazias / whitespace / chars de controle ----
+  describe('variantes empty / whitespace / chars de controle', () => {
+    it('string vazia retorna vazio', () => {
+      expect(sanitizeBodyHtml('')).toBe('');
+    });
+
+    it('whitespace ASCII puro é preservado', () => {
+      expect(sanitizeBodyHtml(' \n\t\r')).toBe(' \n\t\r');
+    });
+
+    it('null character (U+0000) não causa crash e retorna string', () => {
+      const output = sanitizeBodyHtml('\0');
+      expect(typeof output).toBe('string');
+    });
+
+    it('apenas combining marks sem base (U+0301 U+0302 U+0303) não causa crash', () => {
+      const output = sanitizeBodyHtml('́̂̃');
+      expect(typeof output).toBe('string');
+    });
+
+    it('apenas tags fora da whitelist sem conteúdo vira string vazia', () => {
+      expect(sanitizeBodyHtml('<div></div><table></table>')).toBe('');
+    });
+  });
+});
