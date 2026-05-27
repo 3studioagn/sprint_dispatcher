@@ -11,6 +11,60 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ### Added
 
+<!-- ↓↓↓ Sessão 17 (2026-05-27) — W1.C6 inteiro: @sprint/logger ↓↓↓ -->
+
+- **`@sprint/logger` — pacote novo** (`packages/logger/`) [BL-C6-001,
+  Sessão 17]:
+  - **`createLogger(name, options?)`** — factory de logger nomeado.
+    Dev (`NODE_ENV !== 'production'`) sem `destination` ativa
+    `pino-pretty` em worker thread; prod emite JSON estruturado em
+    `process.stdout`. Com `options.destination` (testes), sempre JSON
+    síncrono no stream fornecido.
+  - **`rootLogger()`** — singleton lazy com `name === 'root'`,
+    pensado para boot do app e fatal handlers globais.
+  - **Tipos públicos**: `Logger`, `LogLevel`, `LoggerOptions`,
+    `ChildBindings`. API estreita por design — barrel exporta 6
+    símbolos (Pino expõe ~30 métodos; expomos 7).
+  - **Configuração via env vars**: `NODE_ENV` (dev/prod) +
+    `LOG_LEVEL` (case-insensitive, ignorado se inválido).
+    Precedência: `options.level` > `LOG_LEVEL` > default por
+    `NODE_ENV` (`'debug'` em dev, `'info'` em prod).
+  - **Wrapper opaco em torno do Pino** — `wrap(pinoInstance, name)`
+    esconde `trace`, `silent`, `flush`, `bindings()`, `levels`.
+    `child(bindings)` recursa via `wrap` para que sub-loggers
+    enxerguem só nossa interface.
+  - **`options.bindings` aplicado via `.child()`** após criação para
+    preservar o default `base: { pid, hostname }` do Pino.
+  - **Deps runtime**: `pino@^9` + `pino-pretty@^11` (regular dep —
+    apps usam em `pnpm dev`).
+- **`packages/logger/README.md`** [Sessão 17 Gate 5] — ~250 linhas,
+  11 seções: princípios, "Por que Pino", quickstart (3 exemplos),
+  API pública (tabelas), env vars, **"Uso esperado nos apps (W3 /
+  BL-C6-002)"** com 3 exemplos copy-pasteáveis + lista exata dos 8
+  `console.*` no Agent (apurada no Gate 1), helper `captureLines()`
+  para testes, escopo fora (BL-C6-003 W3, BL-C6-004 W4+), cobertura,
+  referências.
+- **ADR-020** em `DECISIONS.md` — `@sprint/logger` com Pino —
+  wrapper enxuto (W1.C6). Documenta as 8 decisões da sessão
+  (API estreita, dev/prod auto, LOG_LEVEL override, singleton lazy,
+  destination customizado, bindings via child) + 7 alternativas
+  rejeitadas (Winston, Bunyan, custom console wrapper, expor Pino
+  direto, API wide, builder pattern, file/Sentry agora) +
+  endurecimento futuro da regra ESLint `no-console`.
+- **CLAUDE.md** [Sessão 17 Gate 6]:
+  - §4 ganhou nova subseção **"Estrutura interna de `@sprint/logger`
+    (W1.C6 — Sessão 17)"** com 9 convenções específicas + lista
+    exata dos `console.*` no Agent que esperam refactor BL-C6-002.
+- **57 testes** em 3 arquivos no `@sprint/logger` — cobertura
+  **100% lines / 100% branches / 100% funcs / 100% stmts** em
+  `config.ts`, `createLogger.ts` e `rootLogger.ts`. `types.ts`
+  (`export type` only) e `index.ts` (barrel) excluídos da medição
+  por config — mesma escolha de contracts e fs-adapter.
+- **Changeset `logger-package.md`** (patch — versão `0.0.0`) —
+  documenta entrega do pacote para próxima release.
+
+<!-- ↑↑↑ Sessão 17 ↑↑↑ -->
+
 <!-- ↓↓↓ Sessão 16 (2026-05-26) — W1.C3 inteiro: Operator Agent MVP ↓↓↓ -->
 
 - **`sprint-operator-agent` — MVP funcional ponta-a-ponta** [BL-C3-003,

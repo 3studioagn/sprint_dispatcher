@@ -66,6 +66,222 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 17 — 2026-05-27 — Wave 1, C6 inteiro (@sprint/logger)
+
+**Wave atual:** W1 **Método:** gate-by-gate com aprovação explícita entre gates
+**Duração estimada:** ~2-3h (sessão curta — pacote isolado, 1 BL Must) **Itens
+trabalhados:** [BL-C6-001] (único item W1 de C6 — fechou)
+
+### Objetivo da sessão
+
+Fechar W1.C6 inteiro entregando o pacote `@sprint/logger` (último pacote da W1)
+— wrapper enxuto em torno do Pino com pretty print em dev, JSON em prod, suporte
+a loggers nomeados e child loggers. Esclarecimento crítico do prompt:
+**integração nos apps é BL-C6-002, que é W3, NÃO W1**. Esta sessão entrega
+APENAS o pacote; o refactor de `console.*` no Agent (8 ocorrências) e adição de
+logging no Leader (zero console hoje) ficam para W3.
+
+### O que foi feito
+
+- **Gate 1 — reconciliação.** Lido CLAUDE.md, DECISIONS.md (19 ADRs), CHANGELOG,
+  SESSION_LOG (Sessão 16), README, configs (pnpm-workspace, turbo.json,
+  tsconfig.base.json, eslint.config.mjs), estrutura de packages/contracts e
+  packages/fs-adapter (referência). Descoberta: `packages/logger/` era
+  **greenfield 100%** — nem o `package.json` foi criado no W0. Levantamento de
+  `console.*` no Agent: 8 ocorrências (1 em renderer hook, 7 em main/index.ts —
+  5 em wrappers de injeção do PollingService/handleAck, 2 em fatal handlers).
+  Leader: ZERO console. Decisão Gate 1: tsconfig com
+  `types: ["vitest/globals", "node"]` por causa de `process.env` e
+  `NodeJS.WritableStream`.
+- **Gate 2 — foundation.** Criados `package.json` (deps: pino^9 +
+  pino-pretty^11; devDeps: @types/node, vitest, @vitest/coverage-v8),
+  `tsconfig.json`, `vitest.config.ts` (thresholds 95/95/90/95 espelhando
+  contracts/fs-adapter), `src/types.ts` (Logger, LogLevel, LoggerOptions,
+  ChildBindings — só `export type`), `src/config.ts` (isDevelopment,
+  isValidLevel, resolveLevel) + `src/config.test.ts` com 25 testes. Lint pegou 3
+  rules na 1ª rodada (array-type, dot-notation, consistent-indexed-object-style)
+  — fix de 5min, type-check passou primeira. `pnpm install` registrou 6
+  workspaces (era 5), +28 pacotes.
+- **Gate 3 — `createLogger`.** `src/createLogger.ts` com factory + helpers
+  privados `buildPinoInstance` (3 ramos: destination customizado / dev pretty
+  transport / prod stdout JSON) e `wrap` (recursivo via `child`). Dispatch
+  explícito por nível (3 ramos cada) para preservar type-safety sem `any`. 29
+  testes em 5 grupos (superfície API, emissão, filtragem, bindings, child) +
+  parametrização via `it.each` para os 5 níveis. Cobertura subiu de 95.74% para
+  100% após parametrizar o teste "object-only sem msg" para os 5 níveis (era só
+  warn). Smoke visual via `_smoke.mjs` direto em pino (deletado após capturar
+  output).
+- **Gate 4 — `rootLogger` + barrel.** Singleton lazy em `src/rootLogger.ts` +
+  `_resetRootLoggerForTesting` (não exportado no barrel — uso exclusivo em
+  testes). 3 testes (primeira chamada cria, singleton, reset força recriação).
+  Barrel `src/index.ts` exporta `createLogger`, `rootLogger` e 4 tipos. Smoke
+  via vitest temporário (`_smoke.test.ts` em src/) — Node 24 strip-types não
+  auto-resolve extensões e `pnpm dlx tsx` quebrou; vitest foi o único caminho
+  prático. Output do pino-pretty (worker thread) capturado pelo stdout do
+  runner, validou name preservado em child + singleton + barrel resolution.
+- **Gate 5 — README.md.** ~250 linhas, 11 seções: tagline, princípios (4), "Por
+  que Pino", quickstart (3 exemplos), API pública (2 tabelas), env vars
+  (tabela + precedência), **"Uso esperado nos apps (W3 / BL-C6-002)"** com 3
+  exemplos copy-pasteáveis + lista exata dos 8 `console.*` no Agent (file:line),
+  helper `captureLines()` para testes, "O que está FORA do escopo" (BL-C6-002
+  W3, BL-C6-003 W3, BL-C6-004 W4), cobertura, referências (ADR-020, BLs, RNF-03,
+  links externos).
+- **Gate 6 — bateria + cross-package smoke + contexto + changeset.** Bateria
+  final do pacote (test:coverage, build, lint) toda verde. Cross- package smoke
+  via self-import `import { createLogger } from '@sprint/logger'` dentro do
+  próprio pacote — validou que o alias pnpm workspace resolve; confirmação extra
+  via `ls -la node_modules/@sprint/` mostrando o symlink. Changeset
+  `logger-package.md` (patch — versão `0.0.0`). Updates: CLAUDE.md §4 (subseção
+  C6), DECISIONS.md (ADR-020 + registro), CHANGELOG.md (bloco Sessão 17), README
+  raiz (status C6).
+
+### Estado atual
+
+- **BL-C6-001 (`@sprint/logger` com Pino):** ✅ concluído (Sessão 17)
+- **BL-C6-002 (integração nos apps):** ⏸️ W3 — refactor sistemático de
+  `console.*` no Agent + adição de logging no Leader
+- **BL-C6-003 (file transport com rotação):** ⏸️ W3 — via `pino-roll` escrevendo
+  em `<userData>/logs/`
+- **BL-C6-004 (Sentry / serviço externo):** ⏸️ W4+
+
+Cobertura `@sprint/logger`: **100% lines / 100% branches / 100% funcs / 100%
+stmts** em config.ts, createLogger.ts, rootLogger.ts. 57 testes em 3 arquivos.
+types.ts (export type only) e index.ts (barrel) excluídos por config — mesma
+escolha de contracts/fs-adapter.
+
+Outros packages (sem mudança — cached):
+
+- `@sprint/contracts`: 230 testes 100%
+- `@sprint/fs-adapter`: 235 testes 99.61%
+- `sprint-leader`: 198 testes 96.88%
+- `sprint-operator-agent`: 190 testes 97.76%
+
+**Total monorepo: 910 testes verde** (era 853 antes desta sessão; +57).
+
+### Decisões tomadas
+
+- **ADR-020** (`@sprint/logger` com Pino — wrapper enxuto W1.C6): documenta 8
+  decisões — Pino como core, pino-pretty como dep regular (não devDep), API
+  estreita (5 níveis + child + name), detecção dev/prod via NODE_ENV, LOG_LEVEL
+  override, rootLogger singleton lazy, destination customizado primariamente
+  para testes, bindings via child. 7 alternativas rejeitadas. Endurecimento
+  futuro da regra ESLint `no-console` estrita autorizado por este ADR, gatilho é
+  BL-C6-002.
+- **Wrapper opaco** em torno do Pino — `wrap(pinoInstance, name)` esconde 23 dos
+  ~30 métodos. Trocar Pino futuramente afeta só este pacote.
+- **Dispatch explícito por nível** com 3 ramos cada (string-only / obj+msg /
+  obj-only) — verboso (~30 linhas para 5 níveis), mas type-safe sem `any` e sem
+  casts. Alternativas (indexer `pinoInstance[level]`, `.bind`) caem em variance
+  issues do TS.
+- **`options.bindings` via `.child()` após criação** — preserva o default
+  `base: { pid, hostname }` do Pino. Sobrescrever via `options.base` removeria
+  os defaults.
+- **ChildBindings restritos a primitivos** (`string|number|boolean|null`) na v1
+  — Pino aceita aninhados, mas a previsibilidade do shape JSON ganha. Expandir é
+  não-quebrante.
+- **Singleton lazy do rootLogger** — `_rootLogger ??= createLogger('root')`.
+  Permite que código de boot stub env vars antes do primeiro uso.
+- **types: ["vitest/globals", "node"]** no tsconfig por causa de `process.env` e
+  `NodeJS.WritableStream` — mesmo pattern do fs-adapter (vs. contracts que só
+  tem `["vitest/globals"]`).
+- **Captura via `PassThrough`** como pattern único de teste — documentado no
+  README + usado em todos os 29 testes de createLogger. Pino com stream
+  customizado escreve síncrono; evento `data` propaga no próximo tick.
+- **Smoke via vitest** (gates 4 e 6) — único caminho prático sem tsx/ ts-node
+  instalados + Node 24 strip-types não auto-resolvendo extensões bundler-style.
+  Worker thread do pino-pretty escreve no stdout do runner, output visível.
+
+### Bloqueios encontrados
+
+4 fricções resolvidas inline:
+
+1. **Lint pegou 3 rules na 1ª rodada do Gate 2**
+   (`@typescript-eslint/ array-type`, `dot-notation`,
+   `consistent-indexed-object-style`) — fix de 5min: `ReadonlyArray<T>` →
+   `readonly T[]`, `process.env['NODE_ENV']` → `process.env.NODE_ENV`,
+   `interface { [key: string]: ... }` → `Readonly<Record<string, ...>>`.
+2. **Cobertura no limite após Gate 3 inicial** (lines 95.74%, branches 90%) —
+   branches descobertos eram os `else` (object-only sem msg) em
+   debug/info/error/fatal (só testado em warn). Fix: parametrizar via `it.each`
+   os 5 níveis. Subiu para 100/100/100/100.
+3. **Node 24 strip-types + `import './src/index'`** —
+   `node packages/ logger/_smoke.ts` falhou com `ERR_MODULE_NOT_FOUND` porque
+   Node ESM resolver não auto-adiciona `.ts`. Tentativa via `pnpm dlx tsx`
+   falhou com erro de manifest do pnpm cache. Workaround: vitest como runner
+   (worker do pino-pretty escreve no stdout do runner).
+4. **CWD persistiu entre Bash calls** — `cd packages/logger && ...` deixou a
+   próxima call no diretório errado. Fix: `cd` absoluto de volta ao root.
+
+### Próximo passo
+
+Renan revisa o commit consolidado da Sessão 17 (~10 arquivos novos/modificados:
+package.json + tsconfig + vitest.config + 6 arquivos em src/ + README +
+changeset + 4 arquivos de contexto). Push para develop. Workflows CI rodam
+(lint, type-check, test, build). Próxima sessão recomendada: **W1.C8 inteiro —
+testes ampliados (BL-C8-002 + BL-C8-003)**. Última sessão da W1.
+
+### Observações para a próxima sessão
+
+- **BL-C6-002 está pronto para executar** assim que entrar no cronograma (W3).
+  README do pacote tem seção "Uso esperado nos apps" com exemplos
+  copy-pasteáveis para Leader e Agent. Lista exata dos 8 `console.*` no Agent
+  está em CLAUDE.md §4 (nova subseção C6) + README do pacote — quem fizer W3
+  acha rápido.
+- **Slot do PollingService já existe** (`PollingLogger` interface com
+  `SILENT_LOG` default) — BL-C6-002 será literalmente trocar o wrapper inline
+  por `createLogger('polling-service')`.
+- **Leader vai precisar de logging ADICIONAL** — `dispatchService` try/catch
+  isolado por operador hoje só popula `per_operator[]`; loggar
+  `log.error({err, userId}, 'dispatch failed for operator')` enriquece.
+  `loadLeaderConfig` 5 ConfigError podem ter
+  `log.fatal({code, path}, 'config load failed')` no fail-fast.
+  `OperatorsService.list` idem.
+- **Regra ESLint `no-console` estrita** (autorizada por ADR-020) só pode ser
+  endurecida APÓS BL-C6-002 fechar — refactor sistemático dos
+  `console.warn`/`console.error` remanescentes. Não fazer isolado.
+- **Cobertura `@sprint/logger` ficou 100% por causa de excludes** bem
+  posicionados — `types.ts` (zero runtime) e `index.ts` (barrel transparente).
+  Mesma estratégia de contracts/fs-adapter; nunca bater contra V8 measuring
+  `export type` files.
+- **Smoke cross-package via self-import funciona** em vitest porque o
+  package.json do logger declara seu próprio `name` e pnpm workspace cria o
+  symlink em `node_modules/@sprint/logger`. Qualquer outro package no monorepo
+  que declare `@sprint/logger: workspace:*` vai resolver da mesma forma.
+
+### Arquivos modificados/novos
+
+**Novos (pacote `@sprint/logger`):**
+
+- `packages/logger/package.json`
+- `packages/logger/tsconfig.json`
+- `packages/logger/vitest.config.ts`
+- `packages/logger/README.md`
+- `packages/logger/src/types.ts`
+- `packages/logger/src/config.ts` (+ test)
+- `packages/logger/src/createLogger.ts` (+ test)
+- `packages/logger/src/rootLogger.ts` (+ test)
+- `packages/logger/src/index.ts`
+
+**Novos (raiz):**
+
+- `.changeset/logger-package.md`
+
+**Documentos de contexto (esta sessão):**
+
+- `DECISIONS.md` (+ ADR-020 + registro)
+- `CLAUDE.md` (+ §4 subseção C6)
+- `CHANGELOG.md` ([Unreleased].Added — bloco Sessão 17)
+- `SESSION_LOG.md` (esta entrada)
+- `README.md` (status C6 atualizado)
+
+**Não comitar (deletados):**
+
+- `packages/logger/_smoke.mjs` (Gate 3 — pino-pretty visual)
+- `packages/logger/src/_smoke.test.ts` (Gate 4 — barrel)
+- `packages/logger/src/_xpkg_smoke.test.ts` (Gate 6 — cross-package via alias)
+
+---
+
 ## Sessão 16 — 2026-05-26 — Wave 1, C3 inteiro (Operator Agent MVP)
 
 **Wave atual:** W1 **Método:** gate-by-gate com aprovação explícita entre gates

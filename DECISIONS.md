@@ -94,6 +94,8 @@ entradas em ordem cronológica crescente — mais recente no fim.
   do Leader (design Renan)
 - [ADR-019](#adr-019-arquitetura-do-operator-agent-w1c3-inteiro) — Arquitetura
   do Operator Agent (W1.C3 inteiro)
+- [ADR-020](#adr-020-sprintlogger-com-pino-wrapper-enxuto-w1c6) —
+  `@sprint/logger` com Pino — wrapper enxuto (W1.C6)
 
 ---
 
@@ -1952,3 +1954,136 @@ BrowserWindow em testes.
 - `apps/operator-agent/src/main/services/` (overlayService, ackService,
   historyService, queueService, pollingService, trayService, trayStateService)
 - `.github/workflows/build-agent.yml`
+
+---
+
+## ADR-020: `@sprint/logger` com Pino — wrapper enxuto (W1.C6)
+
+- **Status:** Accepted
+- **Data:** 2026-05-27
+- **Decisores:** Renan (3Studio)
+
+### Contexto
+
+BL-C6-001 entrega o pacote `@sprint/logger`, último item W1 do componente
+Observability. RNF-03 (observabilidade) exige logs estruturados para
+troubleshooting. O Agent já tem 8 `console.warn`/`console.error` espalhados
+(W1.C3 — alguns via injeção `PollingLogger`/`HandleAckDeps`, alguns em fatal
+handlers), e o Leader não tem logging algum em pontos onde lança erro
+silenciosamente. Ambos precisam de uma biblioteca comum antes do refactor de W3
+(BL-C6-002).
+
+A regra ESLint atual (`'no-console': ['error', { allow: ['warn', 'error'] }]`)
+foi propositalmente afrouxada em C8 porque sem `@sprint/logger` não havia
+substituto para `console.warn`/`error` em ramos de erro críticos. CLAUDE.md §12
+("Débitos técnicos pendentes") registra a regra estrita como pendente até esta
+sessão.
+
+### Decisão
+
+Adotamos **Pino como logger core**, exposto via **wrapper enxuto** em
+`@sprint/logger`:
+
+1. **Pino 9.x** como dep runtime — performance (~5× faster que Winston em
+   throughput sustentado), JSON estruturado nativo, child loggers nativos,
+   ecossistema de transports (file rotation, Datadog, Loki, etc.) abre porta
+   para W3/W4 sem reescrever o wrapper.
+2. **`pino-pretty` 11.x** como dep runtime (não devDep) — apps usam em
+   `pnpm dev`. Worker thread em dev mode entrega output colorido legível sem
+   custo no main thread.
+3. **API estreita exposta**: `createLogger(name, options?)`, `rootLogger()`,
+   tipos `Logger`, `LogLevel`, `LoggerOptions`, `ChildBindings`. Cinco níveis
+   (`debug`, `info`, `warn`, `error`, `fatal`) + `child(bindings)` + `name`
+   readonly. Pino expõe ~30 métodos; nosso wrapper expõe 7.
+4. **Detecção dev/prod automática via `NODE_ENV`** — `!== 'production'` ativa
+   pretty print; `'production'` emite JSON puro em stdout. Com
+   `options.destination` (testes), sempre JSON síncrono no stream fornecido —
+   não passa por pino-pretty independentemente do `NODE_ENV`.
+5. **`LOG_LEVEL` env var como override universal** — case-insensitive.
+   Precedência: `options.level` > `LOG_LEVEL` env > default por `NODE_ENV`
+   (`'debug'` em dev, `'info'` em prod). Valor inválido em `LOG_LEVEL` é
+   ignorado silenciosamente (fallback para o default — evita boot crash por
+   typo).
+6. **`rootLogger()` é singleton lazy** — primeira chamada cria; chamadas
+   subsequentes retornam a mesma instância. Lazy permite que código de boot stub
+   env vars antes do primeiro uso. `_resetRootLoggerForTesting()` (helper
+   interno, não exportado no barrel) força reconstrução em testes que mudam
+   `NODE_ENV`/ `LOG_LEVEL`.
+7. **Suporte a destination customizado primariamente para testes** — captura via
+   `PassThrough` documentada no README com helper `captureLines()`. Padrão
+   estabelecido nos 29 testes de `createLogger.test.ts`.
+8. **`options.bindings` aplicado via `.child()` após criação** — preserva o
+   default `base: { pid, hostname }` do Pino. Sobrescrever via `options.base`
+   removeria pid/hostname; usar child mantém ambos.
+
+### Alternativas consideradas
+
+| Alternativa                                     | Por que rejeitada                                                                                                                                                                                  |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Winston**                                     | ~5× mais lento que Pino em throughput sustentado. API mais legacy (formatters/transports complexos). Menor adoção em projetos novos.                                                               |
+| **Bunyan**                                      | Descontinuado (último release relevante em 2017). Sem path de evolução.                                                                                                                            |
+| **`console.*` wrapper customizado**             | Reinventa roda. Sem formato estruturado nativo. Sem child loggers. Performance pior por causa do `console.*` overhead em alta cadência.                                                            |
+| **Expor Pino diretamente** (sem wrapper)        | Vazaria detalhes de implementação. Trocar Pino futuramente (ex.: por OpenTelemetry, Datadog SDK) exigiria mudança em N services. Wrapper enxuto isola.                                             |
+| **API wide** (expor `trace`, `silent`, `flush`) | YAGNI. `trace` ruidoso demais em produção; `silent` melhor expresso via `LOG_LEVEL=fatal`; `flush` raramente útil. Expandir é não-quebrante; encolher quebra consumidores.                         |
+| **`react-hook-form`-style options via builder** | Overkill. `createLogger(name, options?)` cobre 100% dos casos. Builder API só pagaria custo se houvesse 10+ opções.                                                                                |
+| **File transport + Sentry agora**               | Fora do escopo do BL-C6-001. File transport é BL-C6-003 (W3) com `pino-roll`; Sentry/serviço externo é BL-C6-004 (W4+). Esta sessão entrega fundação; integração nos apps + transports vêm depois. |
+
+### Consequências
+
+**Aceitas:**
+
+- Apps podem importar `createLogger` e ter logging estruturado pronto.
+  Integração real em W3 (BL-C6-002) é trivial — o `PollingService` já tem slot
+  de injeção pronto (`PollingLogger` interface com `SILENT_LOG` default).
+- Migrações futuras de implementação (OpenTelemetry, Datadog SDK, custom
+  transport) só tocam `@sprint/logger`; consumidores ficam intactos. Decoupling
+  deliberado.
+- Coverage 100% nos 3 arquivos de runtime (config, createLogger, rootLogger). 57
+  testes cobrindo: filtragem por nível, precedência de options/env/default,
+  child com bindings acumulados, name preservado em child recursivo, fluxos
+  dev/prod default sem crash.
+- README do pacote tem seção "Uso esperado nos apps (W3 / BL-C6-002)" com
+  exemplos copy-pasteáveis + lista exata dos 8 `console.*` no Agent.
+
+**Trade-offs:**
+
+- Worker thread do `pino-pretty` em dev mode tem startup cost (~50ms). Aceitável
+  para `pnpm dev`; pode ser desligado em testes via `options.destination`
+  (PassThrough).
+- Bindings de `child` restritos a primitivos (`string|number|boolean|null`) —
+  Pino aceita estruturas aninhadas, mas a v1 do wrapper troca isso por
+  previsibilidade do shape JSON. Expandir é não-quebrante.
+- Dispatch explícito por nível (~30 linhas) é verboso, mas preserva type-safety
+  sem `any` e sem casts. Alternativas (indexer, bind) caem em variance issues do
+  TS.
+
+### Endurecimento futuro da regra ESLint `no-console`
+
+CLAUDE.md §12 ("Débitos técnicos pendentes") registra a regra estrita
+(`'no-console': 'error'`, sem `allow`) como pendente até BL-C6-002. Após o
+refactor sistemático dos `console.warn`/`console.error` remanescentes nos apps,
+abrir PR dedicado para endurecer a regra (W3). Este ADR autoriza a mudança;
+disparador é a entrega de BL-C6-002.
+
+### Padrão de captura em testes
+
+Helper `captureLines()` (PassThrough + parse de linhas JSON) é o padrão único
+para asserts de output. Documentado no README do pacote
+(`packages/logger/ README.md`, seção "Para testes"). Usado em todos os 29 testes
+de `createLogger.test.ts`. Pino com stream customizado escreve síncrono; evento
+`data` propaga no próximo tick — `await new Promise(r => setImmediate(r))` basta
+para flush.
+
+### Referências
+
+- BL-C6-001 (esta sessão); BL-C6-002 (integração — W3), BL-C6-003 (file
+  transport — W3), BL-C6-004 (Sentry/externo — W4+)
+- RNF-03 (observabilidade) — esta sessão cumpre a fundação
+- ADR-019 (W1.C3 inteiro) — Agent introduziu o slot `PollingLogger` /
+  `HandleAckDeps` esperando o logger real
+- CLAUDE.md §4 (nova subseção "Estrutura interna de `@sprint/logger` (W1.C6)")
+- CLAUDE.md §12 (regra `no-console` estrita pendente — débito que este ADR fecha
+  após BL-C6-002)
+- `packages/logger/README.md`
+- [Pino docs](https://getpino.io)
+- [`pino-pretty` docs](https://github.com/pinojs/pino-pretty)

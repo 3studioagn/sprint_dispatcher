@@ -466,6 +466,92 @@ apps/operator-agent/src/
   windows-latest, `pnpm --filter ... run make`, upload-artifact. Build local
   falha pelo ESET (G-009).
 
+### Estrutura interna de `@sprint/logger` (W1.C6 — Sessão 17)
+
+Pacote enxuto, source-first. Espelha a estrutura de `contracts` e `fs-adapter`
+(módulos top-level + barrel `src/index.ts`). Entregue inteiro em uma sessão
+(BL-C6-001):
+
+```
+packages/logger/src/
+├── types.ts             # Logger, LogLevel, LoggerOptions, ChildBindings (export type only)
+├── config.ts            # isDevelopment, isValidLevel, resolveLevel (internos)
+├── config.test.ts       # 25 testes
+├── createLogger.ts      # factory + helpers privados (buildPinoInstance, wrap)
+├── createLogger.test.ts # 29 testes (incl. it.each para 5 níveis × 3 formas de chamada)
+├── rootLogger.ts        # singleton lazy + _resetRootLoggerForTesting
+├── rootLogger.test.ts   # 3 testes
+└── index.ts             # barrel: createLogger, rootLogger, 4 tipos
+```
+
+**Convenções específicas do logger:**
+
+- **API estreita por design** — barrel exporta `createLogger` + `rootLogger` + 4
+  tipos. Helpers internos (`isDevelopment`, `isValidLevel`, `resolveLevel`,
+  `_resetRootLoggerForTesting`) ficam privados. Pino expõe ~30 métodos; nós
+  expomos 7 (5 níveis + `child` + `name`). Trocar Pino futuramente afeta só esse
+  pacote.
+- **Wrapper opaco em torno do Pino** — `wrap(pinoInstance, name)` em
+  `createLogger.ts` retorna objeto com superfície reduzida. `child(bindings)`
+  recursa via `wrap` para que o sub-logger também enxergue só nossa interface.
+- **Dispatch explícito por nível** — cada método (`debug/info/warn/error/fatal`)
+  tem 3 ramos (string-only / obj+msg / obj-only) para preservar type-safety sem
+  `any`. Verboso (~30 linhas para 5 níveis) mas determinístico.
+- **`options.bindings` aplicado via `.child()` após criação** — preserva o
+  default `base: { pid, hostname }` do Pino (vs. sobrescrever via
+  `options.base`).
+- **Convenção de naming dos loggers**: `componente-servico` em kebab-case. Ex:
+  `polling-service`, `leader-main`, `dispatch-service`, `overlay-service`.
+- **Detecção dev/prod via `NODE_ENV`** — `!= 'production'` → pretty print via
+  `pino-pretty` (worker thread); `production` → JSON estruturado em stdout. Com
+  `options.destination` customizado (testes), sempre JSON síncrono no stream
+  fornecido.
+- **`LOG_LEVEL` env var override** — case-insensitive. Precedência:
+  `options.level` > env > default por `NODE_ENV` (`'debug'` em dev, `'info'` em
+  prod). Valor inválido em `LOG_LEVEL` (ex.: `verbose`, `silly`) é ignorado
+  silenciosamente, fallback para o default.
+- **`rootLogger()` é singleton lazy** — primeira chamada cria; subsequentes
+  retornam a mesma instância. Lazy permite que código de boot stub env vars
+  antes do primeiro uso. `_resetRootLoggerForTesting()` força reconstrução em
+  testes que mudam `NODE_ENV`/`LOG_LEVEL`.
+- **Captura de output em testes via `PassThrough`** — pattern documentado no
+  README do pacote (seção "Para testes"). Pino com stream customizado escreve
+  síncrono, mas o evento `data` propaga no próximo tick —
+  `await new Promise(r => setImmediate(r))` é suficiente para flush.
+- **Coverage**: 100% nos 3 arquivos com runtime (config.ts, createLogger.ts,
+  rootLogger.ts). `types.ts` (zero statements de runtime — só `export type`) e
+  `index.ts` (barrel, excluído por config) não aparecem.
+
+**Pendência conhecida da W3 (BL-C6-002):**
+
+Integração nos apps fica para W3 — refactor sistemático de `console.*` no Agent
+e adição de logging onde o Leader hoje lança silenciosamente. Locais exatos
+apurados na Sessão 17:
+
+- `apps/operator-agent/src/renderer/hooks/useIncomingSprint.ts:39` —
+  console.warn
+- `apps/operator-agent/src/main/index.ts:75-77` — console.error
+  (uncaughtException)
+- `apps/operator-agent/src/main/index.ts:88` — console.error
+  (unhandledRejection)
+- `apps/operator-agent/src/main/index.ts:171, 204` — console.warn (handleAck
+  deps)
+- `apps/operator-agent/src/main/index.ts:216, 219` — console.warn/error (polling
+  deps)
+- `apps/operator-agent/src/main/index.ts:319` — console.error (handleAck
+  fallback)
+
+O `PollingService` já tem o slot de injeção pronto (`PollingLogger` interface
+com `SILENT_LOG` default) — refactor BL-C6-002 será literalmente trocar o
+wrapper inline `{warn: console.warn, error: console.error}` por wrapper
+construído a partir do `createLogger`. **Leader** tem ZERO `console.*` hoje, mas
+ganha logging onde só lança erro silenciosamente (`dispatchService.dispatch`
+try/catch isolado por operador, `loadLeaderConfig` 5 ConfigError,
+`OperatorsService.list`).
+
+Pendências adicionais (W3+): BL-C6-003 (file transport com `pino-roll` e rotação
+diária em `<userData>/logs/`), BL-C6-004 (Sentry / serviço externo — W4+).
+
 ---
 
 ## 5. Componentes

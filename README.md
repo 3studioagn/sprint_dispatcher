@@ -66,8 +66,8 @@ sprint-dispatcher/
 │
 ├── packages/                   # Libraries internas (workspace:*)
 │   ├── contracts/              # C1 — schemas Zod + tipos compartilhados
-│   └── fs-adapter/             # C4 — adapter de filesystem (port + 2 impls)
-│   # logger/ chega em Wave 1 (C6)
+│   ├── fs-adapter/             # C4 — adapter de filesystem (port + 2 impls)
+│   └── logger/                 # C6 — wrapper Pino (pretty em dev, JSON em prod)
 │
 ├── .github/workflows/          # CI (ci.yml) + build Windows (build-leader.yml)
 ├── .changeset/                 # Versionamento dos packages internos
@@ -95,15 +95,16 @@ do repositório**, gerenciados externamente por Renan.
 | C3  | Operator Agent                             | Desktop App   | ✅ W1 MVP (Sessão 16)      |
 | C4  | Filesystem Adapter (`@sprint/fs-adapter`)  | Library       | ✅ Domain W1 (Pending+Ack) |
 | C5  | Installer & Deployment                     | Package       | ✅ Config validada         |
-| C6  | Observability & Logging (`@sprint/logger`) | Library       | ⏸️ Wave 1                  |
+| C6  | Observability & Logging (`@sprint/logger`) | Library       | ✅ W1 (Sessão 17)          |
 | C7  | Documentation                              | Docs          | 🔄 Em fechamento da Wave 0 |
 | C8  | Quality Assurance                          | Cross-cutting | 🔄 Em fechamento da Wave 0 |
 
 Detalhes operacionais de cada componente: ver os `README.md` em
 [`apps/leader`](./apps/leader/README.md),
 [`apps/operator-agent`](./apps/operator-agent/README.md),
-[`packages/contracts`](./packages/contracts/README.md) e
-[`packages/fs-adapter`](./packages/fs-adapter/README.md).
+[`packages/contracts`](./packages/contracts/README.md),
+[`packages/fs-adapter`](./packages/fs-adapter/README.md) e
+[`packages/logger`](./packages/logger/README.md).
 
 ## Comandos comuns
 
