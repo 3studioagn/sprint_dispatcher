@@ -676,7 +676,7 @@ Thresholds materializados nos `vitest.config.ts` de cada workspace. `pnpm test`
 | `@sprint/fs-adapter`           |   95% |       95% |      95% |        95% |
 | `@sprint/logger`               |   95% |       95% |      90% |        95% |
 | `sprint-operator-agent` (main) |   90% |       90% |      85% |        90% |
-| `sprint-leader`                |   n/a |       n/a |      n/a |        n/a |
+| `sprint-leader`                |   95% |       90% |      90% |        95% |
 
 Cobertura realmente exercida (Sessão 18 — pós W1.C8 expansion):
 `@sprint/contracts` **100/100/100/100** (230 → 317 testes; threshold 98/95/98/98
@@ -688,9 +688,11 @@ testes); `sprint-operator-agent` **97.76/91.47/95.4/97.76** (190 testes);
 **Total monorepo: 1056 testes verdes.** Thresholds materializados — build falha
 automaticamente se cobertura regredir.
 
-`sprint-leader` em W0 é scaffold sem lógica testável (main/preload via E2E em W3
-— Playwright). À medida que código de domínio for adicionado em W1+, thresholds
-serão introduzidos via PR dedicado. Reporters padronizados nos 4 workspaces:
+Thresholds do `sprint-leader` materializados em sessão pós-auditoria W1
+(2026-05-27, fix de F-017) — 95/90/90/95, com folga sobre o real
+96.89/94.51/93.84/96.89. `main/index.ts` (boot) e `main/ipc.ts` (envelope)
+seguem excluídos do coverage; testados via E2E em W3 (Playwright). Reporters
+padronizados nos 4 workspaces:
 `['text', 'json', 'json-summary', 'html', 'lcov']`.
 
 ### 7.8. Commits (Conventional Commits)

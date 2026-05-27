@@ -59,3 +59,8 @@ app-builds/
 .cache/
 .tmp/
 *.tmp
+
+# Artefatos temporarios de auditorias (extrações markdown de .docx + outputs
+# de comandos baseline). Resumos consolidados ficam em AUDIT_*_pre_*.md +
+# TECH_DEBT.md — `.audit-tmp/` em si é working storage, não historico.
+.audit-tmp/

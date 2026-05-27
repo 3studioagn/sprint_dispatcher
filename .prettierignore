@@ -17,3 +17,8 @@ CHANGELOG.md
 # que o format:check do CI reclame deles.
 dev-fixtures/shared/pending/
 dev-fixtures/shared/acks/
+
+# Artefatos da auditoria pre-W2 (extrações markdown de .docx + outputs de
+# comandos baseline). Conteúdo gerado por ferramenta externa — não
+# reformatar.
+.audit-tmp/

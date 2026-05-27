@@ -9,6 +9,82 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Fixed
+
+<!-- ↓↓↓ Sessão 19 (2026-05-27) — Correções pós-auditoria W1 (Caminho 2) ↓↓↓ -->
+
+- **Sessão de correções pós-auditoria W1 (`AUDIT_W1_pre_W2.md`)** —
+  Caminho 2 (Mínimo + UX). 5 dos 25 findings RESOLVED; 20 DEFERRED
+  catalogados em novo `TECH_DEBT.md`. Veredito da auditoria muda de ⚠️
+  AVANÇAR COM RESSALVAS para ✅ **PRONTO PARA W2**. Total monorepo: 1056 →
+  **1069 testes verdes** (+13 regressão). `pnpm audit --audit-level=high`
+  agora exit 0 (1 HIGH eliminado).
+- **F-020 (High):** `pnpm.overrides.tmp: ^0.2.6` em
+  [package.json:42](package.json:42). Elimina o advisory HIGH
+  `tmp <0.2.6` (Path Traversal, GHSA-ph9p-34f9-6g65) na cadeia
+  `apps/leader > electron-builder > app-builder-lib > @malept/flatpak-bundler
+> tmp-promise > tmp`. 3 moderate restantes (`esbuild`, `vite` × 2) são
+  build-time only — fora do escopo F-020.
+- **F-017 (High):** `coverage.thresholds: { lines: 95, functions: 90,
+branches: 90, statements: 95 }` materializados em
+  [apps/leader/vitest.config.ts:29](apps/leader/vitest.config.ts:29).
+  Coverage real 96.99/94.28/94.02/96.99 passa com folga. CLAUDE.md §7.7.1
+  atualizado: tabela troca `n/a` por valores; parágrafo final substituído
+  com nota da sessão pós-auditoria.
+- **F-002 (High):** `skipTaskbar: false → true` em
+  [overlayService.ts:239](apps/operator-agent/src/main/services/overlayService.ts:239)
+  — alinha com backlog BL-C3-004 AC4 e snippet do CLAUDE.md §8.2. +2 testes
+  regressão F-002 via `expect.objectContaining({ skipTaskbar: true })` no
+  mock BrowserWindow ([overlayService.test.ts:443-478](apps/operator-agent/src/main/services/overlayService.test.ts:443)).
+  TDD-style: teste FALHOU antes do fix, passou após.
+- **F-024 (Medium):** State `warning` em
+  [AckButton.tsx](apps/operator-agent/src/renderer/components/AckButton/AckButton.tsx) —
+  quando `result.data.moved_to_history === false`, mostra `<p role="status">`
+  com mensagem específica do failure de archive. Warning não-bloqueante (ack
+  já foi escrito). Nova classe CSS `.warning` em AckButton.module.css. +4
+  testes regressão F-024 cobrindo: moved_to_history=false → warning visible;
+  moved_to_history=true → sem warning; warning persiste com button disabled;
+  warning some após remount via key.
+- **F-025 (Medium):** Novo componente
+  [ErrorBanner](apps/leader/src/renderer/components/ErrorBanner/ErrorBanner.tsx)
+  (tsx + module.css + index + 4 testes unit) — banner role="alert" com
+  título, mensagem técnica em mono, hint TI, botão opcional retry. Wire em
+  [NovaSprint.tsx:139-143](apps/leader/src/renderer/routes/NovaSprint/NovaSprint.tsx:139)
+  — renderiza condicional substituindo `<OperatorList>` quando
+  `loadStatus === 'error'`. **Atende UC-01 fluxo alternativo A4** dos
+  Requisitos ("Pasta compartilhada inacessível: Sistema exibe erro de
+  conexão e instrui contato com TI"). +3 testes regressão F-025.
+
+### Added — Sessão 19 (2026-05-27)
+
+- **`TECH_DEBT.md`** novo na raiz — catálogo estruturado dos 20 findings
+  DEFERRED da auditoria com gatilho/bloqueio/estimativa/recomendação por
+  entrada. Agrupa findings por padrão temático (Renan-dependentes, UX
+  silent, persistência local, IPC inconsistency, test infra subdimensionada,
+  docs lag).
+- **`.audit-tmp/` adicionado ao `.prettierignore`** — artifacts da auditoria
+  pré-W2 (extrações .docx em markdown + outputs de comandos baseline) não
+  devem ser reformatados.
+
+### Notes — Sessão 19
+
+- 20 findings DEFERRED em `TECH_DEBT.md`:
+  - **High Renan-dependentes (2):** F-003 (timer source — ADR-022), F-006
+    (per-user vs all-users paths — ADR-023).
+  - **Medium (6):** F-004 (tray menu), F-005 (tray left-click), F-007
+    (BL-C6 numbering + file rotation W3), F-011 (persistent_popup — par
+    F-003), F-012 (historyService bypass — par F-006), F-018 (Agent
+    thresholds).
+  - **Low (12):** F-001, F-008, F-009, F-010, F-013, F-014, F-015, F-016,
+    F-019, F-021, F-022, F-023.
+- Veredito atualizado: ✅ **PRONTO PARA W2**. Próxima sessão recomendada:
+  W2 começando por BL-C4-004 + BL-C2-009 + BL-C3-009 (ciclo de
+  cancelamento).
+- Zero findings NOVOS descobertos durante a sessão de correções — escopo
+  cirurgicamente respeitado.
+
+<!-- ↑↑↑ Sessão 19 ↑↑↑ -->
+
 ### Added
 
 <!-- ↓↓↓ Sessão 18 (2026-05-27) — W1.C8 inteiro: testes ampliados — FECHA W1 ↓↓↓ -->

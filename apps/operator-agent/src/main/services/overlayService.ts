@@ -236,7 +236,7 @@ export class OverlayService {
       fullscreen: true,
       frame: false,
       alwaysOnTop: true,
-      skipTaskbar: false,
+      skipTaskbar: true,
       closable: true,
       resizable: false,
       movable: false,

@@ -135,3 +135,89 @@ describe('AckButton — click flow', () => {
     });
   });
 });
+
+describe('AckButton — moved_to_history: false (regressão F-024)', () => {
+  it('regressão F-024: sucesso com moved_to_history: false → warning role="status" visível', async () => {
+    vi.mocked(window.api.sprint.acknowledge).mockResolvedValueOnce({
+      ok: true,
+      data: { acknowledged_at: '2026-05-26T10:00:00.000Z', moved_to_history: false },
+    });
+    render(<AckButton sprintId={SPRINT_ID} userId={USER_ID} />);
+    fireEvent.click(screen.getByRole('button', { name: /recebi/i }));
+
+    const warning = await screen.findByRole('status');
+    expect(warning).toHaveTextContent(/Histórico local não foi atualizado/i);
+    expect(warning).toHaveTextContent(/confirmada com sucesso/i);
+
+    // Sem role="alert" — não é erro, apenas warning não-bloqueante
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('regressão F-024: sucesso com moved_to_history: true → SEM warning', async () => {
+    vi.mocked(window.api.sprint.acknowledge).mockResolvedValueOnce({
+      ok: true,
+      data: { acknowledged_at: '2026-05-26T10:00:00.000Z', moved_to_history: true },
+    });
+    render(<AckButton sprintId={SPRINT_ID} userId={USER_ID} />);
+    fireEvent.click(screen.getByRole('button', { name: /recebi/i }));
+
+    // Aguarda o invoke completar — button passa para "Confirmando…"
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /confirmando/i })).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('regressão F-024: warning persiste enquanto button fica disabled (loading=true) — esperando remount via sprint:incoming push', async () => {
+    vi.mocked(window.api.sprint.acknowledge).mockResolvedValueOnce({
+      ok: true,
+      data: { acknowledged_at: '2026-05-26T10:00:00.000Z', moved_to_history: false },
+    });
+
+    render(<AckButton sprintId={SPRINT_ID} userId={USER_ID} />);
+    fireEvent.click(screen.getByRole('button', { name: /recebi/i }));
+
+    // Aguarda o ack completar (sucesso, mas archive falhou)
+    await screen.findByRole('status');
+
+    // Button permanece disabled ("Confirmando…") esperando o React remount
+    // disparado pelo próximo `sprint:incoming` ou `overlay:minimize`. UX
+    // intencional: ack já foi escrito, operador não deve re-clicar.
+    expect(screen.getByRole('button', { name: /confirmando/i })).toBeDisabled();
+    expect(screen.getByRole('status')).toHaveTextContent(/Histórico local não foi atualizado/i);
+  });
+
+  it('regressão F-024: warning não suprime mensagem de erro de sprints subsequentes (após remount via key)', async () => {
+    // Remount via key — simula novo sprint:incoming chegando.
+    vi.mocked(window.api.sprint.acknowledge).mockResolvedValueOnce({
+      ok: true,
+      data: { acknowledged_at: '2026-05-26T10:00:00.000Z', moved_to_history: false },
+    });
+
+    const { rerender } = render(
+      <AckButton key={SPRINT_ID} sprintId={SPRINT_ID} userId={USER_ID} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /recebi/i }));
+    await screen.findByRole('status');
+
+    // Remount com novo sprint_id — React cria componente do zero
+    const SPRINT_ID_2 = '01HXAAABBBCCCDDDEEEFFFGGGH';
+    vi.mocked(window.api.sprint.acknowledge).mockResolvedValueOnce({
+      ok: false,
+      error: { code: 'IO', message: 'segunda falha' },
+    });
+    rerender(<AckButton key={SPRINT_ID_2} sprintId={SPRINT_ID_2} userId={USER_ID} />);
+
+    // Após remount: warning some, button volta a habilitado
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /recebi/i })).toBeEnabled();
+
+    // Novo click → mostra erro da segunda chamada
+    fireEvent.click(screen.getByRole('button', { name: /recebi/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(/segunda falha/);
+    });
+  });
+});

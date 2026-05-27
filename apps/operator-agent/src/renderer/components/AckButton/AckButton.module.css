@@ -40,3 +40,11 @@
   text-align: center;
   max-width: 600px;
 }
+
+.warning {
+  color: var(--color-warning, #d8a23a);
+  font-size: var(--font-size-base);
+  text-align: center;
+  max-width: 700px;
+  margin: 0;
+}

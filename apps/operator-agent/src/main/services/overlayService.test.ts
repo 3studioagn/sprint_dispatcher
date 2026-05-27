@@ -439,3 +439,36 @@ describe('OverlayService — onStateChange', () => {
     expect(cb).not.toHaveBeenCalled();
   });
 });
+
+describe('OverlayService — BrowserWindow construction args (regressão F-002)', () => {
+  let service: OverlayService;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    mockBrowserWindow.mockClear();
+    mockBrowserWindowInstances.length = 0;
+    service = new OverlayService({ minimizeAfterMs: MINIMIZE_AFTER_MS });
+  });
+
+  afterEach(() => {
+    service.destroy();
+    vi.useRealTimers();
+  });
+
+  it('regressão F-002: BrowserWindow do overlay é criado com skipTaskbar: true (backlog BL-C3-004 AC4 + CLAUDE.md §8.2)', () => {
+    service.showSprint(makeItem(), 1);
+    expect(mockBrowserWindow).toHaveBeenCalledTimes(1);
+    expect(mockBrowserWindow).toHaveBeenCalledWith(expect.objectContaining({ skipTaskbar: true }));
+  });
+
+  it('regressão F-002: demais flags TOPMOST presentes no constructor (defesa em profundidade — fullscreen, frame:false, alwaysOnTop)', () => {
+    service.showSprint(makeItem(), 1);
+    expect(mockBrowserWindow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fullscreen: true,
+        frame: false,
+        alwaysOnTop: true,
+      }),
+    );
+  });
+});

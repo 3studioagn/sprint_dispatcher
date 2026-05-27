@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { BulkSelectButtons } from '../../components/BulkSelectButtons';
 import { DeadlineInput } from '../../components/DeadlineInput';
 import { DispatchModal } from '../../components/DispatchModal';
+import { ErrorBanner } from '../../components/ErrorBanner';
 import { OperatorList } from '../../components/OperatorList';
 import { api } from '../../services/api';
 import { selectIsDispatching, useDispatchStore } from '../../stores/useDispatchStore';
@@ -26,6 +27,7 @@ const TOAST_TIMEOUT_MS = 4000;
 
 export function NovaSprint() {
   const loadStatus = useOperatorsStore((s) => s.status);
+  const loadError = useOperatorsStore((s) => s.error);
   const loadOperators = useOperatorsStore((s) => s.loadOperators);
   const selectedCount = useSprintComposerStore(selectSelectedCount);
   const isFormValid = useSprintComposerStore(selectIsValid);
@@ -143,7 +145,11 @@ export function NovaSprint() {
           </div>
           <BulkSelectButtons />
         </div>
-        <OperatorList />
+        {loadStatus === 'error' && loadError !== null ? (
+          <ErrorBanner message={loadError} onRetry={loadOperators} />
+        ) : (
+          <OperatorList />
+        )}
         <p className={isFormValid ? styles.statusReady : styles.statusPending} aria-live="polite">
           {isFormValid ? 'Pronto para disparar' : 'Preencha todos os campos para disparar'}
         </p>

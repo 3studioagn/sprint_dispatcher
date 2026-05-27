@@ -26,7 +26,12 @@ export default defineConfig({
         'src/renderer/env.d.ts',
         'src/renderer/test-setup.ts',
       ],
-      // W0: scaffold sem lógica, sem threshold; W1+ define
+      thresholds: {
+        lines: 95,
+        functions: 90,
+        branches: 90,
+        statements: 95,
+      },
     },
   },
 });

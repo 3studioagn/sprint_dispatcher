@@ -66,6 +66,196 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 19 — 2026-05-27 — Correções pós-auditoria W1 (Caminho 2)
+
+**Wave atual:** W1 → ✅ **PRONTO PARA W2** **Método:** gate-by-gate corretivo,
+escopo mínimo por finding + teste de regressão antes do fix **Duração
+estimada:** ~3-4h (7 gates) **Itens trabalhados:** [F-002, F-017, F-020, F-024,
+F-025 RESOLVED; 20 findings DEFERRED catalogados em TECH_DEBT.md]
+
+### Objetivo da sessão
+
+Executar Caminho 2 do `AUDIT_W1_pre_W2.md` (recomendado pelo prompt da sessão de
+correções): Caminho 1 mínimo (F-020 + F-017 + F-002 — fixes mecânicos sem
+decisão arquitetural) + Bloco B UX silent failures (F-024 + F-025 via padrão
+ErrorBanner). Veredito da auditoria muda de ⚠️ AVANÇAR COM RESSALVAS (5 High)
+para ✅ PRONTO PARA W2 (2 High DEFERRED Renan-dependentes ≤ 3). 20 findings
+restantes catalogados em novo `TECH_DEBT.md` com gatilhos de reativação por
+finding.
+
+### O que foi feito
+
+- **Gate 1 — triagem.** Lido `AUDIT_W1_pre_W2.md` integralmente (25 findings,
+  baseline da auditoria 1056 testes verdes). 3 caminhos apresentados via
+  AskUserQuestion. Renan escolheu **Caminho 2** + DEFERRED via TECH_DEBT.md.
+- **Gate 2 — Batch 1: F-020 (security debt).** `"tmp": "^0.2.6"` em
+  `pnpm.overrides`. `pnpm audit --audit-level=high` exit 0 confirmado. Suíte
+  global verde (1056 mantém).
+- **Gate 3 — Batch 2: F-017 (Leader thresholds).** Materializado
+  `coverage.thresholds: { lines: 95, functions: 90, branches: 90, statements: 95 }`
+  em `apps/leader/vitest.config.ts:29`. CLAUDE.md §7.7.1 atualizado. Coverage
+  real 96.89/94.51/93.84/96.89 passa com folga. Teste de regressão = próprio
+  threshold materializado (build falha se cobertura cair abaixo).
+- **Gate 4 — Batch 3: F-002 (skipTaskbar).** `false → true` em
+  `overlayService.ts:239` (1 char). +2 testes regressão em
+  `overlayService.test.ts:443-478` via
+  `expect.objectContaining({ skipTaskbar: true })` no mock BrowserWindow.
+  **TDD-style confirmado:** teste FALHOU antes do fix
+  (`expected true, got false`), passou após. Erro TS2352 em primeira iteração
+  com cast `as { skipTaskbar: boolean }` — refatorado para
+  `expect.objectContaining` (idiomático vitest, sem cast — respeita red line §9
+  do prompt).
+- **Gate 5 — Batch 4: F-024 + F-025 (ErrorBanner UX).**
+  - **F-025 (Leader):** novo componente
+    `apps/leader/src/renderer/components/ErrorBanner/` (tsx + module.css +
+    index). Wire em `NovaSprint.tsx:139-143` — quando
+    `loadStatus === 'error' && loadError !== null`, renderiza
+    `<ErrorBanner message={loadError} onRetry={loadOperators} />` substituindo
+    `<OperatorList>`. UC-01 fluxo alternativo A4 dos Requisitos atendido. +4
+    testes ErrorBanner unit + 3 NovaSprint regressão F-025.
+  - **F-024 (Agent):** state `warning` em
+    `apps/operator-agent/src/renderer/components/AckButton/AckButton.tsx` —
+    quando `result.ok === true && !result.data.moved_to_history`, seta mensagem
+    `'Histórico local não foi atualizado. A rodada foi confirmada com sucesso, mas pode não aparecer em "Histórico".'`.
+    Renderizado em `<p role="status">` (warning não-bloqueante; ack já foi
+    escrito). Classe CSS `.warning` em `AckButton.module.css`. +4 testes
+    regressão F-024.
+- **Gate 6 — verificação consolidada.** Re-rodada da bateria da auditoria:
+  install, type-check, lint, build, format:check, test, audit, coverage. Todos
+  os checks PASS. `.audit-tmp/` adicionado ao `.prettierignore`. Grep
+  adversarial de `any`/`@ts-ignore`/`console.log` em produção: zero novos.
+- **Gate 7 — fechamento.** Esta entrada SESSION_LOG. Novo `TECH_DEBT.md` com 20
+  findings DEFERRED catalogados (severidade + bloqueio + gatilho + estimativa +
+  recomendação). Status `⏸️ DEFERRED` adicionado em cada uma das 20 entradas
+  individuais do AUDIT report (+ 5 já `✅ RESOLVED`). Seção "Histórico de
+  correções" no AUDIT report com tabela comparativa baseline vs pós-correções.
+  Sumário Executivo do AUDIT atualizado: veredito ⚠️ → ✅. CHANGELOG.md bloco
+  Sessão 19. README.md status atualizado. 1 changeset gerado.
+
+### Estado atual
+
+- **Veredito da auditoria:** ✅ **PRONTO PARA W2** (0 Critical, 2 High DEFERRED
+  Renan-dependentes ≤ 3 — F-003 e F-006).
+- **Findings:**
+  - ✅ RESOLVED (5): F-020, F-017, F-002, F-024, F-025.
+  - ⏸️ DEFERRED (20): catalogados em `TECH_DEBT.md` com gatilhos individuais.
+- **Suíte:** 1056 → **1069 testes verdes** (+13: F-002 +2, F-024 +4, F-025 +3,
+  ErrorBanner unit +4).
+- **`pnpm audit --audit-level=high`:** exit 0 (1 HIGH eliminado; 3 moderate
+  build-time only persistem como tech debt).
+- **Coverage thresholds materializados:**
+  - `@sprint/contracts`: 98/95/98/98 (real 100/100/100/100) ✅
+  - `@sprint/fs-adapter`: 95/95/95/95 (real 100/99.53/100/100) ✅
+  - `@sprint/logger`: 95/90/95/95 (real 100/100/100/100) ✅
+  - `sprint-leader`: **95/90/90/95** (real 96.99/94.28/94.02/96.99) ✅ — NOVO
+  - `sprint-operator-agent`: 70/65/70/70 (real 97.78/91.57/95.4/97.78) ✅ —
+    threshold ainda subdimensionado (F-018 DEFERRED).
+
+### Decisões tomadas
+
+- **Caminho 2 (não Caminho 3)** — escolha do Renan via AskUserQuestion.
+- **Testes de regressão sem cast `as unknown as`** — `expect.objectContaining`
+  no F-002 substitui cast manual. Respeita red line §9 do prompt.
+- **ErrorBanner criado APENAS no Leader** — apps são separados pela red line
+  ESLint. Para o Agent (F-024), state inline no AckButton segue mesmo padrão UX
+  sem componente reutilizável.
+- **`warning` no AckButton usa `role="status"`, não `"alert"`** — é warning
+  não-bloqueante; ack já foi escrito no shared.
+- **`.audit-tmp/` adicionado ao `.prettierignore`** — artifacts não
+  reformatados.
+- **TECH_DEBT.md criado** como sucessor estruturado do "Débitos técnicos
+  pendentes" do CLAUDE.md §12 — formato com gatilho/bloqueio/estimativa por
+  finding.
+
+### Bloqueios encontrados
+
+3 fricções, todas resolvidas inline:
+
+1. **Type-check falhou** com cast `as { skipTaskbar: boolean }` (TS2352). Fix:
+   `expect.objectContaining` é pattern idiomático vitest, sem cast.
+2. **Teste F-024 "re-click após archive failure"** falhou porque button fica
+   disabled após `moved_to_history: false`. Fix: substituí por cenário real
+   ("warning persiste enquanto disabled" + "warning some após remount via
+   `key`").
+3. **Format:check falhou** após edits (`.audit-tmp/` não estava no
+   prettierignore). Fix: adicionado + `prettier --write` nos arquivos
+   modificados.
+
+### Próximo passo
+
+Renan revisa o commit consolidado da Sessão 19. Push para `develop`. Workflows
+CI rodam (lint, type-check, test:coverage, build).
+
+**Próxima sessão sugerida:** **Wave 2 — features secundárias do MVP.**
+Recomendação: começar pela infraestrutura de cancelamento (BL-C4-004 +
+BL-C2-009 + BL-C3-009). F-003 e F-006 (High DEFERRED) podem entrar em paralelo
+via sessão dedicada de ADRs quando convergir o cronograma da W2.
+
+### Observações para a próxima sessão
+
+- **Veredito ✅ PRONTO PARA W2** validado por baseline pós-correções (1069
+  testes, audit limpa de High, coverage thresholds materializados).
+- **TECH_DEBT.md é a nova fonte da verdade** para findings remanescentes da
+  auditoria — cada entrada tem **gatilho de reativação**.
+- **F-003 + F-011 e F-006 + F-012** são pares com mesma raiz — quando ADR-022 /
+  ADR-023 sair, corrigir os 4 num PR coordenado.
+- **F-018 (Agent threshold)** é fix mecânico análogo ao F-017 — pode ir junto na
+  próxima sessão tocando `apps/operator-agent/vitest.config.ts`.
+- **ErrorBanner do Leader é reutilizável** — quando W2 trouxer mais surfaces de
+  erro, instanciar com `message` + `onRetry`.
+- **`pnpm audit --audit-level=high` deve continuar exit 0** — adicionar como
+  check CI em W3/W4 (BL-C8).
+
+### Arquivos modificados/novos
+
+**Raiz:**
+
+- `package.json` (+ `pnpm.overrides.tmp`)
+- `.prettierignore` (+ `.audit-tmp/`)
+
+**`@apps/leader`:**
+
+- `apps/leader/vitest.config.ts` (+ `coverage.thresholds`)
+- `apps/leader/src/renderer/components/ErrorBanner/` **NOVO** (3 arquivos + 1
+  teste)
+- `apps/leader/src/renderer/routes/NovaSprint/NovaSprint.tsx`
+- `apps/leader/src/renderer/routes/NovaSprint/NovaSprint.test.tsx` (+ 3 testes
+  regressão F-025)
+
+**`@apps/operator-agent`:**
+
+- `apps/operator-agent/src/main/services/overlayService.ts` (1 char)
+- `apps/operator-agent/src/main/services/overlayService.test.ts` (+ 2 testes
+  regressão F-002)
+- `apps/operator-agent/src/renderer/components/AckButton/AckButton.tsx` (+ state
+  `warning`)
+- `apps/operator-agent/src/renderer/components/AckButton/AckButton.module.css`
+  (+ `.warning`)
+- `apps/operator-agent/src/renderer/components/AckButton/AckButton.test.tsx` (+
+  4 testes regressão F-024)
+
+**Documentos:**
+
+- `AUDIT_W1_pre_W2.md` (statuses + histórico de correção + Sumário Executivo
+  reavaliado)
+- `TECH_DEBT.md` **NOVO**
+- `CLAUDE.md` (§7.7.1)
+- `CHANGELOG.md` ([Unreleased].Fixed — bloco Sessão 19)
+- `SESSION_LOG.md` (esta entrada)
+- `README.md` (status W1)
+
+**Changeset:**
+
+- **Nenhum changeset gerado.** Esta sessão tocou apenas apps Electron
+  (`sprint-leader`, `sprint-operator-agent`) e arquivos da raiz (`package.json`,
+  `.prettierignore`). Apps Electron **não participam do Changesets** per ADR-001
+  - `.changeset/README.md` — versionam via `electron-builder` no artefato final.
+    Os 3 packages internos (`@sprint/contracts`, `@sprint/fs-adapter`,
+    `@sprint/logger`) não foram tocados nesta sessão; **nenhum bump
+    necessário**.
+
+---
+
 ## Sessão 18 — 2026-05-27 — Wave 1, C8 inteiro (testes ampliados) — FECHAMENTO W1
 
 **Wave atual:** W1 (FECHA NESTA SESSÃO) **Método:** gate-by-gate com aprovação

@@ -272,3 +272,71 @@ describe('NovaSprint — dispatch real (BL-C2-007)', () => {
     });
   });
 });
+
+describe('NovaSprint — surfacing de erro de carregamento (regressão F-025)', () => {
+  beforeEach(() => {
+    useOperatorsStore.getState().reset();
+    useSprintComposerStore.getState().reset();
+    useDispatchStore.getState().reset();
+  });
+
+  it('regressão F-025: listOperators falha → ErrorBanner é renderizado com mensagem técnica e instrução para TI', async () => {
+    vi.mocked(window.api.listOperators).mockResolvedValueOnce({
+      ok: false,
+      error: {
+        code: 'SHARED_PATH_INACCESSIBLE',
+        message: 'EACCES: pasta compartilhada inacessível',
+      },
+    });
+
+    render(<NovaSprint />);
+
+    // Banner aparece com role="alert"
+    const banner = await screen.findByRole('alert');
+    expect(within(banner).getByText(/Não foi possível carregar os dados/i)).toBeInTheDocument();
+    expect(within(banner).getByText(/EACCES: pasta compartilhada inacessível/)).toBeInTheDocument();
+    expect(within(banner).getByText(/Contate a TI/i)).toBeInTheDocument();
+
+    // OperatorList NÃO renderiza a mensagem genérica de lista vazia
+    expect(screen.queryByText(/Nenhum usuário ativo cadastrado/i)).not.toBeInTheDocument();
+  });
+
+  it('regressão F-025: botão "Tentar novamente" no banner invoca loadOperators de novo', async () => {
+    vi.mocked(window.api.listOperators).mockResolvedValueOnce({
+      ok: false,
+      error: { code: 'INVALID', message: 'operators.json malformed' },
+    });
+
+    const user = userEvent.setup();
+    render(<NovaSprint />);
+
+    await screen.findByRole('alert');
+    expect(vi.mocked(window.api.listOperators)).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole('button', { name: /Tentar novamente/i }));
+
+    await waitFor(() => {
+      expect(vi.mocked(window.api.listOperators)).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it('regressão F-025: retry bem-sucedido depois de erro mostra OperatorList normalmente', async () => {
+    vi.mocked(window.api.listOperators).mockResolvedValueOnce({
+      ok: false,
+      error: { code: 'NOT_FOUND', message: 'operators.json não existe' },
+    });
+
+    const user = userEvent.setup();
+    render(<NovaSprint />);
+
+    // Primeiro: erro
+    await screen.findByRole('alert');
+
+    // Retry — agora o default mock retorna ok=true com TEST_OPERATORS
+    await user.click(screen.getByRole('button', { name: /Tentar novamente/i }));
+
+    // Lista carrega; banner some
+    expect(await screen.findByRole('checkbox', { name: /João Silva/ })).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});

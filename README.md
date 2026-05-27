@@ -156,26 +156,33 @@ Toda contribuição deve seguir os padrões definidos em
 
 ## Status do projeto
 
-**Wave atual:** W1 fechada (Sessão 18 — 2026-05-27); aguardando início de W2
+**Wave atual:** W1 fechada (Sessão 18 — 2026-05-27); auditoria pré-W2 aplicada
+(Sessão 19 — 2026-05-27) — veredito ✅ **PRONTO PARA W2**
 
-| Wave | Foco                                            | Status           |
-| ---- | ----------------------------------------------- | ---------------- |
-| W0   | Foundation, contracts, scaffolds dos apps       | ✅ Concluída     |
-| W1   | MVP Core (fluxo ponta-a-ponta dispatch → ack)   | ✅ **Concluída** |
-| W2   | Refinement (ack tracking, cancelamento, polish) | ⏸️ Próxima       |
-| W3   | Production readiness (installer, logs, E2E)     | ⏸️               |
-| W4   | Hardening (watchdog, perf, futuro-proof)        | ⏸️               |
+| Wave | Foco                                            | Status                                     |
+| ---- | ----------------------------------------------- | ------------------------------------------ |
+| W0   | Foundation, contracts, scaffolds dos apps       | ✅ Concluída                               |
+| W1   | MVP Core (fluxo ponta-a-ponta dispatch → ack)   | ✅ **Concluída + correções pós-auditoria** |
+| W2   | Refinement (ack tracking, cancelamento, polish) | ⏸️ Próxima                                 |
+| W3   | Production readiness (installer, logs, E2E)     | ⏸️                                         |
+| W4   | Hardening (watchdog, perf, futuro-proof)        | ⏸️                                         |
 
-### Wave 1 — MVP Core (fechada na Sessão 18)
+### Wave 1 — MVP Core (fechada na Sessão 18, refinada na Sessão 19)
 
 - ✅ `@sprint/contracts` (W1.C1) — schemas Zod, sanitizer, IDs, filenames
 - ✅ `@sprint/fs-adapter` (W1.C4) — port-and-adapter + Pending/Ack domain stores
 - ✅ `@sprint/logger` (W1.C6) — Pino wrapper (pretty em dev, JSON em prod)
-- ✅ Leader (W1.C2) — composer + dispatch real + redesign visual
+- ✅ Leader (W1.C2) — composer + dispatch real + redesign visual + ErrorBanner
+  UX
 - ✅ Operator Agent (W1.C3) — polling + overlay TOPMOST + tray + ack
-- ✅ Testes ampliados (W1.C8) — production-grade (1056 testes no monorepo)
+- ✅ Testes ampliados (W1.C8) — production-grade (**1069 testes** no monorepo)
+- ✅ Auditoria pré-W2 + correções (Sessão 19): 5 findings RESOLVED, 20 DEFERRED
+  catalogados em [`TECH_DEBT.md`](./TECH_DEBT.md).
+  `pnpm audit --audit-level=high` exit 0 (1 HIGH eliminado).
 
-Histórico de sessões: [`SESSION_LOG.md`](./SESSION_LOG.md).
+Histórico de sessões: [`SESSION_LOG.md`](./SESSION_LOG.md). Tech debt:
+[`TECH_DEBT.md`](./TECH_DEBT.md). Auditoria pré-W2:
+[`AUDIT_W1_pre_W2.md`](./AUDIT_W1_pre_W2.md).
 
 ## Para devs novos
 
