@@ -37,13 +37,23 @@
 /* ----- Row 1: métrica gigante + deadline coluna ----- */
 
 .metricRow {
-  /* Sessão 38 — Renan: "alinhe essa div que armazena o Até{horario}
-   * embaixo do 20 Artes... ele vai ficar alinhado com o 20 artes pra
-   * ficar mais harmonico". flex-start → flex-end: deadlineGroup
-   * desce e alinha pela base com o metricGroup. */
+  /* Sessão 39 — Renan: "ficou desalinhado, o bloco do horário ficou
+   * mais para baixo do que o de Artes". Causa: `flex-end` alinha pelo
+   * BOTTOM da box do flex child, mas a baseline visual do texto fica
+   * acima do bottom (depende de line-height e font metrics — o
+   * line-height tight 1.2 do `.valueBig` (4xl) cria gap entre
+   * baseline e bottom).
+   *
+   * Fix: `align-items: last baseline`. Alinha pela baseline do ÚLTIMO
+   * item baseline-participating de cada flex child:
+   * - metricGroup (row baseline): baseline única ("4 Artes").
+   * - deadlineGroup (column): baseline do ÚLTIMO item = "18:00h".
+   *
+   * Resultado: "Artes" e "18:00h" compartilham a MESMA linha de
+   * baseline visual, harmonia que `flex-end` não consegue. */
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
+  align-items: last baseline;
   gap: var(--sprint-space-6);
 }
 
