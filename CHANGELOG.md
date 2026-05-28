@@ -9,6 +9,63 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Changed — Sessões 35-42 (2026-05-28) — Refino visual coordenado do Overlay
+
+11 micro-iterações sobre o mesmo escopo, guiadas por screenshots do
+Renan vs imagem-alvo. Sequência consolidada (veja SESSION_LOG.md para
+detalhamento por commit):
+
+**ui-kit `<Overlay>`:**
+
+- `.card` max-width 520 → 480 → 560 (proporção retangular final).
+- `.body` padding `space-7` (uniforme) → `space-6 vertical /
+  space-8 lateral` → `space-7 vertical / space-10 lateral` (mais
+  respiração interna, elementos se aproximam horizontalmente).
+- `.header` padding vertical `space-4` → `space-5`.
+- `.title` font-weight `medium` → `light` (300).
+- `.acknowledgeButton` font-size `lg` → `xl`; font-weight `bold`
+  → `light` (300).
+- Token `--sprint-color-surface-subtle` #111 → #0a0a0a (header bar
+  ainda mais sutil sobre body preto puro).
+
+**Agent body slot:**
+
+- `.metricRow` `align-items: flex-start` → `last baseline` (resolve
+  bloco de horário caindo abaixo de "Artes" por gap de line-height
+  do `.valueBig`).
+- `.deadlineGroup` column flex-end → flex-start ("Até" alinhado à
+  esquerda do bloco direito; matching imagem).
+- `.deadlineLabel` font-size `lg` (era 3xl pré-redesign).
+- `.deadlineValue` font-size `3xl` → `2xl`; font-weight `bold` →
+  `medium`.
+- `.sprintBody` gap `space-5` → `space-3` (elementos mais juntos).
+- `.unit` "Artes", `.label` "Suas metas", `.deadlineLabel` "Até":
+  todos padronizados em font-weight `light` (300).
+- `.dateBadge` font `base` → `sm`; padding horizontal `space-3` →
+  `space-4` (laterais mais largas).
+- ackLabel default "Recebi" → "RECEBIDO".
+
+### Added — Sessões 35-42 (2026-05-28)
+
+- **Inter Google Fonts weight 300** no import de `tokens.css` (era
+  400+).
+- **Token `--sprint-font-weight-light: 300`** — padrão para labels
+  muted no design system.
+- **Tokens `--sprint-space-9: 36px` e `--sprint-space-10: 40px`** —
+  continuação monotônica da escala 4px para chrome generoso.
+
+### Fixed — Sessões 35-42 (2026-05-28)
+
+- **`pnpm dev` na raiz**: 3-camada fix do race no `dist/` do ui-kit.
+  Remove `predev` do Agent (race com `@sprint/ui-kit#dev` paralelo);
+  adiciona `predev` na raiz (`pnpm --filter @sprint/ui-kit build`);
+  `emptyOutDir: !isWatchMode` no `ui-kit/vite.config.ts` (watch não
+  esvazia mais o dist/ no startup).
+- **Cores do Leader**: `.dispatchButton:disabled` em
+  `NovaSprint.module.css` tinha `rgba(235, 199, 106, 0.35)` hardcoded
+  (amarelo antigo). Trocado para `rgba(245, 165, 87, 0.35)` (RGB do
+  laranja `#f5a557` unificado).
+
 ### Changed — Sessão 34 (2026-05-28) — Polish final do overlay matching design-alvo
 
 Renan: "Apenas ajuste os detalhes... border radius, peso de fonte,

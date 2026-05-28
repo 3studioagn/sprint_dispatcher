@@ -66,6 +66,165 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessões 35-42 — 2026-05-28 — Refino visual coordenado do Overlay (consolidação)
+
+**Wave atual:** W2 — em curso **Método:** iterações curtas de feedback visual
+com Renan rodando o `pnpm dev` real e screenshoteando diffs vs imagem-alvo
+**Duração estimada:** ~3h total (8 commits) **Itens:** [`<Overlay>` chrome do
+ui-kit + `SprintBody` do Agent — refinos coordenados de proporção, tipografia,
+padding, alinhamento + 2 fixes infraestrutura (cores do Leader + race do `pnpm
+dev`)]
+
+### Objetivo da sequência
+
+Sessão 31 entregou o redesign inicial do `<Overlay>` matching design 'Hora do
+Rush!'. Sessões 32-42 são 11 micro-iterações sobre o mesmo escopo, cada uma
+disparada por um screenshot do Renan apontando uma diferença vs a imagem-alvo.
+Pattern: comentário curto → ajuste de CSS → commit → screenshot → repete.
+
+### O que foi feito (commits, em ordem cronológica)
+
+**Sessão 33 —
+`chore(C3): predev script garante ui-kit dist fresh antes do Vite dev`
+(`b8e7a2e`):** Workaround tático para erro de resolve do
+`@sprint/ui-kit/styles.css` no dev server quando o `dist/` está stale.
+Posteriormente refeito na Sessão 42.
+
+**Sessão 34 — `fix(C9,C3): polish final do overlay matching design-alvo`
+(`8397f46`):** title weight `regular` → `medium`; header padding vertical
+`space-5` → `space-4`; acknowledgeButton weight `semibold` → `bold`; metricGroup
+gap `space-3` → `space-4`; dateBadge font `base` → `sm` + padding
+`space-2/space-4` → `space-1/space-3`.
+
+**Sessão 35 — `fix(C2): alinhar cores do Leader com paleta laranja unificada`
+(`3f0345c`):** `.dispatchButton:disabled` no Leader tinha
+`rgba(235, 199, 106, 0.35)` hardcoded (amarelo antigo). Trocado para
+`rgba(245, 165, 87, 0.35)` (RGB do `#f5a557` laranja). Renan já tinha alinhado
+`--color-accent` em `global.css`.
+
+**Sessão 36 — `fix(C9,C3): overlay body padding + Até inline antes do horário`
+(`3d0e832`):** `.body` padding `space-6` → `space-7`. `.deadlineGroup` column →
+row baseline (inline). `.deadlineLabel` font-size `lg` → `sm`. _(Interpretação
+errada de "alinhe o até à esquerda" como inline — revertida na Sessão 37.)_
+
+**Sessão 37 — `fix(C3): "Até" empilhado em coluna pela direita matching design`
+(`6c5b839`):** Reverte Sessão 36 — `.deadlineGroup` volta para column align
+flex-end. `.deadlineLabel` mantém `sm`.
+
+**Sessão 38 —
+`fix(C9,C3): header mais escuro + Até alinhado à esquerda levemente maior`
+(`6a052f1`):** Token `--sprint-color-surface-subtle` `#111` → `#0a0a0a` (header
+bar mais sutil). `.deadlineGroup` align-items `flex-end` → `flex-start`.
+`.deadlineLabel` `sm` → `base`.
+
+**Sessão 39 — `fix(C3): bloco Até{horario} desce e harmoniza com 20 Artes`
+(`ca165e7`):** `.metricRow` align-items `flex-start` → `flex-end`.
+`.deadlineLabel` `base` → `lg`. `.deadlineValue` font-size `3xl` → `2xl` +
+font-weight `bold` → `medium`.
+
+**Sessão 40 — `fix(C3): metricRow last baseline alinha "Artes" com "18:00h"`
+(`f7ad69b`):** `.metricRow` align-items `flex-end` → `last baseline`. Resolve o
+"Bloco do horário ficou mais baixo": baseline real do "Artes" estava acima do
+bottom da box do metricGroup (line-height tight 1.2 do `.valueBig` cria o gap).
+
+**Sessão 41 —
+`fix(C9,C3): suas metas light + RECEBIDO + header padding + card menor`
+(`7884ed1`):** Inter import adiciona weight 300; novo token
+`--sprint-font-weight-light: 300`. `.card` max-width 520 → 480. `.header`
+padding vertical `space-4` → `space-5`. `.acknowledgeButton` font-size `lg` →
+`xl`. `.label` "Suas metas" font-weight `regular` → `light`. ackLabel `'Recebi'`
+→ `'RECEBIDO'`.
+
+**Sessão 42 — `fix(C9,C3): overlay retangular + tipografia 300 padronizada`
+(`e4cfbc6`):** `.card` max-width 480 → 560 (proporção retangular). `.body`
+padding `space-7` → `space-6 vertical / space-8 lateral`. `.title` weight
+`medium` → `light`. `.acknowledgeButton` weight `bold` → `light`. `.sprintBody`
+gap `space-5` → `space-3`. `.unit`/`.deadlineLabel` weight → `light`
+(padronização). `.dateBadge` padding horizontal `space-3` → `space-4`.
+
+**Sessão 42b — `fix(C9): aumenta padding interno do .body do overlay`
+(`cc88c3b`):** Novos tokens `--sprint-space-9: 36px` e
+`--sprint-space-10: 40px`. `.body` padding `space-6 space-8` →
+`space-7 space-10`. Com `max-width: 560px` fixo e
+`justify-content: space-between` nos rows, padding maior reduz a área útil e os
+grupos se aproximam horizontalmente.
+
+**Sessão 42c — `fix(C0): pnpm dev na raiz funciona sem race no dist/ do ui-kit`
+(`95c89fc`):** 3-camada fix: (1) remove `predev` do Agent (race com
+`@sprint/ui-kit#dev` em paralelo); (2) adiciona `predev` na raiz; (3)
+`emptyOutDir: !isWatchMode` no `ui-kit/vite.config.ts` — watch não esvazia mais
+o dist/ no startup.
+
+### Estado final pós sessão 42
+
+- **Overlay matching design-alvo:** card preto puro (`background-deep`), header
+  bar sutil (`surface-subtle` #0a0a0a), proporção retangular (560×~280), padding
+  generoso (`space-7 space-10`), tipografia light 300 uniforme em todos os
+  labels muted (title + unit + label + deadlineLabel), CTA "RECEBIDO" laranja
+  com glow.
+- **Layout interno:** metricRow com `last baseline` alignment ("Artes" e
+  "18:00h" compartilham mesma linha); deadlineGroup column flex-start ("Até"
+  sobre "18:00h", alinhados pela esquerda do bloco direito); footerRow com ✓
+  "Suas metas" | badge "28/05" com padding lateral generoso.
+- **`pnpm dev` na raiz funciona limpo** — predev do root + emptyOutDir
+  condicional resolvem race; turbo dev orquestra 3 watches em paralelo (ui-kit +
+  leader + agent).
+- **Testes:** 60 verdes no ui-kit + 298 verdes no Agent + 205 verdes no Leader.
+  Lint + type-check + builds limpos.
+- **Tokens novos:** `--sprint-font-weight-light: 300`,
+  `--sprint-color-surface-subtle: #0a0a0a`, `--sprint-space-9: 36px`,
+  `--sprint-space-10: 40px`. Inter Google Fonts inclui weight 300.
+
+### Decisões tomadas
+
+- **`align-items: last baseline`** (Sessão 40, CSS Box Alignment Level 3) é a
+  resposta correta para alinhar elementos heterogêneos por texto baseline visual
+  quando line-heights divergem. Suporte: Chromium 92+ (Electron 42 usa Chromium
+  ~129); seguro.
+- **Tipografia 300 uniforme** em labels muted é decisão estética do Renan —
+  overrides o default 400 do Inter. Token `--sprint-font-weight-light`
+  estabelecido; usar em qualquer label muted futuro.
+- **`emptyOutDir: !isWatchMode`** para vite library mode — pattern reusável para
+  qualquer library Vite consumida por dev server downstream.
+- **`predev` na raiz**, não no consumer: garante ordering correto com turbo dev
+  orquestrando watches; predev no consumer entra em race com `^dev` paralelo.
+
+### Bloqueios encontrados
+
+- **Token `--sprint-font-weight-semibold: 300`** (corrupted, deveria ser 600)
+  ainda presente em `tokens.css`. Foi alterado em sessão externa do Renan e
+  mantido. Workaround: usar `--sprint-font-weight-medium` (500) ou
+  `--sprint-font-weight-bold` (700) em vez de semibold. Débito a corrigir numa
+  sessão dedicada (W3).
+- **6 interpretações errôneas de feedback do Renan** ao longo das sessões 35-42
+  (especialmente "Até à esquerda" da Sessão 36 e "flex-end" da Sessão 39) — cada
+  uma corrigida pela próxima iteração via screenshot. Pattern: comentários
+  verbais ambíguos sobre layout precisam de validação contra imagem-alvo antes
+  de implementação literal.
+
+### Próximo passo
+
+Renan validou visualmente, fechou a sequência ("ficou bom"). Branch pronta para
+merge em develop.
+
+### Observações para a próxima sessão
+
+- **Sessões 24-42 fecham o ciclo completo de "visual fidelity"** do `<Overlay>`
+  e `<Pill>` do `@sprint/ui-kit` matching design-alvo. Pattern recorrente das 19
+  iterações: ajustes finos guiados por screenshot vs imagem-alvo, cada um
+  <30min. Lição: começar com structural matching antes de iterar em
+  curvas/easing — Sessão 30 (max-height para resolver reflow do Pill) e Sessão
+  40 (last baseline para alinhamento) foram os pivots reais; iterações de easing
+  antes disso (25-29) só tratavam sintomas.
+- **`--sprint-font-weight-semibold: 300` corruption** continua presente —
+  consumer code que usar esse token vai renderizar light, não semibold.
+  Defensar: usar medium ou bold direto enquanto não for revertido.
+- **`predev` + `emptyOutDir: !isWatchMode`** dependem entre si para `pnpm dev`
+  da raiz funcionar. Se algum outro package C\* virar Vite lib mode no futuro,
+  replicar a mesma config para evitar mesma classe de bug.
+
+---
+
 ## Sessão 34 — 2026-05-28 — Polish final do overlay matching design-alvo
 
 **Wave atual:** W2 — em curso **Método:** ajustes finos solicitados pelo Renan

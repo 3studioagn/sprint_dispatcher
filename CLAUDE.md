@@ -1750,10 +1750,80 @@ Descobertas durante o desenvolvimento que economizam tempo da próxima sessão.
   adversarial de 10 escritas simultâneas exibiu EPERM no Windows. Linux/macOS
   passa.
 
+### G-025: `align-items: flex-end` alinha BOTTOM da box, não baseline visual — use `last baseline` quando line-heights divergem
+
+- **Sintoma:** em `<Overlay>` do Agent, com `flex-direction: row` e
+  `align-items: flex-end`, o bloco "Até 18:00h" (column) caía visivelmente
+  abaixo da baseline do "Artes" (do metricGroup row baseline ao lado).
+- **Causa:** `flex-end` alinha pelo BOTTOM da margin box do flex child. Mas o
+  `.valueBig` 4xl (120px) com `line-height: tight` (1.2 = 144px) cria gap entre
+  a baseline real do texto e o bottom da box (~24px). O conteúdo da outra coluna
+  fica ANCORADO no bottom — então mais baixo que a baseline visual.
+- **Solução:** `align-items: last baseline` (CSS Box Alignment Module Level 3).
+  Alinha pela baseline do ÚLTIMO item baseline-participating de cada flex child.
+  Para metricGroup (row baseline) → baseline única. Para deadlineGroup (column)
+  → baseline do último item (ex.: "18:00h" no bottom). Ambas as baselines
+  visuais alinham.
+- **Suporte:** Chromium 92+ / Firefox 86+ / Safari 16+. Electron 42 usa Chromium
+  ~129; seguro.
+- **Variantes:** `first baseline` para a primeira baseline (default em
+  `baseline` em column). `last baseline` é o que normalmente queremos quando o
+  conteúdo importante fica no bottom.
+- **Descoberto em:** Sessão 40 (2026-05-28), após 3 iterações falhas de
+  `flex-start` / `flex-end` / `baseline` no `.metricRow`.
+
+### G-026: `pnpm dev` na raiz exige predev + `emptyOutDir: !isWatchMode` para library workspaces consumidos por dev server
+
+- **Sintoma:** `pnpm dev` (root, `turbo dev`) sobe os 3 watches em paralelo
+  (`@sprint/ui-kit#dev` + `sprint-leader#dev` + `sprint-operator-agent#dev`).
+  Apps consumidores (Agent/Leader) falham com Vite Pre-transform error:
+  `Failed to load url .../packages/ui-kit/dist/index.js / styles.css`. Erro
+  intermitente, mas recorrente em starts frios.
+- **Causa raiz dupla:**
+  1. **Race entre predev e watch concorrente:** se `predev` do consumer dispara
+     `pnpm --filter @sprint/ui-kit build` (one-shot), o turbo já está rodando
+     `@sprint/ui-kit#dev` (watch) em paralelo. Dois `vite build` no mesmo
+     `dist/` → race no `vite-plugin-dts` reading intermediate files.
+  2. **`emptyOutDir: true` (default) em watch:** `vite build --watch` esvazia
+     `dist/` no startup antes do primeiro re-bundle. Apps consumidores fazem
+     Pre-transform exatamente nesse intervalo de ~2s e falham com "Failed to
+     load".
+- **Solução em 3 camadas:**
+  1. **Predev no root `package.json`**:
+     `predev: pnpm --filter @sprint/ui-kit build`. Roda one-shot ANTES de
+     `turbo dev`. Garante `dist/` populado.
+  2. **Sem predev no consumer**: predev no Agent/Leader entra em race com o
+     watch paralelo. Manter SÓ no root.
+  3. **`emptyOutDir: !isWatchMode`** no `ui-kit/vite.config.ts`. Detecta
+     `process.argv.includes('--watch')`. Watch não esvazia mais; apenas
+     sobrescreve arquivos. One-shot build (sem --watch) segue limpando.
+- **Aplicabilidade futura:** se outro package C\* virar Vite library mode
+  (consumido por dev server downstream), replicar `emptyOutDir` condicional +
+  predev no root.
+- **Descoberto em:** Sessão 42c (2026-05-28), após múltiplas iterações com
+  `predev` no consumer e `dependsOn: ["^build"]` no turbo dev (cada uma falhando
+  por motivos diferentes).
+
 ### Débitos técnicos pendentes
 
 Itens conhecidos que **deveriam** existir mas dependem de pré-requisito ainda
 não entregue. Cada um tem disparador explícito que reabre o trabalho.
+
+#### Débito: `--sprint-font-weight-semibold: 300` corrupted em `tokens.css`
+
+- **Status:** ativo — alteração externa do Renan em sessão de experimentação
+  visual (provavelmente Sessão 32-34 timeline). O valor correto seria `600`.
+  Atualmente `300` = light.
+- **Sintoma:** qualquer consumer code que use
+  `var(--sprint-font-weight-semibold)` vai renderizar com peso 300 (light), não
+  semibold. Regressão visual silenciosa.
+- **Workaround atual (Sessão 41+):** sessions posteriores ao bug evitam o token
+  semibold — usam `--sprint-font-weight-medium` (500),
+  `--sprint-font-weight-bold` (700), ou `--sprint-font-weight-light` (300)
+  conforme o caso.
+- **Plano:** reverter para `600` em sessão dedicada após Renan confirmar.
+  Auditar `packages/`/`apps/` por referências ao token semibold antes do fix
+  para garantir que nenhum estilo dependa do valor 300 corrupted.
 
 #### Débito: regra ESLint `no-console` estrita (apenas `@sprint/logger`)
 
