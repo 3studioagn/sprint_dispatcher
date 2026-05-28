@@ -1,9 +1,24 @@
 /**
- * QueueService — fila FIFO em memória de sprints aguardando exibição.
+ * QueueService — fila em memória de sprints aguardando exibição,
+ * ordenada por `criado_em` ascendente (BL-C3-010, RF-16).
  *
- * Estrutura interna: array ordenado (índice 0 = próxima a exibir) +
- * `Set<string>` paralelo para deduplicação O(1) por chave
- * `sprint_id|user_id` (RN única de "1 sprint por operador por sprint").
+ * Estrutura interna: array ordenado (índice 0 = sprint atualmente
+ * exibida pelo overlay quando há ao menos 1 item) + `Set<string>`
+ * paralelo para deduplicação O(1) por chave `sprint_id|user_id` (RN
+ * única de "1 sprint por operador por sprint").
+ *
+ * **Ordem (BL-C3-010, RF-16, UC-02 A4):**
+ *
+ * - Sprints aguardando processamento são exibidas em ordem cronológica
+ *   ascendente de `payload.criado_em` (timestamp ISO-8601 de emissão
+ *   pelo Leader). Comparação via `Date.parse()` — timezone-aware.
+ * - Empate em `criado_em` (sprints emitidas no mesmo instante) mantém a
+ *   ordem de chegada (FIFO no empate).
+ * - **`items[0]` (sprint atualmente exibida) NÃO é preempted.** Sprints
+ *   novas que chegam com `criado_em` MAIS antigo que `items[0]` são
+ *   inseridas em `items[1]` (próxima da fila), nunca em `items[0]`.
+ *   Trocar o overlay no meio da exibição seria confuso para o operador
+ *   (ele clicou esperando ack da sprint que estava vendo).
  *
  * **Eventos emitidos:**
  *
@@ -14,9 +29,9 @@
  *   `queueUpdated`).
  *
  * - `queueUpdated(length)` — disparado em **qualquer mudança** (enqueue,
- *   dequeue, clear). Consumidor típico: `trayService` atualiza estado
- *   visual (idle ↔ sprint_active) + renderer recebe push para UI de
- *   "+N na fila".
+ *   dequeue, clear, removeBySprintId). Consumidor típico: `trayService`
+ *   atualiza estado visual (idle ↔ sprint_active) + renderer recebe
+ *   push para UI de "+N na fila".
  *
  * **O QueueService NÃO emite `nextSprint` após `dequeue` mesmo se há
  * próximo item.** O caller (overlayService) é responsável por chamar
@@ -25,6 +40,7 @@
  *
  * @see DECISIONS.md ADR-009 — IPC contract-first (events fluem para
  *   renderer via main↔renderer push em Gate 4-5)
+ * @see Requisitos RF-16, UC-02 A4 — ordenação cronológica
  */
 
 import { EventEmitter } from 'node:events';
@@ -49,9 +65,16 @@ export class QueueService {
   private readonly emitter = new EventEmitter();
 
   /**
-   * Adiciona item ao fim da fila. Idempotente para chaves duplicadas
+   * Insere item na fila respeitando ordem cronológica de `criado_em`
+   * (BL-C3-010, RF-16). Idempotente para chaves duplicadas
    * (`sprint_id + user_id`) — segundo enqueue do mesmo identificador
    * retorna `false` sem mutar a fila.
+   *
+   * **Inserção ordenada:** a posição é a primeira `i >= 1` cujo
+   * `items[i].criado_em > item.criado_em` — empate mantém ordem de
+   * chegada (FIFO). `items[0]` (sprint atualmente exibida) é sempre
+   * preservada, mesmo se o novo item tem `criado_em` mais antigo —
+   * preempção do overlay no meio da exibição seria má UX.
    *
    * @returns `true` se enfileirou, `false` se duplicado (dedup).
    */
@@ -61,13 +84,35 @@ export class QueueService {
       return false;
     }
     const wasEmpty = this.items.length === 0;
-    this.items.push(item);
+    if (wasEmpty) {
+      this.items.push(item);
+    } else {
+      const insertAt = this.findInsertPosition(item);
+      this.items.splice(insertAt, 0, item);
+    }
     this.keys.add(key);
     this.emitter.emit(QUEUE_UPDATED_EVENT, this.items.length);
     if (wasEmpty) {
       this.emitter.emit(NEXT_SPRINT_EVENT, item);
     }
     return true;
+  }
+
+  /**
+   * Calcula a posição de inserção para um novo item respeitando ordem
+   * por `criado_em`. Caller garante que `items.length >= 1` (chamado
+   * apenas no ramo not-empty do enqueue). Sempre retorna >= 1 (preserva
+   * items[0] — sprint atualmente exibida — de preempção).
+   */
+  private findInsertPosition(item: QueueItem): number {
+    const itemTs = Date.parse(item.payload.criado_em);
+    for (let i = 1; i < this.items.length; i++) {
+      const existing = this.items[i]!;
+      if (Date.parse(existing.payload.criado_em) > itemTs) {
+        return i;
+      }
+    }
+    return this.items.length;
   }
 
   /**

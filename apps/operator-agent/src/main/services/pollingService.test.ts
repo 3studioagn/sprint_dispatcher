@@ -20,7 +20,7 @@ import {
   type SprintPayload,
 } from '@sprint/contracts';
 import { MemoryFilesystemAdapter, PendingStore, type PendingEntry } from '@sprint/fs-adapter';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
 import type { QueueItem } from '../../shared/types/queue';
 
@@ -163,7 +163,10 @@ describe('PollingService — ciclos positivos', () => {
 
 describe('PollingService — deadline passado (BL-C3-012)', () => {
   let kit: TestKit;
-  let archiveSpy: ReturnType<typeof vi.spyOn<HistoryService, 'archive'>>;
+  let archiveSpy: MockInstance<
+    Parameters<HistoryService['archive']>,
+    ReturnType<HistoryService['archive']>
+  >;
 
   beforeEach(() => {
     kit = makeKit({ now: new Date('2026-05-26T22:00:00.000Z') });

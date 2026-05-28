@@ -15,13 +15,18 @@ const VALID_SPRINT_ID = '01HX9K2M4F8N7P2Q5R3S6T7V8W';
 const ANOTHER_SPRINT_ID = '01HXAAABBBCCCDDDEEEFFFGGGH';
 
 function makePayload(
-  opts: { sprintId?: string; userId?: string; meta?: number } = {},
+  opts: {
+    sprintId?: string;
+    userId?: string;
+    meta?: number;
+    criadoEm?: string;
+  } = {},
 ): SprintPayload {
   return parseSprintPayload({
     schema_version: '1.0',
     sprint_id: opts.sprintId ?? VALID_SPRINT_ID,
     criado_por: 'TestRenan',
-    criado_em: '2026-05-26T10:00:00.000Z',
+    criado_em: opts.criadoEm ?? '2026-05-26T10:00:00.000Z',
     user_id: opts.userId ?? 'joao',
     title: 'Teste',
     body_html: 'corpo',
@@ -30,7 +35,9 @@ function makePayload(
   });
 }
 
-function makeItem(opts: { sprintId?: string; userId?: string; meta?: number } = {}): QueueItem {
+function makeItem(
+  opts: { sprintId?: string; userId?: string; meta?: number; criadoEm?: string } = {},
+): QueueItem {
   const payload = makePayload(opts);
   return {
     payload,
@@ -150,6 +157,131 @@ describe('QueueService — clear', () => {
     q.onQueueUpdated(cb);
     q.clear();
     expect(cb).not.toHaveBeenCalled();
+  });
+});
+
+describe('QueueService — ordenação por criado_em (BL-C3-010)', () => {
+  const VALID_SPRINT_ID_3 = '01HXBBBCCCDDDEEEFFFGGGHHHJ';
+  const VALID_SPRINT_ID_4 = '01HXCCCDDDEEEFFFGGGHHHJKMN';
+
+  let q: QueueService;
+  beforeEach(() => {
+    q = new QueueService();
+  });
+
+  it('primeira sprint vai para [0] independente de criado_em', () => {
+    q.enqueue(makeItem({ sprintId: VALID_SPRINT_ID, criadoEm: '2026-05-26T15:00:00.000Z' }));
+    expect(q.peek()?.payload.sprint_id).toBe(VALID_SPRINT_ID);
+  });
+
+  it('sprint mais antiga que items[0] vai para [1], preservando exibida', () => {
+    // A em [0] (exibida, criado_em=10:05)
+    // B chega com criado_em=10:00 — MAIS ANTIGA
+    // Esperado: A permanece em [0], B em [1] (próxima na fila)
+    q.enqueue(makeItem({ sprintId: VALID_SPRINT_ID, criadoEm: '2026-05-26T10:05:00.000Z' }));
+    q.enqueue(makeItem({ sprintId: ANOTHER_SPRINT_ID, criadoEm: '2026-05-26T10:00:00.000Z' }));
+
+    const snap = q.snapshot();
+    expect(snap.items.map((i) => i.payload.sprint_id)).toEqual([
+      VALID_SPRINT_ID, // exibida (mais nova) preservada
+      ANOTHER_SPRINT_ID, // próxima (mais antiga)
+    ]);
+  });
+
+  it('sprint com criado_em entre duas existentes vai para o meio', () => {
+    // A em [0] (criado_em=10:00, exibida)
+    // C em [1] (criado_em=10:10)
+    // Chega B com criado_em=10:05 — entre A e C
+    // Esperado: A[0], B[1], C[2]
+    q.enqueue(makeItem({ sprintId: VALID_SPRINT_ID, criadoEm: '2026-05-26T10:00:00.000Z' }));
+    q.enqueue(makeItem({ sprintId: VALID_SPRINT_ID_3, criadoEm: '2026-05-26T10:10:00.000Z' }));
+    q.enqueue(makeItem({ sprintId: ANOTHER_SPRINT_ID, criadoEm: '2026-05-26T10:05:00.000Z' }));
+
+    const snap = q.snapshot();
+    expect(snap.items.map((i) => i.payload.sprint_id)).toEqual([
+      VALID_SPRINT_ID,
+      ANOTHER_SPRINT_ID,
+      VALID_SPRINT_ID_3,
+    ]);
+  });
+
+  it('sprint mais nova vai para o final', () => {
+    q.enqueue(makeItem({ sprintId: VALID_SPRINT_ID, criadoEm: '2026-05-26T10:00:00.000Z' }));
+    q.enqueue(makeItem({ sprintId: ANOTHER_SPRINT_ID, criadoEm: '2026-05-26T10:05:00.000Z' }));
+    q.enqueue(makeItem({ sprintId: VALID_SPRINT_ID_3, criadoEm: '2026-05-26T10:10:00.000Z' }));
+
+    const snap = q.snapshot();
+    expect(snap.items.map((i) => i.payload.sprint_id)).toEqual([
+      VALID_SPRINT_ID,
+      ANOTHER_SPRINT_ID,
+      VALID_SPRINT_ID_3,
+    ]);
+  });
+
+  it('empate em criado_em mantém ordem de chegada (FIFO no empate)', () => {
+    const sameTs = '2026-05-26T10:00:00.000Z';
+    q.enqueue(makeItem({ sprintId: VALID_SPRINT_ID, criadoEm: sameTs }));
+    q.enqueue(makeItem({ sprintId: ANOTHER_SPRINT_ID, criadoEm: sameTs }));
+    q.enqueue(makeItem({ sprintId: VALID_SPRINT_ID_3, criadoEm: sameTs }));
+
+    const snap = q.snapshot();
+    expect(snap.items.map((i) => i.payload.sprint_id)).toEqual([
+      VALID_SPRINT_ID,
+      ANOTHER_SPRINT_ID,
+      VALID_SPRINT_ID_3,
+    ]);
+  });
+
+  it('inserção ordenada com timezone offset (não-UTC) funciona', () => {
+    // criado_em pode vir com offset (-03:00). Date.parse normaliza.
+    // 2026-05-26T07:00:00-03:00 == 2026-05-26T10:00:00Z
+    // 2026-05-26T08:00:00-03:00 == 2026-05-26T11:00:00Z
+    q.enqueue(makeItem({ sprintId: VALID_SPRINT_ID, criadoEm: '2026-05-26T08:00:00.000-03:00' }));
+    q.enqueue(makeItem({ sprintId: ANOTHER_SPRINT_ID, criadoEm: '2026-05-26T07:00:00.000-03:00' }));
+
+    const snap = q.snapshot();
+    // A (08:00-03 = 11Z) exibida; B (07:00-03 = 10Z) mais antiga vai para [1]
+    expect(snap.items.map((i) => i.payload.sprint_id)).toEqual([
+      VALID_SPRINT_ID,
+      ANOTHER_SPRINT_ID,
+    ]);
+  });
+
+  it('múltiplas sprints fora de ordem chegam ordenadas (preservando [0])', () => {
+    // A em [0] (criado_em=10:00, exibida)
+    // Chegam D (10:30), B (10:05), C (10:20) em ordem aleatória
+    // Esperado: A[0], B[1], C[2], D[3]
+    q.enqueue(makeItem({ sprintId: VALID_SPRINT_ID, criadoEm: '2026-05-26T10:00:00.000Z' }));
+    q.enqueue(makeItem({ sprintId: VALID_SPRINT_ID_4, criadoEm: '2026-05-26T10:30:00.000Z' }));
+    q.enqueue(makeItem({ sprintId: ANOTHER_SPRINT_ID, criadoEm: '2026-05-26T10:05:00.000Z' }));
+    q.enqueue(makeItem({ sprintId: VALID_SPRINT_ID_3, criadoEm: '2026-05-26T10:20:00.000Z' }));
+
+    const snap = q.snapshot();
+    expect(snap.items.map((i) => i.payload.sprint_id)).toEqual([
+      VALID_SPRINT_ID,
+      ANOTHER_SPRINT_ID,
+      VALID_SPRINT_ID_3,
+      VALID_SPRINT_ID_4,
+    ]);
+  });
+
+  it('após dequeue, próxima exibida [0] é a anterior [1] — invariante mantida', () => {
+    // A exibida, B e C aguardando ordenadas. Ack A → B vira exibida ([0])
+    q.enqueue(makeItem({ sprintId: VALID_SPRINT_ID, criadoEm: '2026-05-26T10:00:00.000Z' }));
+    q.enqueue(makeItem({ sprintId: ANOTHER_SPRINT_ID, criadoEm: '2026-05-26T10:05:00.000Z' }));
+    q.enqueue(makeItem({ sprintId: VALID_SPRINT_ID_3, criadoEm: '2026-05-26T10:10:00.000Z' }));
+
+    expect(q.dequeue()?.payload.sprint_id).toBe(VALID_SPRINT_ID);
+    expect(q.peek()?.payload.sprint_id).toBe(ANOTHER_SPRINT_ID);
+
+    // Chega D mais antiga que peek atual mas DEPOIS de B [0]: vai para [1]
+    q.enqueue(makeItem({ sprintId: VALID_SPRINT_ID_4, criadoEm: '2026-05-26T10:01:00.000Z' }));
+    const snap = q.snapshot();
+    expect(snap.items.map((i) => i.payload.sprint_id)).toEqual([
+      ANOTHER_SPRINT_ID, // exibida agora (preservada)
+      VALID_SPRINT_ID_4, // D mais antiga que C mas posicionada após exibida
+      VALID_SPRINT_ID_3,
+    ]);
   });
 });
 
