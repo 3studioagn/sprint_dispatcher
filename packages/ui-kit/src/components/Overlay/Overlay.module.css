@@ -47,11 +47,13 @@
   /* Sessão 31: padding REMOVIDO do .card — cada section controla o
    * próprio para que o header possa ter bg distinto sem gap no topo. */
   /* Sessão 32: max-width 720 → 520px. Renan reportou que o card
-   * estava largo demais comparado com a imagem-alvo (proporção mais
-   * quadrada/portrait do design 'Hora do Rush!').
-   * Sessão 40: 520 → 480px — Renan: "o box da overlay é levemente
-   * menor na largura, pros elementos ficarem mais juntos". */
-  max-width: 480px;
+   * estava largo demais comparado com a imagem-alvo.
+   * Sessão 40: 520 → 480px — "levemente menor na largura".
+   * Sessão 41: 480 → 560px — Renan: "no geral, a overlay esta hoje
+   * como um quadrado, preciso dela mais como um retângulo". Mais
+   * wide + body com padding lateral maior + vertical menor cria
+   * proporção horizontal pronunciada. */
+  max-width: 560px;
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -98,10 +100,10 @@
 
 .title {
   font-size: var(--sprint-font-size-2xl);
-  /* Sessão 34: weight regular → medium. Design alvo mostra título com
-   * presença visual mais firme; medium (500) dá esse "peso" sem ficar
-   * pesado como bold. */
-  font-weight: var(--sprint-font-weight-medium);
+  /* Sessão 34: regular → medium. Sessão 41 — Renan: "diminua o font
+   * weight da frase 'É hora de correr'". Padroniza com Artes/Suas
+   * metas/Até em light (300). */
+  font-weight: var(--sprint-font-weight-light);
   line-height: var(--sprint-line-height-tight);
   color: var(--sprint-color-text);
   margin: 0;
@@ -109,11 +111,12 @@
 
 .body {
   /* Sessão 31: padding generoso para criar respiração entre header
-   * e conteúdo estruturado do host (Agent renderiza metricRow +
-   * footerRow no body slot).
-   * Sessão 35: space-6 → space-7 — Renan reportou itens muito
-   * próximos das laterais; pequeno bump dá mais respiração lateral. */
-  padding: var(--sprint-space-7);
+   * e conteúdo estruturado do host.
+   * Sessão 35: space-6 → space-7 (uniforme).
+   * Sessão 41 — Renan: "aumente o padding das laterais... pra ficar
+   * retângulo". Vertical space-7 (28) → space-6 (24); lateral
+   * space-7 (28) → space-8 (32). Proporção horizontal acentuada. */
+  padding: var(--sprint-space-6) var(--sprint-space-8);
   font-size: var(--sprint-font-size-lg);
   line-height: var(--sprint-line-height-normal);
   color: var(--sprint-color-text);
@@ -130,9 +133,10 @@
   /* Sessão 40 — Renan: "aumente levemente a font" do botão. lg (18)
    * → xl (24). Mantém peso bold da Sessão 34. */
   font-size: var(--sprint-font-size-xl);
-  /* Sessão 34: weight semibold → bold. Match peso do texto "Recebido"
-   * no design alvo (apresentação firme do call-to-action principal). */
-  font-weight: var(--sprint-font-weight-bold);
+  /* Sessão 34: semibold → bold. Sessão 41 — Renan: "diminua o font
+   * weight do botão para 300". Bold (700) → light (300); peso fino
+   * padronizado com o resto do overlay. */
+  font-weight: var(--sprint-font-weight-light);
   padding: var(--sprint-space-4) var(--sprint-space-6);
   border-radius: var(--sprint-radius-pill);
   border: none;
