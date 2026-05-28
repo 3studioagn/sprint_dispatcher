@@ -15,6 +15,7 @@ import type { AcknowledgeSprintResponse } from '../../shared/ipc-types';
 import type { AckService } from '../services/ackService';
 import type { HistoryService } from '../services/historyService';
 import type { OverlayService } from '../services/overlayService';
+import type { PillService } from '../services/pillService';
 import type { QueueService } from '../services/queueService';
 
 export interface HandleAckLogger {
@@ -31,6 +32,13 @@ export interface HandleAckDeps {
   overlayService: OverlayService;
   pendingStore: PendingStore;
   ackService: AckService;
+  /**
+   * `pillService` opcional — quando presente, é chamado após ack final
+   * para mostrar o pill (badge minimizado, BL-C3-017) se a fila esvazia,
+   * ou esconder se há próxima sprint na fila. Omitido em alguns
+   * caminhos de teste isolado; em produção sempre injetado.
+   */
+  pillService?: PillService;
   log?: HandleAckLogger;
 }
 
@@ -59,7 +67,8 @@ export async function handleAck(
   userId: string,
 ): Promise<AcknowledgeSprintResponse> {
   const log = deps.log ?? SILENT_LOG;
-  const { queueService, historyService, overlayService, pendingStore, ackService } = deps;
+  const { queueService, historyService, overlayService, pendingStore, ackService, pillService } =
+    deps;
 
   const item = queueService.peek();
   if (item === null) {
@@ -104,13 +113,20 @@ export async function handleAck(
   // 6. Dequeue — emit queueUpdated (refreshTrayState + sendQueueUpdate).
   queueService.dequeue();
 
-  // 7. Próxima sprint OU hide.
+  // 7. Próxima sprint OU pill (BL-C3-017) + hide overlay.
   const next = queueService.peek();
   if (next !== null) {
+    // Há próxima — exibe direto sem passar pelo pill. Pill some se
+    // estivesse exibida (cenário: ack A → pill A → nova B chegou no
+    // polling antes do operador clicar pill → próxima B substitui).
     overlayService.showSprint(next, queueService.length());
     void ackService.writeDisplayed(next.payload);
+    pillService?.hide();
   } else {
+    // Fila vazia → overlay esconde; pill mostra "última sprint acked"
+    // (BL-C3-017). Operador vê badge persistente no topo da tela.
     overlayService.hide();
+    pillService?.show(item.payload);
   }
 
   return {

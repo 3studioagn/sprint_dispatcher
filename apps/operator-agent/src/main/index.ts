@@ -42,6 +42,7 @@ import {
   AckService,
   HistoryService,
   OverlayService,
+  PillService,
   PollingService,
   QueueService,
   TrayService,
@@ -105,6 +106,7 @@ let currentConfig: RuntimeConfig | null = null;
 let queueService: QueueService | null = null;
 let historyService: HistoryService | null = null;
 let overlayService: OverlayService | null = null;
+let pillService: PillService | null = null;
 let pendingStore: PendingStore | null = null;
 let ackService: AckService | null = null;
 // pollingService é wired em Gate 5+ (`stop()` no `before-quit` lifecycle).
@@ -161,6 +163,9 @@ async function handleReopenLast(): Promise<void> {
       return;
     }
     overlayService.reopenFromHistory(last.payload);
+    // BL-C3-017: pill (se exibido) some quando overlay reabre — UX
+    // consistente com showSprint normal.
+    pillService?.hide();
   } catch (err) {
     console.error('[reopen-last] falha ao carregar último arquivado', err);
     trayService.displayInfoBalloon(
@@ -204,6 +209,11 @@ async function handleAck(sprintId: string, userId: string): Promise<AcknowledgeS
       overlayService,
       pendingStore,
       ackService,
+      // BL-C3-017: pill mostrado pós-ack quando fila esvazia;
+      // hide quando próxima sprint substitui. pillService pode ser
+      // null pré-rebuildDeps; spread conditional respeita
+      // exactOptionalPropertyTypes (não pode passar undefined explícito).
+      ...(pillService !== null ? { pillService } : {}),
       log: {
         warn: (msg, ctx) => {
           console.warn(`[ack] ${msg}`, ctx ?? '');
@@ -233,6 +243,7 @@ async function rebuildDeps(): Promise<RuntimeConfig> {
     const overlayLocal = new OverlayService({
       minimizeAfterMs: config.minimizeAfterMs,
     });
+    const pillLocal = new PillService();
     const ackLocal = new AckService({
       ackStore: ackStoreLocal,
       hostname: config.hostname,
@@ -262,12 +273,15 @@ async function rebuildDeps(): Promise<RuntimeConfig> {
       },
     });
 
-    // Wire queueService → overlayService + ack + tray refresh.
+    // Wire queueService → overlayService + ack + tray refresh + pill hide.
     queueLocal.onNextSprint((item) => {
       overlayLocal.showSprint(item, queueLocal.length());
       // Grava ack inicial (displayed_at) em paralelo — não bloqueia overlay.
       // Não-fatal em erro (writeDisplayed retorna null + loga warn).
       void ackLocal.writeDisplayed(item.payload);
+      // BL-C3-017: nova sprint eclipsa o pill — se o operador tinha um
+      // pill na tela da sprint anterior acked, ele some agora.
+      pillLocal.hide();
     });
     queueLocal.onQueueUpdated((length) => {
       overlayLocal.sendQueueUpdate(length);
@@ -278,6 +292,7 @@ async function rebuildDeps(): Promise<RuntimeConfig> {
     queueService = queueLocal;
     historyService = historyLocal;
     overlayService = overlayLocal;
+    pillService = pillLocal;
     pendingStore = pendingStoreLocal;
     ackService = ackLocal;
     pollingService = pollingLocal;
@@ -367,6 +382,21 @@ function registerIpcHandlers(): void {
   // overlay reaberto via tray. Sem ack adicional; apenas hide().
   ipcMain.handle('overlay:close-reopened', (): void => {
     overlayService?.closeReopened();
+  });
+
+  // pill:request-current — BL-C3-017 — janela do pill pulla info atual
+  // no mount (race-free vs push de pill:update).
+  ipcMain.handle('pill:request-current', () => pillService?.getCurrent() ?? null);
+
+  // pill:expand — BL-C3-017 — operador clica no pill → hide pill +
+  // reabre overlay fullscreen com payload preservado (modo reopen,
+  // sem novo ack — BL-C3-009 pattern).
+  ipcMain.handle('pill:expand', (): void => {
+    if (pillService === null || overlayService === null) return;
+    const payload = pillService.getFullPayload();
+    if (payload === null) return;
+    overlayService.reopenFromHistory(payload);
+    pillService.hide();
   });
 }
 

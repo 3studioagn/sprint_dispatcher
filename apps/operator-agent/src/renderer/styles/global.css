@@ -37,3 +37,15 @@ body {
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
 }
+
+/*
+ * BL-C3-017 — janela do pill (?pill na query). Body background NÃO deve
+ * cobrir o canvas inteiro do BrowserWindow do pill: o <OverlayMinimized>
+ * desenha apenas a bar dark (32px) + badge pendurada. Área abaixo da bar
+ * ficaria com fundo escuro permanente sem este reset, criando uma faixa
+ * inerte de 68px no topo da tela. main.tsx adiciona .pill-mode ao body
+ * quando window.location.search contém ?pill.
+ */
+body.pill-mode {
+  background: transparent;
+}

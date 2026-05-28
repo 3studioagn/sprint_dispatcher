@@ -29,6 +29,8 @@ import type {
   ConfigStatusResponse,
   IncomingSprintEvent,
   IpcResult,
+  PillCurrentInfo,
+  PillUpdateEvent,
   QueueUpdatedEvent,
   Unsubscribe,
 } from '../shared/ipc-types';
@@ -88,6 +90,14 @@ const api: Api = {
       }),
     closeReopened: (): Promise<void> =>
       ipcRenderer.invoke('overlay:close-reopened') as Promise<void>,
+  },
+
+  pill: {
+    requestCurrent: (): Promise<PillCurrentInfo | null> =>
+      ipcRenderer.invoke('pill:request-current') as Promise<PillCurrentInfo | null>,
+    expand: (): Promise<void> => ipcRenderer.invoke('pill:expand') as Promise<void>,
+    onUpdate: (cb: (event: PillUpdateEvent) => void): Unsubscribe =>
+      subscribePush<PillUpdateEvent>('pill:update', cb),
   },
 };
 

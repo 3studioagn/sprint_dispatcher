@@ -34,3 +34,6 @@ export {
   type OverlayState,
   type OverlayStateUnsubscribe,
 } from './overlayService';
+
+// Pill — BL-C3-017 (W2) — badge minimizado pós-ack
+export { PillService } from './pillService';

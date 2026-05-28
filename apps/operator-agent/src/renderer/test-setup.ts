@@ -56,6 +56,11 @@ if (typeof window !== 'undefined') {
       onMinimize: vi.fn(() => NOOP_UNSUBSCRIBE),
       closeReopened: vi.fn(() => Promise.resolve()),
     },
+    pill: {
+      requestCurrent: vi.fn(() => Promise.resolve(null)),
+      expand: vi.fn(() => Promise.resolve()),
+      onUpdate: vi.fn(() => NOOP_UNSUBSCRIBE),
+    },
   };
   Object.defineProperty(window, 'api', {
     configurable: true,
@@ -73,6 +78,9 @@ beforeEach(() => {
   vi.mocked(window.api.queue.onUpdated).mockReset().mockReturnValue(NOOP_UNSUBSCRIBE);
   vi.mocked(window.api.overlay.onMinimize).mockReset().mockReturnValue(NOOP_UNSUBSCRIBE);
   vi.mocked(window.api.overlay.closeReopened).mockReset().mockResolvedValue(undefined);
+  vi.mocked(window.api.pill.requestCurrent).mockReset().mockResolvedValue(null);
+  vi.mocked(window.api.pill.expand).mockReset().mockResolvedValue(undefined);
+  vi.mocked(window.api.pill.onUpdate).mockReset().mockReturnValue(NOOP_UNSUBSCRIBE);
 });
 
 afterEach(() => {

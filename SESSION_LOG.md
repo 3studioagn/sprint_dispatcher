@@ -66,6 +66,111 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 22 — 2026-05-28 — Fix CSS ui-kit + BL-C3-017 pill orchestration
+
+**Wave atual:** W2 (Refinement + Design System) — em curso **Método:** extensão
+da Sessão 21 após Renan testar o build e reportar 2 bugs **Duração estimada:**
+~2h (2 commits) **Itens trabalhados:** [fix CSS, **BL-C3-017 (novo no escopo)**]
+
+### Objetivo da sessão
+
+Resposta ao feedback do Renan: (a) "design novo não carregou" — CSS do ui-kit
+não estava sendo aplicado em runtime; (b) "comportamento que estávamos
+esperando" — pill minimizado pós-ack que era pendência documentada como
+BL-C3-017 (fora do escopo da Sessão 21).
+
+Renan optou via AskUserQuestion por: **(1)** nova BrowserWindow para o pill;
+**(2)** pill só após "Recebi" (não após auto-close); **(3)** clique no pill
+reabre overlay fullscreen para revisão (padrão BL-C3-009 reopen).
+
+### O que foi feito
+
+- **Fix CSS (commit `d9834d8`)** — root cause: Vite library mode do ui-kit
+  extrai CSS dos componentes para `dist/assets/style.css` (7 kB) mas o bundle JS
+  `dist/index.js` não tem mais os imports `.module.css`. Consumidores recebiam
+  só o JS; CSS ficava órfão em node_modules. Fix: exports do ui-kit ganha
+  `"./styles.css": "./dist/assets/style.css"`; Agent main.tsx faz
+  `import '@sprint/ui-kit/styles.css'` antes do App. Bundle CSS do Agent: 2.45
+  kB → 9.51 kB.
+
+- **BL-C3-017** — orquestração Overlay ↔ OverlayMinimized via `pillService`
+  (novo em main/services/). Quando aparece: handleAck final + queue vazia.
+  Quando some: clique no pill (expand → reopen overlay full), nova sprint via
+  polling (queueService.onNextSprint hide), ou clique "Reabrir último aviso" no
+  tray. Window strategy: nova BrowserWindow frameless+transparent+topmost
+  screen-saver+ skipTaskbar+focusable:false, largura tela primária × altura
+  100px, ancorada top:0.
+
+  Renderer: `PillApp.tsx` com `<ThemeProvider>` + `<OverlayMinimized>`.
+  `main.tsx` detecta `?pill` em location.search e monta `<PillApp>` em vez de
+  `<App>`. `body.pill-mode { background: transparent }` no global.css.
+
+  IPC novos: `pill:request-current` (pull), `pill:expand` (click → reabre
+  overlay full + esconde pill), `pill:update` (push).
+
+  +29 testes (pillService 18, PillApp 7, handleAck 4). Total Agent: 240 → 269
+  verdes.
+
+### Estado atual
+
+- CSS bundle funcional em produção (verificado via size check).
+- BL-C3-017 ✅ concluído; pill aparece após "Recebi" + fila vazia.
+- 269 testes verdes no Agent.
+- Lint + type-check + build clean.
+- 2 commits separados (fix CSS + BL-C3-017).
+- 1 changeset novo (`c3-017-pill-orchestration.md`).
+
+### Decisões tomadas
+
+- Fix CSS via export + import explícito (não inline-via-JS plugin).
+- Nova BrowserWindow para pill (escolha Renan).
+- Pill só após "Recebi" (escolha Renan); auto-close timeout continua hide()
+  invisível → tray.
+- Clique no pill reabre overlay fullscreen (escolha Renan; padrão BL-C3-009
+  reopen).
+- `pillService?` opcional em HandleAckDeps (backward compat).
+- `focusable: false` no pill window — não rouba foco.
+- Mock `once` auto-dispatch `ready-to-show` em testes.
+
+### Bloqueios encontrados
+
+3 fricções menores, todas resolvidas inline:
+
+1. `exactOptionalPropertyTypes: true` rejeita `pillService: x ?? undefined`.
+   Fix: spread conditional em main/index.ts; cast direto `as PillService` em
+   handleAck.test.ts.
+2. `<ThemeProvider />` sem children rejeitado (children required) —
+   `<ThemeProvider><div /></ThemeProvider>` no placeholder do PillApp.
+3. Mock `once` não auto-dispatch causava `win.show` nunca chamado nos testes de
+   pillService. Fix: factory dispara callback de `ready-to-show` imediatamente.
+
+### Próximo passo
+
+Push da branch + revisão Renan + abertura de PR. Validação visual em runtime
+real (Electron) recomendada — testes em jsdom não exercitam window stacking /
+transparent rendering / focusable:false.
+
+**Próxima sessão sugerida:** C2 (Leader) na W2 + BL-C4-004 (writeCancel) — fecha
+cancelamento ponta-a-ponta agora que C3 detecta cancels (BL-C3-011 da Sessão
+21).
+
+### Observações para a próxima sessão
+
+- **PillService usa `screen.getPrimaryDisplay()`** — em multi-monitor, pill
+  sempre aparece no primário. Refinar em W3 se necessário.
+- **Click-through no BrowserWindow do pill NÃO foi implementado** — 100px no
+  topo da tela não-clicáveis para apps atrás. Em W3 considerar
+  `setIgnoreMouseEvents(true, { forward: true })` + JS detection
+  mouse-over-badge.
+- **Pill window persiste até `app.quit`** — sem cleanup gracioso em
+  config_error/before-quit. Aceitar para v1.
+- **Pill window em runtime Electron precisa validação manual** — jsdom testa
+  lógica de PillApp + props OverlayMinimized; não testa transparent rendering,
+  screen positioning, focusable false. Renan deve validar visualmente após pull
+  dessa branch.
+
+---
+
 ## Sessão 21 — 2026-05-28 — Refinamento C3 (Operator Agent) na W2 (BL-C3-009/010/011/012/015/016)
 
 **Wave atual:** W2 (Refinement + Design System) — em curso **Método:** sessão

@@ -134,6 +134,35 @@ export interface QueueUpdatedEvent {
 export type OverlayMinimizeEvent = Record<string, never>;
 
 // =============================================================================
+// Pill (BL-C3-017) — badge minimizado pós-ack
+// =============================================================================
+
+/**
+ * Subset da sprint exibida no pill — campos visíveis ao operador no
+ * `<OverlayMinimized>` (label = title, value = meta) + identificadores
+ * para distinguir a sprint. Renderer NÃO recebe o body_html nem deadline_at
+ * — pill é só "última sprint confirmada", não interativo nesses campos.
+ *
+ * O main process preserva o payload completo internamente para reabrir
+ * overlay fullscreen quando o operador clica no pill (via `pill:expand`).
+ */
+export interface PillCurrentInfo {
+  sprintId: string;
+  userId: string;
+  title: string;
+  meta: number;
+}
+
+/**
+ * Push main → renderer quando o pill troca de sprint (ex.: operador ack
+ * sprint A → pill A; operador ack sprint B → pill atualiza para B sem
+ * destruir a janela).
+ */
+export interface PillUpdateEvent {
+  info: PillCurrentInfo;
+}
+
+// =============================================================================
 // sprint:acknowledge — renderer → main quando operador clica "Recebi"
 // =============================================================================
 
@@ -246,5 +275,34 @@ export interface Api {
      * em modo de reabertura.
      */
     readonly closeReopened: () => Promise<void>;
+  };
+
+  /**
+   * API do pill (BL-C3-017) — usado pela janela do pill (`?pill` no
+   * URL). Renderer pulla info atual no mount + subscribe a updates;
+   * click no pill chama `expand` para reabrir overlay fullscreen.
+   */
+  readonly pill: {
+    /**
+     * Pull pattern (renderer → main) usado no mount do `<PillApp>` para
+     * obter a sprint exibida no pill atualmente. Retorna `null` se o
+     * pill ainda não foi configurado (race possível durante boot da
+     * janela).
+     */
+    readonly requestCurrent: () => Promise<PillCurrentInfo | null>;
+
+    /**
+     * Operador clicou no pill — main esconde o pill e reabre o overlay
+     * fullscreen com o payload completo da última sprint ackeada (modo
+     * BL-C3-009 reopen, sem novo ack). Idempotente em races.
+     */
+    readonly expand: () => Promise<void>;
+
+    /**
+     * Registra callback para atualizações de conteúdo do pill (operador
+     * acka uma nova sprint enquanto pill já existe; pill troca de
+     * sprint sem destruir/recriar a janela).
+     */
+    readonly onUpdate: (cb: (event: PillUpdateEvent) => void) => Unsubscribe;
   };
 }

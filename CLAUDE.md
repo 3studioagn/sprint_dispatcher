@@ -519,6 +519,64 @@ apps/operator-agent/src/
 >   (queue/overlay/archive), Overlay refatorado (loading/error/warning/ reopen).
 >   Coverage thresholds inalterados (W1.C8 baseline).
 
+> **Atualização W2 — BL-C3-017 + fix CSS (Sessão 22):**
+>
+> Continuação da Sessão 21, incorporando: (a) fix do CSS bundle do
+> `@sprint/ui-kit` que não estava sendo carregado em runtime; (b) implementação
+> completa do BL-C3-017 (orquestração Overlay ↔ OverlayMinimized via novo
+> `pillService`).
+>
+> **Fix CSS:**
+>
+> - `packages/ui-kit/package.json#exports` ganha subpath `./styles.css`
+>   apontando para `./dist/assets/style.css` (bundle extraído pelo Vite library
+>   mode com as classes dos componentes).
+> - `apps/operator-agent/src/renderer/main.tsx` adiciona
+>   `import '@sprint/ui-kit/styles.css'` como side-effect antes do App.
+> - Sem isso, em produção o JS do ui-kit carregava mas as classes
+>   (.overlay/.card/.acknowledgeButton/etc) e os tokens `--sprint-*` ficavam
+>   órfãos em `node_modules/@sprint/ui-kit/dist/assets/style.css`.
+> - Bundle CSS do Agent foi de 2.45 kB → 9.51 kB (+7 kB) após o fix.
+>
+> **BL-C3-017 — orquestração Overlay ↔ OverlayMinimized:**
+>
+> - **`pillService.ts` (novo, em main/services/)** — gerencia BrowserWindow
+>   dedicada do pill. Quando aparece: handleAck final + queue vazia. Quando
+>   some: clique no pill (expand → reopen overlay full), nova sprint via polling
+>   (queueService.onNextSprint hide), ou clique "Reabrir último aviso" no tray.
+>   Métodos públicos: `show(payload)`, `hide()`, `getCurrent()`,
+>   `getFullPayload()`, `isShown()`, `destroy()`.
+> - **Window strategy**: nova BrowserWindow (não reusa a do overlay).
+>   `frame: false`, `transparent: true`, `alwaysOnTop screen-saver`,
+>   `skipTaskbar: true`, `focusable: false` (não rouba foco), largura = primary
+>   display workAreaSize.width, altura 100px ancorada em top:0.
+> - **Renderer separado**: `PillApp.tsx` renderiza `<ThemeProvider>` +
+>   `<OverlayMinimized>` (ui-kit). `main.tsx` detecta `?pill` em
+>   `window.location.search` e monta `<PillApp>` em vez de `<App>`. Mesmo
+>   preload, mesma surface IPC.
+> - **Pull + push**: PillApp pulla via `window.api.pill.requestCurrent` no
+>   mount; subscribe a `pill.onUpdate` para atualizações (sprint A acked → pill
+>   A, sprint B acked → push atualiza para B sem destruir janela).
+> - **`body.pill-mode { background: transparent }`** — main.tsx adiciona classe
+>   quando `?pill` para canvas do BrowserWindow do pill ficar transparente fora
+>   da bar do OverlayMinimized.
+> - **Wire em handleAck**: `pillService?` opcional em `HandleAckDeps`. Após
+>   ack + success: `next === null` → `overlayService.hide()` +
+>   `pillService.show(item.payload)`; `next !== null` →
+>   `overlayService.showSprint(next)` + `pillService.hide()`. Sem pillService
+>   injetado, comportamento legado preservado (backward compat).
+> - **IPC novos**: `pill:request-current` (renderer pulls), `pill:expand`
+>   (renderer click → main reabre overlay full e esconde pill), `pill:update`
+>   (main → renderer push para troca de sprint).
+> - **Click no pill** (decisão Renan via AskUserQuestion): "Reabre overlay
+>   fullscreen para revisão" — pattern BL-C3-009 reopen. Operador clica "Fechar"
+>   no overlay reaberto → fim do ciclo, pill não volta.
+> - **Pill só após ack** (decisão Renan): auto-close por timeout (sem ack)
+>   continua hide() invisível → tray como antes; pill = "concluída" matching
+>   check pontilhado do design.
+> - **Total testes do Agent**: 240 → 269. +29 (18 pillService + 7 PillApp + 4
+>   handleAck wire).
+
 ### Estrutura interna de `@sprint/logger` (W1.C6 — Sessão 17)
 
 Pacote enxuto, source-first. Espelha a estrutura de `contracts` e `fs-adapter`

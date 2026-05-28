@@ -9,6 +9,41 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Fixed — Sessão 22 (2026-05-28)
+
+- **CSS bundle do `@sprint/ui-kit` não era carregado pelo Agent em
+  produção.** Vite library mode extrai CSS para
+  `dist/assets/style.css`; consumidores recebiam só JS sem importar o
+  CSS bundled. Fix: `packages/ui-kit/package.json#exports` ganha
+  `"./styles.css"` apontando para o bundle; `apps/operator-agent/src/
+  renderer/main.tsx` adiciona `import '@sprint/ui-kit/styles.css'` como
+  side-effect. Bundle CSS do Agent: 2.45 kB → 9.51 kB (+7 kB).
+
+### Added — Sessão 22 (2026-05-28) — BL-C3-017 pill orchestration
+
+- **BL-C3-017** — `PillService` (novo em
+  [pillService.ts](apps/operator-agent/src/main/services/pillService.ts))
+  gerencia BrowserWindow dedicada do pill (badge minimizado do
+  `@sprint/ui-kit` — `<OverlayMinimized>`) que aparece após "Recebi"
+  quando a fila esvazia. Wire em
+  [handleAck.ts](apps/operator-agent/src/main/handlers/handleAck.ts):
+  next === null → `overlayService.hide()` + `pillService.show(payload)`;
+  next !== null → `overlayService.showSprint(next)` +
+  `pillService.hide()`. `queueService.onNextSprint` também esconde pill
+  (nova sprint eclipsa). Click no pill via IPC `pill:expand` reabre
+  overlay fullscreen no modo BL-C3-009 reopen.
+- **PillApp.tsx** + roteamento por `?pill` em `main.tsx` — mesma
+  index.html carregada em 2 BrowserWindows; query param distingue qual
+  root React montar. `body.pill-mode { background: transparent }` para
+  canvas do pill window não cobrir apps atrás.
+- **IPC API `window.api.pill`** com `requestCurrent` (pull no mount),
+  `expand` (click → reabre overlay), `onUpdate` (push para trocas de
+  sprint sem destruir janela).
+- **+29 testes**: pillService 18 (estado, show/hide/destroy, push update,
+  isShown), PillApp 7 (render, push, click, cleanup), handleAck 4 (wire
+  do pill — queue vazia/cheia, backward compat, payload correto).
+- Total Agent: 240 (Sessão 21) → 269 verdes.
+
 ### Added — Sessão 21 (2026-05-28) — Refinamento C3 (Operator Agent) na W2
 
 - **BL-C3-012** — Sprint com `deadline_at` no passado é arquivada localmente
