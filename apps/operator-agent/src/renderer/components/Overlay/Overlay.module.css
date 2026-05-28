@@ -37,9 +37,13 @@
 /* ----- Row 1: métrica gigante + deadline coluna ----- */
 
 .metricRow {
+  /* Sessão 38 — Renan: "alinhe essa div que armazena o Até{horario}
+   * embaixo do 20 Artes... ele vai ficar alinhado com o 20 artes pra
+   * ficar mais harmonico". flex-start → flex-end: deadlineGroup
+   * desce e alinha pela base com o metricGroup. */
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: flex-end;
   gap: var(--sprint-space-6);
 }
 
@@ -83,16 +87,22 @@
 }
 
 .deadlineLabel {
-  /* Sessão 37: sm (14px) → base (16px). Renan: "o Até é levemente
-   * maior". Bump sutil para combinar com a proporção da imagem-alvo
-   * sem competir com o "18:00h" 3xl. */
-  font-size: var(--sprint-font-size-base);
+  /* Sessão 38: base (16px) → lg (18px). Renan: "aumente o Até um
+   * pouco". Mantém hierarquia abaixo do "18:00h". */
+  font-size: var(--sprint-font-size-lg);
   color: var(--sprint-color-text-muted);
 }
 
 .deadlineValue {
-  font-size: var(--sprint-font-size-3xl);
-  font-weight: var(--sprint-font-weight-bold);
+  /* Sessão 38 — Renan: "diminua o horario um pouco" + "diminua um
+   * pouco o font weight do horario". Tipografia mais leve, harmoniza
+   * com o "20 Artes" ao lado sem dominar visualmente.
+   * - font-size: 3xl (48px) → 2xl (32px).
+   * - font-weight: bold (700) → medium (500). (Evita o token
+   *   `--sprint-font-weight-semibold` que está alterado para 300
+   *   em tokens.css; medium fica firme sem ser pesado.) */
+  font-size: var(--sprint-font-size-2xl);
+  font-weight: var(--sprint-font-weight-medium);
   color: var(--sprint-color-text);
   line-height: var(--sprint-line-height-tight);
   font-feature-settings: 'tnum';
