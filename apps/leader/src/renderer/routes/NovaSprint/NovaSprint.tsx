@@ -4,6 +4,7 @@ import { BulkSelectButtons } from '../../components/BulkSelectButtons';
 import { DeadlineInput } from '../../components/DeadlineInput';
 import { DispatchModal } from '../../components/DispatchModal';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import { MessageCustomizer } from '../../components/MessageCustomizer';
 import { OperatorList } from '../../components/OperatorList';
 import { api } from '../../services/api';
 import { selectIsDispatching, useDispatchStore } from '../../stores/useDispatchStore';
@@ -154,6 +155,8 @@ export function NovaSprint() {
           {isFormValid ? 'Pronto para disparar' : 'Preencha todos os campos para disparar'}
         </p>
       </section>
+
+      <MessageCustomizer />
 
       {toast !== null && (
         <div

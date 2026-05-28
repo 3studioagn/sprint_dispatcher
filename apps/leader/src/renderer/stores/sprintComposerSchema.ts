@@ -16,6 +16,20 @@
 
 import { z } from 'zod';
 
+/**
+ * Limites de tamanho para os campos customizáveis pelo líder (BL-C2-006).
+ *
+ * Title é exibido no header do overlay (espaço limitado) — capped em 80
+ * chars cobre frases naturais ("É hora de correr — fim de expediente").
+ *
+ * Body é template HTML que vai parar no overlay após substituição de
+ * `{meta}` e sanitização (`sanitizeBodyHtml`, ADR-014). 500 chars dá
+ * margem para HTML estruturado (`<b>`, `<p>`, `<br>`) sem virar superfície
+ * para abuso.
+ */
+const MAX_TITLE_LENGTH = 80;
+const MAX_BODY_TEMPLATE_LENGTH = 500;
+
 export const composerFormSchema = z.object({
   selectedOperators: z
     .array(
@@ -26,6 +40,19 @@ export const composerFormSchema = z.object({
     )
     .min(1, 'Selecione ao menos um operador'),
   deadline: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Formato HH:MM (00:00–23:59)'),
+  /**
+   * Título customizado. String vazia OU mais que 80 chars derruba a
+   * validação. Líder pode digitar livremente, mas dispatch só sai com
+   * algo razoável (default é populado pelo store, então só fica vazio se
+   * o líder apagar tudo manualmente).
+   */
+  title: z.string().min(1, 'Informe um título').max(MAX_TITLE_LENGTH, 'Título muito longo'),
+  /**
+   * Template HTML do corpo. String vazia é aceita — significa "usar o
+   * default do DispatchService". Não exigir min(1) porque o cenário
+   * normal é o líder deixar vazio para o template padrão.
+   */
+  body: z.string().max(MAX_BODY_TEMPLATE_LENGTH, 'Corpo muito longo'),
 });
 
 export type ComposerFormInput = z.input<typeof composerFormSchema>;

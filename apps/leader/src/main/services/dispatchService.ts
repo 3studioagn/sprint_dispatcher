@@ -38,8 +38,31 @@ import type { LeaderConfig } from '../config';
 
 import type { OperatorsService } from './operatorsService';
 
+/**
+ * Defaults aplicados pelo `DispatchService` quando o request não traz
+ * `title`/`body_template` customizados (BL-C2-006). Mantidos como
+ * constants em vez de literais para que o changelog de defaults fique
+ * sob controle de versão (um diff visível dizendo "default mudou").
+ */
 const DEFAULT_TITLE = 'É hora de correr';
 const DEFAULT_BODY_TEMPLATE = 'Sua meta até o final do dia é de: <b>{meta} artes</b>';
+
+/**
+ * Resolve título/corpo finais a partir do request: usa o customizado
+ * quando presente e não-vazio, senão cai para o default. String que é só
+ * whitespace é tratada como vazia (operador apagou tudo no input).
+ *
+ * Exportado para teste isolado.
+ */
+export function resolveTitle(requestTitle: string | undefined): string {
+  const trimmed = requestTitle?.trim();
+  return trimmed !== undefined && trimmed.length > 0 ? trimmed : DEFAULT_TITLE;
+}
+
+export function resolveBodyTemplate(requestBody: string | undefined): string {
+  const trimmed = requestBody?.trim();
+  return trimmed !== undefined && trimmed.length > 0 ? trimmed : DEFAULT_BODY_TEMPLATE;
+}
 
 /** Regex HH:MM 00–23:00–59. Exportado para reuso e teste. */
 const HHMM_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
@@ -125,6 +148,13 @@ export class DispatchService {
     const createdAt = new Date().toISOString();
     const deadlineIso = resolveDeadlineIso(request.deadline, new Date());
 
+    // BL-C2-006: título/corpo customizados via request, com fallback
+    // para os defaults. Resolvidos uma vez por dispatch (o sprintId é
+    // único, então mesma sprint para todos os operadores compartilha
+    // título/template).
+    const finalTitle = resolveTitle(request.title);
+    const bodyTemplate = resolveBodyTemplate(request.body_template);
+
     const perOperator: DispatchSprintPerOperatorResult[] = [];
     let successCount = 0;
     let failedCount = 0;
@@ -134,14 +164,14 @@ export class DispatchService {
       const displayName = operator?.user_nome_exibicao ?? sel.user_id;
 
       try {
-        const sanitizedBody = sanitizeBodyHtml(substituteMeta(DEFAULT_BODY_TEMPLATE, sel.meta));
+        const sanitizedBody = sanitizeBodyHtml(substituteMeta(bodyTemplate, sel.meta));
         const payload = parseSprintPayload({
           schema_version: SCHEMA_VERSION,
           sprint_id: sprintId,
           criado_por: this.config.criado_por,
           criado_em: createdAt,
           user_id: sel.user_id,
-          title: DEFAULT_TITLE,
+          title: finalTitle,
           body_html: sanitizedBody,
           meta: sel.meta,
           deadline_at: deadlineIso,

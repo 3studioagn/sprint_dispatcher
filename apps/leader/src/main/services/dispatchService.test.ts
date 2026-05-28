@@ -4,7 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LeaderConfig } from '../config';
 
-import { DispatchService, resolveDeadlineIso, substituteMeta } from './dispatchService';
+import {
+  DispatchService,
+  resolveBodyTemplate,
+  resolveDeadlineIso,
+  resolveTitle,
+  substituteMeta,
+} from './dispatchService';
 import { OperatorsService } from './operatorsService';
 
 const SHARED = '/shared';
@@ -124,6 +130,54 @@ describe('substituteMeta', () => {
 
   it('aceita meta = 1', () => {
     expect(substituteMeta('Faça {meta} arte hoje', 1)).toBe('Faça 1 arte hoje');
+  });
+});
+
+// =============================================================================
+// resolveTitle / resolveBodyTemplate — helpers de defaults (BL-C2-006)
+// =============================================================================
+
+describe('resolveTitle', () => {
+  it('retorna o default quando undefined', () => {
+    expect(resolveTitle(undefined)).toBe('É hora de correr');
+  });
+
+  it('retorna o default quando string vazia', () => {
+    expect(resolveTitle('')).toBe('É hora de correr');
+  });
+
+  it('retorna o default quando só whitespace', () => {
+    expect(resolveTitle('   ')).toBe('É hora de correr');
+  });
+
+  it('retorna o customizado quando informado', () => {
+    expect(resolveTitle('Fim de turno!')).toBe('Fim de turno!');
+  });
+
+  it('faz trim do customizado', () => {
+    expect(resolveTitle('  Fim de turno!  ')).toBe('Fim de turno!');
+  });
+});
+
+describe('resolveBodyTemplate', () => {
+  it('retorna o default quando undefined', () => {
+    expect(resolveBodyTemplate(undefined)).toBe(
+      'Sua meta até o final do dia é de: <b>{meta} artes</b>',
+    );
+  });
+
+  it('retorna o default quando string vazia', () => {
+    expect(resolveBodyTemplate('')).toBe('Sua meta até o final do dia é de: <b>{meta} artes</b>');
+  });
+
+  it('retorna o default quando só whitespace', () => {
+    expect(resolveBodyTemplate('  \n  ')).toBe(
+      'Sua meta até o final do dia é de: <b>{meta} artes</b>',
+    );
+  });
+
+  it('retorna o customizado quando informado', () => {
+    expect(resolveBodyTemplate('<p>Faça {meta} hoje</p>')).toBe('<p>Faça {meta} hoje</p>');
   });
 });
 
@@ -301,5 +355,104 @@ describe('DispatchService.dispatch — falhas isoladas', () => {
     });
     expect(result.summary).toEqual({ total: 1, success: 0, failed: 1 });
     expect(result.per_operator[0]?.status).toBe('error');
+  });
+});
+
+// =============================================================================
+// BL-C2-006 — title/body customizados via DispatchSprintRequest
+// =============================================================================
+
+describe('DispatchService.dispatch — customização de título e corpo (BL-C2-006)', () => {
+  async function readFirstPayload(): Promise<Record<string, unknown>> {
+    const pending = await adapter.listDir(`${SHARED}/pending`);
+    const filename = pending[0];
+    if (filename === undefined) {
+      expect.unreachable('deveria ter pelo menos 1 arquivo em pending/');
+    }
+    const raw = await adapter.readFile(`${SHARED}/pending/${filename}`);
+    return JSON.parse(raw) as Record<string, unknown>;
+  }
+
+  it('usa o título customizado do request', async () => {
+    await service.dispatch({
+      selected: [{ user_id: 'joao', meta: 5 }],
+      deadline: '18:00',
+      title: 'Fim de turno — meta crítica',
+    });
+    const payload = await readFirstPayload();
+    expect(payload.title).toBe('Fim de turno — meta crítica');
+  });
+
+  it('usa o default quando title está ausente', async () => {
+    await service.dispatch({
+      selected: [{ user_id: 'joao', meta: 5 }],
+      deadline: '18:00',
+    });
+    const payload = await readFirstPayload();
+    expect(payload.title).toBe('É hora de correr');
+  });
+
+  it('usa o default quando title é string vazia (líder apagou tudo)', async () => {
+    await service.dispatch({
+      selected: [{ user_id: 'joao', meta: 5 }],
+      deadline: '18:00',
+      title: '',
+    });
+    const payload = await readFirstPayload();
+    expect(payload.title).toBe('É hora de correr');
+  });
+
+  it('usa o body_template customizado e substitui {meta} antes da escrita', async () => {
+    await service.dispatch({
+      selected: [{ user_id: 'joao', meta: 12 }],
+      deadline: '18:00',
+      body_template: '<p>Produza {meta} unidades antes do fim do turno</p>',
+    });
+    const payload = await readFirstPayload();
+    expect(payload.body_html).toContain('12');
+    expect(payload.body_html).not.toContain('{meta}');
+    expect(payload.body_html as string).toMatch(/Produza 12 unidades/);
+  });
+
+  it('sanitiza body_template customizado (remove <script>)', async () => {
+    await service.dispatch({
+      selected: [{ user_id: 'joao', meta: 5 }],
+      deadline: '18:00',
+      body_template: '<p>Meta {meta}</p><script>alert("xss")</script>',
+    });
+    const payload = await readFirstPayload();
+    expect(payload.body_html).not.toMatch(/<script/i);
+    expect(payload.body_html).not.toContain('alert');
+    expect(payload.body_html).toContain('Meta 5');
+  });
+
+  it('usa o body_template default quando ausente', async () => {
+    await service.dispatch({
+      selected: [{ user_id: 'joao', meta: 8 }],
+      deadline: '18:00',
+    });
+    const payload = await readFirstPayload();
+    expect(payload.body_html as string).toContain('Sua meta até o final do dia');
+    expect(payload.body_html as string).toContain('8');
+  });
+
+  it('título e corpo customizados são compartilhados entre operadores da mesma sprint', async () => {
+    await service.dispatch({
+      selected: [
+        { user_id: 'joao', meta: 5 },
+        { user_id: 'mario', meta: 9 },
+      ],
+      deadline: '18:00',
+      title: 'Compartilhado',
+      body_template: '<p>Faça {meta} hoje</p>',
+    });
+    const pending = await adapter.listDir(`${SHARED}/pending`);
+    expect(pending).toHaveLength(2);
+    for (const filename of pending) {
+      const raw = await adapter.readFile(`${SHARED}/pending/${filename}`);
+      const parsed = JSON.parse(raw) as { title: string; body_html: string };
+      expect(parsed.title).toBe('Compartilhado');
+      expect(parsed.body_html).toMatch(/Faça \d+ hoje/);
+    }
   });
 });

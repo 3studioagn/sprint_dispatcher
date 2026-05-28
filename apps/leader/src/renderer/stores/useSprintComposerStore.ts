@@ -22,6 +22,19 @@ const DEFAULT_DEADLINE = '18:00';
 const DEFAULT_TITLE = 'É hora de correr';
 const DEFAULT_BODY = '';
 
+/**
+ * Template default do corpo do aviso quando o líder não customiza.
+ *
+ * Espelhado em `DispatchService.DEFAULT_BODY_TEMPLATE` (main process —
+ * a única fonte que de fato escreve no payload é o main, que aplica
+ * o default quando o request chega com body_template vazio). Este
+ * espelho existe apenas para o preview do renderer não precisar de
+ * IPC para mostrar o default.
+ *
+ * @see DispatchService (apps/leader/src/main/services/dispatchService.ts)
+ */
+export const DEFAULT_BODY_TEMPLATE = 'Sua meta até o final do dia é de: <b>{meta} artes</b>';
+
 export interface SprintComposerState {
   /** user_id → meta (null = ainda não preenchida). */
   readonly selectedOperators: ReadonlyMap<string, number | null>;
@@ -29,7 +42,11 @@ export interface SprintComposerState {
   readonly deadline: string;
   /** Título da sprint exibido no overlay do Agent. */
   readonly title: string;
-  /** Corpo HTML da sprint (W2: customizável via BL-C2-006). */
+  /**
+   * Template HTML do corpo da sprint. String vazia = usa o default do main
+   * (`DEFAULT_BODY_TEMPLATE`). O `{meta}` é substituído por operador no
+   * `DispatchService` antes da sanitização e da escrita.
+   */
   readonly body: string;
 
   /** Marca/desmarca um operador. Ao marcar, meta inicial = null. */
@@ -42,6 +59,10 @@ export interface SprintComposerState {
   deselectAll: () => void;
   /** Atualiza o deadline (validação fica nos selectors). */
   setDeadline: (deadline: string) => void;
+  /** Atualiza o título exibido no overlay (BL-C2-006). */
+  setTitle: (title: string) => void;
+  /** Atualiza o template HTML do corpo (BL-C2-006). String vazia = default. */
+  setBody: (body: string) => void;
   /** Volta tudo aos defaults. */
   reset: () => void;
 }
@@ -92,6 +113,14 @@ export const useSprintComposerStore = create<SprintComposerState>((set) => ({
     set({ deadline });
   },
 
+  setTitle: (title) => {
+    set({ title });
+  },
+
+  setBody: (body) => {
+    set({ body });
+  },
+
   reset: () => {
     set({
       selectedOperators: new Map(),
@@ -129,6 +158,8 @@ export function selectFormPayload(state: SprintComposerState): ComposerFormOutpu
   const result = composerFormSchema.safeParse({
     selectedOperators,
     deadline: state.deadline,
+    title: state.title,
+    body: state.body,
   });
 
   return result.success ? result.data : null;
@@ -156,5 +187,7 @@ export function selectDispatchRequest(state: SprintComposerState): DispatchSprin
   return {
     selected: payload.selectedOperators,
     deadline: payload.deadline,
+    title: payload.title,
+    body_template: payload.body,
   };
 }
