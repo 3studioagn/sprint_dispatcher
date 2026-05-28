@@ -66,6 +66,76 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 33 — 2026-05-28 — Fix dev resolve do `@sprint/ui-kit/styles.css`
+
+**Wave atual:** W2 — em curso **Método:** atendimento a runtime error reportado
+pelo Renan no Vite dev server **Duração estimada:** ~10min **Itens:** [`predev`
+script no Agent + cache cleanup]
+
+### Objetivo da sessão
+
+Renan reportou:
+
+> `[plugin:vite:import-analysis] Failed to resolve import "@sprint/ui-kit/styles.css" from "src/renderer/main.tsx"`
+
+### Root cause
+
+`pnpm dev` do Agent inicia Vite dev server, que faz import-analysis estática dos
+imports. `@sprint/ui-kit/styles.css` resolve via `exports` field do package.json
+para `./dist/assets/style.css`. Se o `dist/` está stale ou ausente no momento do
+startup (ex.: `pnpm dev` disparado logo após `git pull` ou `pnpm clean`), Vite
+cacheia o erro e segue retornando "Failed to resolve" mesmo após o `dist/` ser
+recriado.
+
+### O que foi feito
+
+- **Rebuild ui-kit** + clear cache `apps/operator-agent/node_modules/ .vite/`
+  (fix tático imediato).
+- **Adiciona `predev` script no `apps/operator-agent/package.json`** —
+  `pnpm --filter @sprint/ui-kit build`. pnpm executa automaticamente antes do
+  `dev`, garantindo que `dist/assets/style.css` esteja presente e atualizado no
+  startup.
+
+### Estado atual
+
+- Cache Vite limpo localmente.
+- `dist/` do ui-kit fresh (rebuild manual nesta sessão).
+- Próximo `pnpm dev` do Agent vai rebuilder o ui-kit antes de subir o Vite
+  server (no-op rápido se `dist/` já estiver fresh, ~2s).
+- Sem changeset (mudança DX interna, não afeta package release).
+
+### Decisões tomadas
+
+- **`predev` em vez de `turbo dev`** — simples, sem precisar mexer no
+  `turbo.json`. Pnpm dispara automaticamente; sem comando novo para Renan
+  memorizar.
+- **NÃO adicionei watch do ui-kit** — `predev` builda uma vez no startup. Para
+  iteração contínua mexendo no source do ui-kit, Renan precisa rodar
+  `pnpm --filter @sprint/ui-kit dev` (build watch) em paralelo. Documentado nas
+  observações.
+
+### Bloqueios encontrados
+
+Nenhum.
+
+### Próximo passo
+
+Renan reinicia `pnpm dev` no Agent — o `predev` agora roda automaticamente e
+gera o `dist/` antes do Vite subir.
+
+### Observações para a próxima sessão
+
+- **Para iteração contínua no source do ui-kit:** rodar em terminal separado
+  `pnpm --filter @sprint/ui-kit dev` (vite build --watch). O `predev` do Agent
+  só garante o startup; após isso, mudanças no source do ui-kit precisam de
+  rebuild manual ou watch ativo.
+- **Cache Vite stale** é uma classe recorrente — sempre que `dist/` do ui-kit
+  muda durante o `pnpm dev` do Agent ativo, o operador precisa reiniciar o dev
+  server. Considerar `turbo dev --filter` orquestrando ambos em paralelo se W3
+  trouxer fluxo de iteração mais intenso.
+
+---
+
 ## Sessão 32 — 2026-05-28 — Overlay mais estreito + header bar "subtle"
 
 **Wave atual:** W2 — em curso **Método:** extensão da Sessão 31 após Renan
