@@ -1,0 +1,70 @@
+/**
+ * @sprint/ui-kit — CSS reset mínimo
+ *
+ * Aplicado pelo <ThemeProvider>. Normaliza o ambiente sem reescrever
+ * estilos default de elementos semânticos. Foco em remover surpresas
+ * herdadas do user-agent (Chromium do Electron) e estabelecer
+ * box-sizing previsível.
+ *
+ * NÃO toca em font-family/color/background — esses ficam no
+ * .module.css do ThemeProvider para serem rastreáveis via tokens.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+figure,
+blockquote,
+dl,
+dd {
+  margin: 0;
+}
+
+body {
+  min-height: 100vh;
+  line-height: var(--sprint-line-height-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+img,
+picture,
+video,
+canvas,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+input,
+button,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+ul,
+ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
