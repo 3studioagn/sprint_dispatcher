@@ -4,7 +4,6 @@ import { BulkSelectButtons } from '../../components/BulkSelectButtons';
 import { DeadlineInput } from '../../components/DeadlineInput';
 import { DispatchModal } from '../../components/DispatchModal';
 import { ErrorBanner } from '../../components/ErrorBanner';
-import { MessageCustomizer } from '../../components/MessageCustomizer';
 import { OperatorList } from '../../components/OperatorList';
 import { api } from '../../services/api';
 import { selectIsDispatching, useDispatchStore } from '../../stores/useDispatchStore';
@@ -34,6 +33,11 @@ export function NovaSprint() {
   const selectedCount = useSprintComposerStore(selectSelectedCount);
   const isFormValid = useSprintComposerStore(selectIsValid);
   const isDispatching = useDispatchStore(selectIsDispatching);
+
+  // BL-C2-006 (refinamento UX): título customizável via input inline no
+  // header, entre o H1 e o grupo de ações (deadline + botão).
+  const title = useSprintComposerStore((s) => s.title);
+  const setTitle = useSprintComposerStore((s) => s.setTitle);
 
   const [toast, setToast] = useState<ToastState | null>(null);
 
@@ -127,6 +131,19 @@ export function NovaSprint() {
           <br />
           para <span className={styles.titleAccent}>rodada de metas</span>
         </h1>
+        <div className={styles.titleField}>
+          <input
+            type="text"
+            className={styles.titleInput}
+            value={title}
+            maxLength={80}
+            placeholder="Título do aviso"
+            onChange={(e) => {
+              setTitle(e.target.value);
+            }}
+            aria-label="Título do aviso"
+          />
+        </div>
         <div className={styles.actions}>
           <DeadlineInput />
           <button
@@ -176,8 +193,6 @@ export function NovaSprint() {
           {isFormValid ? 'Pronto para disparar' : 'Preencha todos os campos para disparar'}
         </p>
       </section>
-
-      <MessageCustomizer />
 
       {toast !== null && (
         <div

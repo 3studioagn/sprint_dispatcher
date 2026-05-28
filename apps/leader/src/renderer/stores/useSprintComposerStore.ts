@@ -1,9 +1,11 @@
 /**
- * Store do composer de sprint (W1.C2 parte 1).
+ * Store do composer de sprint (W1.C2 parte 1 + BL-C2-006 W2).
  *
  * Mantém o rascunho da sprint sendo composta: operadores selecionados, meta
- * por operador, deadline, título e corpo. O dispatch real (escrita em
- * `pending/`) fica em BL-C2-007 — esta store só guarda o draft.
+ * por operador, deadline e título. O `body_html` final é montado pelo
+ * `DispatchService` a partir do template default — não é mais customizável
+ * pelo líder (decisão UX da Sessão 43+1: apenas o título fica editável,
+ * inline no header da NovaSprint, e o corpo permanece padronizado).
  *
  * Lógica derivada (isValid, count, payload) fica em selectors puros exportados
  * separadamente — não em estado armazenado. A validação delega para
@@ -20,34 +22,14 @@ import { composerFormSchema, type ComposerFormOutput } from './sprintComposerSch
 
 const DEFAULT_DEADLINE = '18:00';
 const DEFAULT_TITLE = 'É hora de correr';
-const DEFAULT_BODY = '';
-
-/**
- * Template default do corpo do aviso quando o líder não customiza.
- *
- * Espelhado em `DispatchService.DEFAULT_BODY_TEMPLATE` (main process —
- * a única fonte que de fato escreve no payload é o main, que aplica
- * o default quando o request chega com body_template vazio). Este
- * espelho existe apenas para o preview do renderer não precisar de
- * IPC para mostrar o default.
- *
- * @see DispatchService (apps/leader/src/main/services/dispatchService.ts)
- */
-export const DEFAULT_BODY_TEMPLATE = 'Sua meta até o final do dia é de: <b>{meta} artes</b>';
 
 export interface SprintComposerState {
   /** user_id → meta (null = ainda não preenchida). */
   readonly selectedOperators: ReadonlyMap<string, number | null>;
   /** Horário limite no formato HH:MM (24h). */
   readonly deadline: string;
-  /** Título da sprint exibido no overlay do Agent. */
+  /** Título da sprint exibido no overlay do Agent (BL-C2-006). */
   readonly title: string;
-  /**
-   * Template HTML do corpo da sprint. String vazia = usa o default do main
-   * (`DEFAULT_BODY_TEMPLATE`). O `{meta}` é substituído por operador no
-   * `DispatchService` antes da sanitização e da escrita.
-   */
-  readonly body: string;
 
   /** Marca/desmarca um operador. Ao marcar, meta inicial = null. */
   toggleOperator: (userId: string) => void;
@@ -61,8 +43,6 @@ export interface SprintComposerState {
   setDeadline: (deadline: string) => void;
   /** Atualiza o título exibido no overlay (BL-C2-006). */
   setTitle: (title: string) => void;
-  /** Atualiza o template HTML do corpo (BL-C2-006). String vazia = default. */
-  setBody: (body: string) => void;
   /** Volta tudo aos defaults. */
   reset: () => void;
 }
@@ -71,7 +51,6 @@ export const useSprintComposerStore = create<SprintComposerState>((set) => ({
   selectedOperators: new Map(),
   deadline: DEFAULT_DEADLINE,
   title: DEFAULT_TITLE,
-  body: DEFAULT_BODY,
 
   toggleOperator: (userId) =>
     set((state) => {
@@ -117,16 +96,11 @@ export const useSprintComposerStore = create<SprintComposerState>((set) => ({
     set({ title });
   },
 
-  setBody: (body) => {
-    set({ body });
-  },
-
   reset: () => {
     set({
       selectedOperators: new Map(),
       deadline: DEFAULT_DEADLINE,
       title: DEFAULT_TITLE,
-      body: DEFAULT_BODY,
     });
   },
 }));
@@ -142,8 +116,6 @@ export function selectSelectedCount(state: SprintComposerState): number {
 
 /**
  * Retorna o payload validado pelo schema, ou `null` se o draft não passa.
- * Quando BL-C2-007 (parte 2) ativar o dispatch, este é o objeto que vai
- * para `pending/<sprintId>-<userId>.json` via fs-adapter.
  */
 export function selectFormPayload(state: SprintComposerState): ComposerFormOutput | null {
   const selectedOperators = Array.from(state.selectedOperators.entries()).map(
@@ -159,7 +131,6 @@ export function selectFormPayload(state: SprintComposerState): ComposerFormOutpu
     selectedOperators,
     deadline: state.deadline,
     title: state.title,
-    body: state.body,
   });
 
   return result.success ? result.data : null;
@@ -188,6 +159,5 @@ export function selectDispatchRequest(state: SprintComposerState): DispatchSprin
     selected: payload.selectedOperators,
     deadline: payload.deadline,
     title: payload.title,
-    body_template: payload.body,
   };
 }

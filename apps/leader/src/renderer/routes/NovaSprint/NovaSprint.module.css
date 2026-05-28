@@ -29,6 +29,40 @@
   color: var(--color-accent);
 }
 
+.titleField {
+  flex: 1 1 240px;
+  min-width: 220px;
+  max-width: 420px;
+  display: flex;
+  align-items: center;
+  /* Alinhar verticalmente com .actions (que tem padding via DeadlineInput/button). */
+  padding-bottom: var(--space-1);
+}
+
+.titleInput {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg-elevated);
+  color: var(--color-text);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-button);
+  font-family: inherit;
+  font-size: var(--font-size-sm);
+  outline: none;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.titleInput::placeholder {
+  color: var(--color-text-subtle);
+}
+
+.titleInput:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(245, 165, 87, 0.25);
+}
+
 .actions {
   display: flex;
   align-items: center;

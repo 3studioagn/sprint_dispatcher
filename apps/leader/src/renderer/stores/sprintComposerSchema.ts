@@ -2,13 +2,13 @@
  * Schema Zod do composer de sprint do Leader.
  *
  * Define a forma validada do payload que o composer produz: lista de
- * operadores com metas inteiras positivas (RN-07) e deadline em HH:MM.
+ * operadores com metas inteiras positivas (RN-07), deadline em HH:MM e
+ * título do aviso (BL-C2-006).
  *
  * Esta sessão (W1.C2 parte 1) NÃO usa `react-hook-form` — a store Zustand
  * é a fonte única de verdade, e este schema é consumido por
  * `selectIsValid` / `selectFormPayload` para validar o draft antes do
- * dispatch. Quando BL-C2-007 trouxer o dispatch real (parte 2), o output
- * deste schema é o payload pronto para escrita em pending/ via fs-adapter.
+ * dispatch.
  *
  * @see DECISIONS.md ADR-005 (schema-first com z.infer)
  * @see DECISIONS.md ADR-015 (composer do Leader — W1.C2 parte 1)
@@ -17,18 +17,12 @@
 import { z } from 'zod';
 
 /**
- * Limites de tamanho para os campos customizáveis pelo líder (BL-C2-006).
+ * Limite de tamanho do título customizável pelo líder (BL-C2-006).
  *
- * Title é exibido no header do overlay (espaço limitado) — capped em 80
+ * Título é exibido no header do overlay (espaço limitado) — capped em 80
  * chars cobre frases naturais ("É hora de correr — fim de expediente").
- *
- * Body é template HTML que vai parar no overlay após substituição de
- * `{meta}` e sanitização (`sanitizeBodyHtml`, ADR-014). 500 chars dá
- * margem para HTML estruturado (`<b>`, `<p>`, `<br>`) sem virar superfície
- * para abuso.
  */
 const MAX_TITLE_LENGTH = 80;
-const MAX_BODY_TEMPLATE_LENGTH = 500;
 
 export const composerFormSchema = z.object({
   selectedOperators: z
@@ -47,12 +41,6 @@ export const composerFormSchema = z.object({
    * o líder apagar tudo manualmente).
    */
   title: z.string().min(1, 'Informe um título').max(MAX_TITLE_LENGTH, 'Título muito longo'),
-  /**
-   * Template HTML do corpo. String vazia é aceita — significa "usar o
-   * default do DispatchService". Não exigir min(1) porque o cenário
-   * normal é o líder deixar vazio para o template padrão.
-   */
-  body: z.string().max(MAX_BODY_TEMPLATE_LENGTH, 'Corpo muito longo'),
 });
 
 export type ComposerFormInput = z.input<typeof composerFormSchema>;

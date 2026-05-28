@@ -16,12 +16,11 @@ describe('useSprintComposerStore', () => {
   });
 
   describe('defaults', () => {
-    it('inicia com Map vazio, deadline 18:00, título "É hora de correr" e body vazio', () => {
+    it('inicia com Map vazio, deadline 18:00 e título "É hora de correr"', () => {
       const state = store.getState();
       expect(state.selectedOperators.size).toBe(0);
       expect(state.deadline).toBe('18:00');
       expect(state.title).toBe('É hora de correr');
-      expect(state.body).toBe('');
     });
   });
 
@@ -137,32 +136,17 @@ describe('useSprintComposerStore', () => {
     });
   });
 
-  describe('setBody (BL-C2-006)', () => {
-    it('atualiza o body com a string informada', () => {
-      store.getState().setBody('<p>Faça {meta} hoje</p>');
-      expect(store.getState().body).toBe('<p>Faça {meta} hoje</p>');
-    });
-
-    it('aceita string vazia (= usa default no dispatch)', () => {
-      store.getState().setBody('<p>Algo</p>');
-      store.getState().setBody('');
-      expect(store.getState().body).toBe('');
-    });
-  });
-
   describe('reset', () => {
     it('volta tudo ao default', () => {
       store.getState().toggleOperator('joao');
       store.getState().setMeta('joao', 5);
       store.getState().setDeadline('20:00');
       store.getState().setTitle('Custom');
-      store.getState().setBody('<p>Custom</p>');
       store.getState().reset();
       const state = store.getState();
       expect(state.selectedOperators.size).toBe(0);
       expect(state.deadline).toBe('18:00');
       expect(state.title).toBe('É hora de correr');
-      expect(state.body).toBe('');
     });
   });
 });
@@ -269,25 +253,10 @@ describe('selectIsValid (selector puro)', () => {
     expect(selectIsValid(store.getState())).toBe(false);
   });
 
-  it('falso quando body passa de 500 caracteres (BL-C2-006)', () => {
-    store.getState().toggleOperator('joao');
-    store.getState().setMeta('joao', 5);
-    store.getState().setBody('a'.repeat(501));
-    expect(selectIsValid(store.getState())).toBe(false);
-  });
-
-  it('verdadeiro com body vazio (= usa default no dispatch)', () => {
-    store.getState().toggleOperator('joao');
-    store.getState().setMeta('joao', 5);
-    store.getState().setBody('');
-    expect(selectIsValid(store.getState())).toBe(true);
-  });
-
-  it('verdadeiro com title e body customizados dentro dos limites', () => {
+  it('verdadeiro com título customizado dentro do limite', () => {
     store.getState().toggleOperator('joao');
     store.getState().setMeta('joao', 5);
     store.getState().setTitle('Custom title');
-    store.getState().setBody('<p>Custom {meta}</p>');
     expect(selectIsValid(store.getState())).toBe(true);
   });
 
@@ -346,17 +315,14 @@ describe('selectFormPayload (selector puro)', () => {
       { user_id: 'maria', meta: 10 },
     ]);
     expect(payload?.title).toBe('É hora de correr');
-    expect(payload?.body).toBe('');
   });
 
-  it('propaga title e body customizados (BL-C2-006)', () => {
+  it('propaga title customizado (BL-C2-006)', () => {
     store.getState().toggleOperator('joao');
     store.getState().setMeta('joao', 5);
     store.getState().setTitle('Custom');
-    store.getState().setBody('<p>X {meta}</p>');
     const payload = selectFormPayload(store.getState());
     expect(payload?.title).toBe('Custom');
-    expect(payload?.body).toBe('<p>X {meta}</p>');
   });
 
   it('converte meta null para 0 (que falha em positive)', () => {
@@ -406,14 +372,12 @@ describe('selectDispatchRequest (selector puro)', () => {
     expect(request?.deadline).toBe('20:30');
   });
 
-  it('inclui title e body_template no request (BL-C2-006)', () => {
+  it('inclui title no request (BL-C2-006)', () => {
     store.getState().toggleOperator('joao');
     store.getState().setMeta('joao', 5);
     store.getState().setTitle('Custom');
-    store.getState().setBody('<p>Custom {meta}</p>');
     const request = selectDispatchRequest(store.getState());
     expect(request?.title).toBe('Custom');
-    expect(request?.body_template).toBe('<p>Custom {meta}</p>');
   });
 
   it('título usa o default quando store ainda não foi customizado', () => {
@@ -421,7 +385,6 @@ describe('selectDispatchRequest (selector puro)', () => {
     store.getState().setMeta('joao', 5);
     const request = selectDispatchRequest(store.getState());
     expect(request?.title).toBe('É hora de correr');
-    expect(request?.body_template).toBe('');
   });
 
   it('é puro — sem mutação do state', () => {

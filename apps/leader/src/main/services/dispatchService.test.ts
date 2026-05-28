@@ -6,7 +6,6 @@ import type { LeaderConfig } from '../config';
 
 import {
   DispatchService,
-  resolveBodyTemplate,
   resolveDeadlineIso,
   resolveTitle,
   substituteMeta,
@@ -156,28 +155,6 @@ describe('resolveTitle', () => {
 
   it('faz trim do customizado', () => {
     expect(resolveTitle('  Fim de turno!  ')).toBe('Fim de turno!');
-  });
-});
-
-describe('resolveBodyTemplate', () => {
-  it('retorna o default quando undefined', () => {
-    expect(resolveBodyTemplate(undefined)).toBe(
-      'Sua meta até o final do dia é de: <b>{meta} artes</b>',
-    );
-  });
-
-  it('retorna o default quando string vazia', () => {
-    expect(resolveBodyTemplate('')).toBe('Sua meta até o final do dia é de: <b>{meta} artes</b>');
-  });
-
-  it('retorna o default quando só whitespace', () => {
-    expect(resolveBodyTemplate('  \n  ')).toBe(
-      'Sua meta até o final do dia é de: <b>{meta} artes</b>',
-    );
-  });
-
-  it('retorna o customizado quando informado', () => {
-    expect(resolveBodyTemplate('<p>Faça {meta} hoje</p>')).toBe('<p>Faça {meta} hoje</p>');
   });
 });
 
@@ -362,7 +339,7 @@ describe('DispatchService.dispatch — falhas isoladas', () => {
 // BL-C2-006 — title/body customizados via DispatchSprintRequest
 // =============================================================================
 
-describe('DispatchService.dispatch — customização de título e corpo (BL-C2-006)', () => {
+describe('DispatchService.dispatch — customização de título (BL-C2-006)', () => {
   async function readFirstPayload(): Promise<Record<string, unknown>> {
     const pending = await adapter.listDir(`${SHARED}/pending`);
     const filename = pending[0];
@@ -402,31 +379,7 @@ describe('DispatchService.dispatch — customização de título e corpo (BL-C2-
     expect(payload.title).toBe('É hora de correr');
   });
 
-  it('usa o body_template customizado e substitui {meta} antes da escrita', async () => {
-    await service.dispatch({
-      selected: [{ user_id: 'joao', meta: 12 }],
-      deadline: '18:00',
-      body_template: '<p>Produza {meta} unidades antes do fim do turno</p>',
-    });
-    const payload = await readFirstPayload();
-    expect(payload.body_html).toContain('12');
-    expect(payload.body_html).not.toContain('{meta}');
-    expect(payload.body_html as string).toMatch(/Produza 12 unidades/);
-  });
-
-  it('sanitiza body_template customizado (remove <script>)', async () => {
-    await service.dispatch({
-      selected: [{ user_id: 'joao', meta: 5 }],
-      deadline: '18:00',
-      body_template: '<p>Meta {meta}</p><script>alert("xss")</script>',
-    });
-    const payload = await readFirstPayload();
-    expect(payload.body_html).not.toMatch(/<script/i);
-    expect(payload.body_html).not.toContain('alert');
-    expect(payload.body_html).toContain('Meta 5');
-  });
-
-  it('usa o body_template default quando ausente', async () => {
+  it('corpo do aviso usa template fixo do sistema (não customizável)', async () => {
     await service.dispatch({
       selected: [{ user_id: 'joao', meta: 8 }],
       deadline: '18:00',
@@ -436,7 +389,7 @@ describe('DispatchService.dispatch — customização de título e corpo (BL-C2-
     expect(payload.body_html as string).toContain('8');
   });
 
-  it('título e corpo customizados são compartilhados entre operadores da mesma sprint', async () => {
+  it('título customizado é compartilhado entre operadores da mesma sprint', async () => {
     await service.dispatch({
       selected: [
         { user_id: 'joao', meta: 5 },
@@ -444,7 +397,6 @@ describe('DispatchService.dispatch — customização de título e corpo (BL-C2-
       ],
       deadline: '18:00',
       title: 'Compartilhado',
-      body_template: '<p>Faça {meta} hoje</p>',
     });
     const pending = await adapter.listDir(`${SHARED}/pending`);
     expect(pending).toHaveLength(2);
@@ -452,7 +404,7 @@ describe('DispatchService.dispatch — customização de título e corpo (BL-C2-
       const raw = await adapter.readFile(`${SHARED}/pending/${filename}`);
       const parsed = JSON.parse(raw) as { title: string; body_html: string };
       expect(parsed.title).toBe('Compartilhado');
-      expect(parsed.body_html).toMatch(/Faça \d+ hoje/);
+      expect(parsed.body_html).toMatch(/Sua meta até o final do dia/);
     }
   });
 });

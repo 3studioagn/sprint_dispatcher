@@ -15,7 +15,6 @@ export {
 
 export {
   DispatchService,
-  resolveBodyTemplate,
   resolveDeadlineIso,
   resolveTitle,
   substituteMeta,

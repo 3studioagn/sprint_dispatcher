@@ -118,17 +118,11 @@ export interface DispatchSprintRequest {
   readonly deadline: string;
   /**
    * Título customizado pelo líder (BL-C2-006). Vazio ou ausente = main
-   * usa o default `'É hora de correr'`.
+   * usa o default `'É hora de correr'`. O corpo do aviso (`body_html`)
+   * é montado pelo main a partir do template default fixo — não é
+   * customizável.
    */
   readonly title?: string;
-  /**
-   * Template HTML do corpo customizado pelo líder (BL-C2-006). Pode
-   * conter o placeholder `{meta}` que é substituído por operador no
-   * `DispatchService.substituteMeta`. Vazio ou ausente = main usa o
-   * default `'Sua meta até o final do dia é de: <b>{meta} artes</b>'`.
-   * Sanitização (`sanitizeBodyHtml`) sempre aplicada antes da escrita.
-   */
-  readonly body_template?: string;
 }
 
 export interface DispatchSprintPerOperatorResult {
