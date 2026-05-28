@@ -66,4 +66,22 @@ describe('<TextBlock>', () => {
     rerender(<TextBlock bodyHtml={html} />);
     expect(container.innerHTML).toBe(firstHtml);
   });
+
+  it('compõe className adicional preservando a classe base do CSS Module', () => {
+    const { container, rerender } = render(<TextBlock bodyHtml="<p>x</p>" />);
+    const baseClassName = (container.firstElementChild as HTMLElement).className;
+    expect(baseClassName).not.toContain('host-extra');
+
+    rerender(<TextBlock bodyHtml="<p>x</p>" className="host-extra" />);
+    const composedClassName = (container.firstElementChild as HTMLElement).className;
+    expect(composedClassName).toContain('host-extra');
+    expect(composedClassName.split(' ').length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('renderiza wrapper vazio para bodyHtml vazio (não joga)', () => {
+    const { container } = render(<TextBlock bodyHtml="" />);
+    const wrapper = container.firstElementChild;
+    expect(wrapper).not.toBeNull();
+    expect(wrapper?.innerHTML).toBe('');
+  });
 });

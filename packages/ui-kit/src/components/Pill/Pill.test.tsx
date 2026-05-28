@@ -154,6 +154,16 @@ describe('Pill — prop position (Sessão 25)', () => {
     const positioner = screen.getByRole('button').parentElement?.parentElement;
     expect(positioner?.style.left).toBe('50%');
   });
+
+  it('position com valor inválido fora do tipo (cast) cai em 50% — defesa em profundidade', () => {
+    // Só atingível via cast em runtime — TypeScript impede em compile.
+    // O fallback `return 50` em resolvePillPositionPercent protege
+    // contra valores inesperados (ex: prop dinâmica de IPC sem validação).
+    const invalidPosition = 'middle' as unknown as 'left';
+    render(<Pill label="Suas metas" value={20} position={invalidPosition} />);
+    const positioner = screen.getByRole('button').parentElement?.parentElement;
+    expect(positioner?.style.left).toBe('50%');
+  });
 });
 
 describe('Pill — variant', () => {

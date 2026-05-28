@@ -159,6 +159,20 @@ describe('<OverlayMinimized>', () => {
       const positioner = asElement(container.querySelector('[data-position="numeric"]'));
       expect(positioner.style.left).toBe('50%');
     });
+
+    it('valor inválido fora do tipo (cast) cai em center (50%) — defesa em profundidade', () => {
+      // Caso só atingível via cast em runtime — TypeScript impede em
+      // compile time. O fallback final `return 50` em resolvePercent
+      // protege contra valores inesperados (ex: prop dinâmica vinda
+      // de JSON/IPC sem validação a montante).
+      const invalidPosition = 'middle' as unknown as 'left';
+      const { container } = render(
+        <OverlayMinimized label="L" value={1} onClick={vi.fn()} position={invalidPosition} />,
+      );
+
+      const positioner = asElement(container.querySelector('[data-position]'));
+      expect(positioner.style.left).toBe('50%');
+    });
   });
 
   it('variant="urgent" compõe className adicional na badge (placeholder visual)', () => {
