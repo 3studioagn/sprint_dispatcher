@@ -2716,3 +2716,131 @@ junto a `@sprint/contracts`, `@sprint/fs-adapter` e `@sprint/logger`. Vive em
 - CLAUDE.md §4 ("Estrutura interna de `@sprint/ui-kit`") — convenções detalhadas
 - CLAUDE.md §12 G-026 — race do `pnpm dev` corrigida na Sessão 42c
 - Nota técnica C9 acima — decisões de implementação não-arquiteturais
+
+---
+
+## ADR-023: Não adoção de Storybook na v1.0 do `@sprint/ui-kit`
+
+- **Status:** Accepted
+- **Data:** 2026-05-28
+- **Decisores:** Renan (3Studio)
+- **Relacionado a:**
+  [ADR-022](#adr-022-adocao-do-sprintui-kit-c9-como-package-compartilhado)
+
+### Contexto
+
+Ao montar o C9 (BL-C9-001..006, Sessão 20), surgiu a pergunta natural de adotar
+Storybook (ou equivalente como Ladle/Histoire) para catálogo navegável e
+documentação visual dos componentes do `@sprint/ui-kit`. Ferramentas dessa
+classe ajudam a:
+
+- visualizar variantes (props × states) lado a lado;
+- compartilhar estados intermediários com designer/PM;
+- documentar uso (props, slots, acessibilidade) num único lugar navegável;
+- detectar regressões visuais via snapshot/Chromatic.
+
+A pergunta apareceu novamente na sessão de fechamento da W2 (BL-C8-008/
+C7-008/009) — o ui-kit atingiu cobertura 100/100/100/100 com 64 testes Vitest +
+Testing Library, e o preview do Renan
+(`packages/ui-kit/dev/palette-preview. html`) já cobre a inspeção da paleta DARK
+isoladamente. Vale subir o aparato de Storybook?
+
+### Decisão
+
+**Não** adotar Storybook (nem Ladle, nem Histoire, nem Chromatic) na v1.0 do
+`@sprint/ui-kit`. A verificação visual e funcional dos componentes fica a cargo
+de:
+
+1. **Vitest + `@testing-library/react`** para comportamento (props, states,
+   acessibilidade, sanitização XSS). Cobertura ≥85% materializada em threshold
+   no `vitest.config.ts` (BL-C8-008).
+2. **`packages/ui-kit/dev/palette-preview.html`** — preview HTML standalone da
+   paleta DARK, sem dependências, abertável diretamente no navegador. Suficiente
+   para revisão visual da paleta sem aparato de catálogo.
+3. **Validação visual no app consumidor** (Operator Agent) — o overlay real, no
+   ambiente real (Electron + tokens aplicados em runtime), é a fonte definitiva
+   de verdade visual. Sessões 32-42 da W2 já operam nesse modo (Renan roda
+   `pnpm dev` real e screenshoteia diffs).
+4. **E2E com Playwright** (BL-C8-004, W3) — quando entregue, vai exercer o
+   overlay no fluxo real do operador. Cobre o que jsdom não cobre (CSS computado
+   de tokens.css, alwaysOnTop, multi-monitor).
+
+### Critério de reavaliação
+
+Esta decisão deve ser revista quando QUALQUER um dos limiares for atingido:
+
+- **3+ devs trabalhando simultaneamente na UI.** O custo de coordenar
+  expectativas visuais cresce não-linearmente com o número de devs no mesmo
+  componente. Storybook vira valioso como ponto de sincronização cedo nesse
+  cenário.
+- **10+ componentes no `@sprint/ui-kit`.** A v1.0 entrega 4 componentes
+  (Overlay, TextBlock, OverlayMinimized, Pill) + ThemeProvider. Quando o
+  catálogo cruzar 10, a navegação por arquivo vira fricção real e justifica
+  catálogo navegável.
+- **Necessidade de revisão visual por designer não-dev** (cenário hipotético
+  futuro: ARTFLEXÍVEIS contrata designer dedicado que precisa explorar variantes
+  sem rodar o monorepo).
+
+Quando atingido, abrir novo ADR explicitando qual ferramenta foi escolhida
+(Storybook 8 vs Ladle vs Histoire — decisão na época), por que, e plano de
+migração.
+
+### Alternativas consideradas
+
+1. **Storybook 8.** Aceito como padrão de mercado para catálogo de componentes
+   React. Setup envolve config dedicada (`.storybook/`), stories por componente,
+   build separado, integração CI opcional (Chromatic). Custo de manutenção:
+   stories envelhecem se não atualizadas com a API do componente. **Rejeitada
+   para v1.0** por desproporção entre setup e tamanho do catálogo atual (4
+   componentes).
+2. **Ladle (alternativa leve a Storybook, by Uber).** API próxima de Storybook
+   com setup minimal e build via Vite (afinidade com o stack do ui-kit). Custo
+   de manutenção menor que Storybook, mas ainda exige arquivo `.stories.tsx` por
+   componente. **Rejeitada para v1.0** pelo mesmo motivo (não há catálogo
+   suficiente para justificar o aparato).
+3. **Histoire (alternativa Vue/Vite-first).** Mesmo raciocínio que Ladle.
+   Suporte React menos maduro à data desta decisão.
+4. **Chromatic (visual regression como serviço).** Integraria com Storybook ou
+   GitHub Actions standalone. **Rejeitada** porque sem Storybook não há base
+   para Chromatic operar; visual regression entra em pauta junto da reavaliação
+   acima.
+5. **Apenas testes unitários + preview HTML standalone.** **Escolhida.**
+
+### Consequências
+
+**Aceitas:**
+
+- Não há catálogo navegável de componentes do `@sprint/ui-kit` na v1.0. Quem
+  precisa entender o componente lê o código + JSDoc + testes (que servem como
+  documentação executável de uso).
+- Revisão visual depende do app consumidor + preview HTML standalone. Para os 4
+  componentes atuais, suficiente.
+- Não há detecção automatizada de regressão visual. Mitigada por (a) Vitest +
+  Testing Library cobrindo branches/atributos/estrutura DOM; (b) E2E em W3
+  (BL-C8-004); (c) revisão manual no consumer (Agent overlay real) em cada
+  mudança visual.
+- Setup do ui-kit fica enxuto: vite library mode + vitest + tokens.css. Menos
+  uma config a manter.
+
+**Trade-offs:**
+
+- Quando o catálogo crescer (~10 componentes), a fricção de "para entender o
+  componente eu preciso ler o código" vira real. Reavaliação acima endereça esse
+  momento.
+- Designer eventual contratado teria que rodar o monorepo para inspecionar
+  variantes — fricção alta. Reavaliação cobre.
+- Em caso de regressão visual subtil (ex.: cor de hover muda 5%), pode passar
+  batido até alguém olhar o app real. Mitigação parcial: tokens DARK são poucos
+  e auditáveis manualmente (`tokens.test.ts` tem teste anti-regressão).
+
+### Referências
+
+- BL-C7-009 (este ADR)
+- ADR-022 — adoção do `@sprint/ui-kit` como package compartilhado (decisão pré-
+  requisito desta)
+- BL-C8-004 — E2E com Playwright (cobre o lado runtime/Electron que Storybook
+  cobriria parcialmente — agendado para W3)
+- BL-C8-008 — testes unitários ≥85% (substituto operacional do catálogo na v1.0)
+- `packages/ui-kit/dev/palette-preview.html` — preview HTML da paleta DARK
+- [Storybook](https://storybook.js.org/) · [Ladle](https://ladle.dev/) ·
+  [Histoire](https://histoire.dev/) — opções avaliadas e rejeitadas para v1.0
