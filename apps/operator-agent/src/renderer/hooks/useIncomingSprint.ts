@@ -31,7 +31,9 @@ export function useIncomingSprint(): void {
       try {
         const current = await window.api.sprint.requestCurrent();
         if (cancelled || current === null) return;
-        setCurrent(current.sprint);
+        // Pull sempre vem do `currentItem` do main — fluxo normal de
+        // fila, nunca reopen (reopen não toca em currentItem).
+        setCurrent(current.sprint, current.reopened ?? false);
         setLength(current.queueLength);
       } catch (err) {
         // Falha no pull não bloqueia o renderer — o push via onIncoming
@@ -42,7 +44,9 @@ export function useIncomingSprint(): void {
     void pullInitial();
 
     const unsub = window.api.sprint.onIncoming((event) => {
-      setCurrent(event.sprint);
+      // event.reopened === true → overlay em modo reabertura
+      // (BL-C3-009 — botão "Fechar" em vez de "Recebi").
+      setCurrent(event.sprint, event.reopened ?? false);
       setLength(event.queueLength);
     });
 

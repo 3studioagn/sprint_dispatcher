@@ -45,8 +45,13 @@ export type TrayIconColor = 'gray' | 'yellow' | 'red';
  * e ser inspecionável em testes.
  *
  * `null` = item não é clicável (header / separador semântico).
+ *
+ * - `show-current`: restaura overlay minimizado (sprint atual).
+ * - `reopen-last`: reabre último aviso do histórico local (BL-C3-009).
+ * - `open-history`: abre `<userData>/historico/` no Explorer.
+ * - `about`: dialog "Sobre".
  */
-export type TrayMenuAction = 'show-current' | 'open-history' | 'about' | null;
+export type TrayMenuAction = 'show-current' | 'reopen-last' | 'open-history' | 'about' | null;
 
 /**
  * Item de menu. `enabled: false` cria itens visíveis mas inativos
@@ -109,8 +114,13 @@ export function computeTrayTooltip(state: TrayState): string {
  * `label` mudam por estado:
  *
  * - "Mostrar sprint atual": habilitado só em `sprint_active`.
- * - "Histórico local": sempre habilitado (operador pode inspecionar
- *   pasta `userData/historico/` mesmo sem sprint ativa).
+ * - "Reabrir último aviso" (BL-C3-009): habilitado iff `idle` (não há
+ *   sprint sendo exibida — quando há, "Mostrar sprint atual" já serve).
+ *   Em config_error fica desabilitado também (cenário de boot ruim;
+ *   operador deve corrigir config antes de explorar histórico).
+ * - "Histórico local": habilitado exceto em `config_error` (operador
+ *   pode inspecionar a pasta `userData/historico/` mesmo sem sprint
+ *   ativa).
  * - "Sobre": sempre habilitado.
  *
  * **"Sair" ocluso no W1** — RN-04 (operador não pode fechar o agente).
@@ -118,6 +128,7 @@ export function computeTrayTooltip(state: TrayState): string {
  */
 export function computeTrayMenu(state: TrayState): readonly TrayMenuItem[] {
   const hasSprint = state.kind === 'sprint_active';
+  const canReopen = state.kind === 'idle';
   return [
     {
       label: 'Sprint Operator Agent',
@@ -128,6 +139,11 @@ export function computeTrayMenu(state: TrayState): readonly TrayMenuItem[] {
       label: hasSprint ? 'Mostrar sprint atual' : 'Nenhuma sprint na fila',
       enabled: hasSprint,
       action: hasSprint ? 'show-current' : null,
+    },
+    {
+      label: 'Reabrir último aviso',
+      enabled: canReopen,
+      action: canReopen ? 'reopen-last' : null,
     },
     {
       label: 'Histórico local',

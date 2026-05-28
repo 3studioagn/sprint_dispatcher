@@ -20,6 +20,7 @@ import styles from './Overlay.module.css';
 
 export function Overlay(): JSX.Element {
   const sprint = useCurrentSprintStore((s) => s.sprint);
+  const isReopened = useCurrentSprintStore((s) => s.isReopened);
 
   if (sprint === null) {
     return (
@@ -44,8 +45,14 @@ export function Overlay(): JSX.Element {
       <SprintCard sprint={sprint} />
       <footer className={styles.footer}>
         {/* key force remount em troca de sprint — reseta loading/error
-            local do AckButton sem useEffect/cleanup manual. */}
-        <AckButton key={sprint.sprint_id} sprintId={sprint.sprint_id} userId={sprint.user_id} />
+            local do AckButton sem useEffect/cleanup manual.
+            `reopened` ramifica AckButton para "Fechar" (BL-C3-009). */}
+        <AckButton
+          key={sprint.sprint_id}
+          sprintId={sprint.sprint_id}
+          userId={sprint.user_id}
+          reopened={isReopened}
+        />
       </footer>
     </main>
   );

@@ -54,6 +54,7 @@ if (typeof window !== 'undefined') {
     },
     overlay: {
       onMinimize: vi.fn(() => NOOP_UNSUBSCRIBE),
+      closeReopened: vi.fn(() => Promise.resolve()),
     },
   };
   Object.defineProperty(window, 'api', {
@@ -71,6 +72,7 @@ beforeEach(() => {
   vi.mocked(window.api.sprint.onIncoming).mockReset().mockReturnValue(NOOP_UNSUBSCRIBE);
   vi.mocked(window.api.queue.onUpdated).mockReset().mockReturnValue(NOOP_UNSUBSCRIBE);
   vi.mocked(window.api.overlay.onMinimize).mockReset().mockReturnValue(NOOP_UNSUBSCRIBE);
+  vi.mocked(window.api.overlay.closeReopened).mockReset().mockResolvedValue(undefined);
 });
 
 afterEach(() => {

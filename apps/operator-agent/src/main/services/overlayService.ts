@@ -39,6 +39,7 @@
 import { EventEmitter } from 'node:events';
 import path from 'node:path';
 
+import type { SprintPayload } from '@sprint/contracts';
 import { BrowserWindow } from 'electron';
 
 import type { IncomingSprintEvent } from '../../shared/ipc-types';
@@ -64,6 +65,13 @@ export class OverlayService {
   private currentItem: QueueItem | null = null;
   private currentQueueLength = 0;
   private minimizeTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * `true` quando o overlay está exibindo um aviso reaberto via tray
+   * (BL-C3-009). Diferente do fluxo normal: NÃO inicia timer, NÃO toca
+   * em `currentItem` (preserva null/idle do main process), e o renderer
+   * substitui o botão "Recebi" por "Fechar" (sem grave ack).
+   */
+  private reopenedMode = false;
 
   private readonly minimizeAfterMs: number;
   private readonly emitter = new EventEmitter();
@@ -75,8 +83,12 @@ export class OverlayService {
   /**
    * Exibe uma sprint. Cria janela na primeira chamada; nas subsequentes
    * envia push `sprint:incoming`. Sempre RESETA o timer de minimização.
+   *
+   * Limpa o `reopenedMode` — fluxo normal supersede reopen (cenário raro:
+   * sprint chega na fila enquanto reopen estava ativo).
    */
   showSprint(item: QueueItem, queueLength: number): void {
+    this.reopenedMode = false;
     this.currentItem = item;
     this.currentQueueLength = queueLength;
 
@@ -140,6 +152,61 @@ export class OverlayService {
   }
 
   /**
+   * Reabre o overlay com um aviso recuperado do histórico local
+   * (BL-C3-009 — tray menu "Reabrir último aviso"). Diferenças do
+   * fluxo normal `showSprint`:
+   *
+   * - NÃO modifica `currentItem` (preserva o estado do main process —
+   *   tipicamente null quando o tray item está habilitado).
+   * - NÃO inicia timer de minimização — operador fecha manualmente.
+   * - Envia push `sprint:incoming` com `reopened: true` — renderer
+   *   substitui o botão "Recebi" por "Fechar" e o handler de fechamento
+   *   chama `api.overlay.closeReopened()` em vez de `acknowledge`
+   *   (sprint já foi ackeada anteriormente; reabertura não duplica ack).
+   * - Marca `reopenedMode = true`. `closeReopened` é no-op fora desse
+   *   modo (defesa contra IPC adulterado).
+   */
+  reopenFromHistory(payload: SprintPayload): void {
+    this.reopenedMode = true;
+    if (this.window === null || this.window.isDestroyed()) {
+      this.window = this.createWindow();
+    }
+    // Push direto: renderer recebe sprint + reopened flag. Não usa
+    // pull pattern (`getCurrentEvent` retorna null porque currentItem
+    // permanece null) — push é a fonte autoritativa em reopen.
+    this.window.webContents.send('sprint:incoming', {
+      sprint: payload,
+      queueLength: 0,
+      reopened: true,
+    } satisfies IncomingSprintEvent);
+    if (!this.window.isVisible()) this.window.show();
+    this.window.focus();
+    this.transitionTo('showing');
+    // Sem `restartMinimizeTimer` — operador controla o fechamento.
+  }
+
+  /**
+   * Fecha o overlay reaberto via tray (BL-C3-009). Apenas oculta a
+   * janela; NÃO grava ack adicional. No-op se overlay não está em
+   * reopened mode (defesa contra IPC adulterado).
+   *
+   * Após fechar, o state machine volta para `'hidden'` — próxima
+   * sprint via fluxo normal funciona inalterada.
+   */
+  closeReopened(): void {
+    if (!this.reopenedMode) return;
+    this.reopenedMode = false;
+    if (this.window === null || this.window.isDestroyed()) return;
+    this.window.hide();
+    this.transitionTo('hidden');
+  }
+
+  /** Indica se o overlay está exibindo um aviso reaberto (BL-C3-009). */
+  isReopened(): boolean {
+    return this.reopenedMode;
+  }
+
+  /**
    * Push `queue:updated` ao renderer. Mantém o snapshot da queue length
    * para o pull pattern (`getCurrentEvent`).
    */
@@ -175,6 +242,7 @@ export class OverlayService {
   hide(): void {
     if (this.window === null || this.window.isDestroyed()) return;
     this.clearMinimizeTimer();
+    this.reopenedMode = false;
     this.window.hide();
     this.currentItem = null;
     this.currentQueueLength = 0;
@@ -186,6 +254,7 @@ export class OverlayService {
    */
   destroy(): void {
     this.clearMinimizeTimer();
+    this.reopenedMode = false;
     if (this.window !== null && !this.window.isDestroyed()) {
       this.window.destroy();
     }

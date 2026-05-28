@@ -6,6 +6,11 @@
  *   pullar via `sprint:request-current` no mount inicial.
  * - Gate 6: limpa após ack final (junto com dequeue do queueService).
  *
+ * **`isReopened` (BL-C3-009):** `true` quando o último push veio com
+ * `reopened: true` — overlay está exibindo um aviso reaberto via tray.
+ * Renderer muda o botão "Recebi" por "Fechar" e usa o handler
+ * `closeReopened` em vez de `acknowledge`.
+ *
  * Selector puro `selectHasSprint` separado do `create()` (padrão estabelecido
  * em ADR-015 do Leader).
  */
@@ -15,17 +20,19 @@ import { create } from 'zustand';
 
 export interface CurrentSprintState {
   sprint: SprintPayload | null;
-  setCurrent: (sprint: SprintPayload) => void;
+  isReopened: boolean;
+  setCurrent: (sprint: SprintPayload, isReopened?: boolean) => void;
   clearCurrent: () => void;
 }
 
 export const useCurrentSprintStore = create<CurrentSprintState>((set) => ({
   sprint: null,
-  setCurrent: (sprint) => {
-    set({ sprint });
+  isReopened: false,
+  setCurrent: (sprint, isReopened = false) => {
+    set({ sprint, isReopened });
   },
   clearCurrent: () => {
-    set({ sprint: null });
+    set({ sprint: null, isReopened: false });
   },
 }));
 

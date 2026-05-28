@@ -472,3 +472,112 @@ describe('OverlayService — BrowserWindow construction args (regressão F-002)'
     );
   });
 });
+
+describe('OverlayService — reopenFromHistory + closeReopened (BL-C3-009)', () => {
+  let service: OverlayService;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    mockBrowserWindow.mockClear();
+    mockBrowserWindowInstances.length = 0;
+    service = new OverlayService({ minimizeAfterMs: MINIMIZE_AFTER_MS });
+  });
+
+  afterEach(() => {
+    service.destroy();
+    vi.useRealTimers();
+  });
+
+  it('reopenFromHistory cria janela na primeira chamada + state="showing"', () => {
+    service.reopenFromHistory(makeItem().payload);
+    expect(mockBrowserWindow).toHaveBeenCalledTimes(1);
+    expect(service.getState()).toBe('showing');
+    expect(service.isReopened()).toBe(true);
+  });
+
+  it('reopenFromHistory NÃO toca em currentItem (preserva null)', () => {
+    expect(service.getCurrentEvent()).toBeNull();
+    service.reopenFromHistory(makeItem({ sprintId: SPRINT_ID_1 }).payload);
+    expect(service.getCurrentEvent()).toBeNull();
+  });
+
+  it('reopenFromHistory envia push sprint:incoming com reopened:true', () => {
+    service.reopenFromHistory(makeItem({ sprintId: SPRINT_ID_1 }).payload);
+    const w = lastWindow();
+    expect(w.webContents.send).toHaveBeenCalledTimes(1);
+    const [channel, payload] = w.webContents.send.mock.calls[0] as [
+      string,
+      { sprint: { sprint_id: string }; queueLength: number; reopened: boolean },
+    ];
+    expect(channel).toBe('sprint:incoming');
+    expect(payload.sprint.sprint_id).toBe(SPRINT_ID_1);
+    expect(payload.queueLength).toBe(0);
+    expect(payload.reopened).toBe(true);
+  });
+
+  it('reopenFromHistory NÃO inicia timer de minimize (operador controla)', () => {
+    service.reopenFromHistory(makeItem().payload);
+    vi.advanceTimersByTime(MINIMIZE_AFTER_MS * 3);
+    expect(service.getState()).toBe('showing'); // sem timer → não minimiza
+    expect(lastWindow().hide).not.toHaveBeenCalled();
+  });
+
+  it('reopenFromHistory em janela hidden existente apenas exibe', () => {
+    // Show normal → hide → reopen reusa a janela
+    service.showSprint(makeItem(), 1);
+    service.hide();
+    expect(mockBrowserWindow).toHaveBeenCalledTimes(1);
+
+    service.reopenFromHistory(makeItem({ sprintId: SPRINT_ID_2 }).payload);
+    // Mesma janela
+    expect(mockBrowserWindow).toHaveBeenCalledTimes(1);
+    expect(lastWindow().show).toHaveBeenCalled();
+    expect(service.isReopened()).toBe(true);
+  });
+
+  it('closeReopened: hide + reopenedMode=false + state="hidden"', () => {
+    service.reopenFromHistory(makeItem().payload);
+    expect(service.isReopened()).toBe(true);
+
+    service.closeReopened();
+
+    expect(service.isReopened()).toBe(false);
+    expect(service.getState()).toBe('hidden');
+    expect(lastWindow().hide).toHaveBeenCalled();
+  });
+
+  it('closeReopened fora do modo é no-op (não toca window)', () => {
+    // showSprint normal, depois closeReopened — deve ser no-op
+    service.showSprint(makeItem(), 1);
+    const w = lastWindow();
+    const initialHideCalls = w.hide.mock.calls.length;
+    const initialState = service.getState();
+
+    service.closeReopened();
+
+    expect(w.hide.mock.calls.length).toBe(initialHideCalls); // sem hide adicional
+    expect(service.getState()).toBe(initialState);
+  });
+
+  it('showSprint normal após reopen limpa reopenedMode', () => {
+    service.reopenFromHistory(makeItem({ sprintId: SPRINT_ID_1 }).payload);
+    expect(service.isReopened()).toBe(true);
+
+    service.showSprint(makeItem({ sprintId: SPRINT_ID_2 }), 1);
+    expect(service.isReopened()).toBe(false);
+  });
+
+  it('hide limpa reopenedMode', () => {
+    service.reopenFromHistory(makeItem().payload);
+    expect(service.isReopened()).toBe(true);
+    service.hide();
+    expect(service.isReopened()).toBe(false);
+  });
+
+  it('destroy limpa reopenedMode', () => {
+    service.reopenFromHistory(makeItem().payload);
+    expect(service.isReopened()).toBe(true);
+    service.destroy();
+    expect(service.isReopened()).toBe(false);
+  });
+});

@@ -103,6 +103,15 @@ export interface IncomingSprintEvent {
   sprint: SprintPayload;
   /** Quantidade total de sprints na fila (incluindo a atual). UI mostra "+N na fila". */
   queueLength: number;
+  /**
+   * `true` quando o evento é uma reabertura via tray (BL-C3-009) — sprint
+   * já foi ackeada anteriormente, sendo apenas re-exibida do histórico
+   * local. UI deve mostrar botão "Fechar" em vez de "Recebido" e o handler
+   * de fechamento NÃO grava ack adicional.
+   *
+   * Opcional — ausente em pushes normais (fluxo de fila padrão).
+   */
+  reopened?: boolean;
 }
 
 // =============================================================================
@@ -229,5 +238,13 @@ export interface Api {
      * ou resetar estado de UI (ack permanece pendente — não foi clicado).
      */
     readonly onMinimize: (cb: () => void) => Unsubscribe;
+
+    /**
+     * Fecha o overlay quando exibido em modo de reabertura (BL-C3-009 —
+     * `reopened: true`). Apenas oculta a janela; NÃO grava ack adicional
+     * (sprint já foi ackeada anteriormente). No-op se o overlay não está
+     * em modo de reabertura.
+     */
+    readonly closeReopened: () => Promise<void>;
   };
 }

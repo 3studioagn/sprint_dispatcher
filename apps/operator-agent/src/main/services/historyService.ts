@@ -22,9 +22,19 @@ import { randomBytes } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
+import { safeParseFilename, safeParseSprintPayload, type SprintPayload } from '@sprint/contracts';
 import { format } from 'date-fns';
 
 const HISTORICO_DIR = 'historico';
+
+/**
+ * Resultado de {@link HistoryService.loadLastArchived}. `payload` já passou
+ * pelo schema Zod — caller pode usar diretamente sem re-parse.
+ */
+export interface LoadLastArchivedResult {
+  filename: string;
+  payload: SprintPayload;
+}
 
 export class HistoryService {
   private readonly processedFilenames = new Set<string>();
@@ -152,6 +162,91 @@ export class HistoryService {
         }
       }
     }
+  }
+
+  /**
+   * Carrega o último aviso (sprint) arquivado no histórico local — usado
+   * pelo BL-C3-009 (reabertura via tray).
+   *
+   * Algoritmo:
+   *  1. Lista subpastas em `<userData>/historico/`.
+   *  2. Ordena `YYYY-MM-DD` desc — pasta mais recente primeiro.
+   *  3. Para cada dia (do mais recente ao mais antigo):
+   *     a. Lista `.json` válidos como filename de PENDING (exclui
+   *        `cancel-*.json` — não faz sentido reabrir uma sprint
+   *        cancelada).
+   *     b. Ordena por nome desc — ULID encode timestamp, então sort
+   *        lexicográfico desc retorna o mais recente primeiro.
+   *     c. Para cada arquivo do mais recente ao mais antigo: lê, parse
+   *        JSON, valida via Zod. Em sucesso → retorna. Em corrupção
+   *        → pula silenciosamente.
+   *  4. Se nenhum arquivo válido em nenhum dia: retorna `null` (caller
+   *     mostra balloon "nenhum aviso para reabrir").
+   *
+   * **Não atualiza o cache `processedFilenames`** — leitura passiva.
+   * **Não lança em pasta inexistente** (retorna `null`).
+   */
+  async loadLastArchived(): Promise<LoadLastArchivedResult | null> {
+    const root = this.getHistoricoPath();
+    let dayDirs: string[];
+    try {
+      dayDirs = await fs.readdir(root);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
+      throw err;
+    }
+
+    // YYYY-MM-DD ordena lexicograficamente como cronologicamente.
+    // Desc → mais recente primeiro.
+    const sortedDays = [...dayDirs].sort().reverse();
+
+    for (const day of sortedDays) {
+      const dayPath = path.join(root, day);
+      let stats;
+      try {
+        stats = await fs.stat(dayPath);
+      } catch {
+        continue;
+      }
+      if (!stats.isDirectory()) continue;
+
+      let files: string[];
+      try {
+        files = await fs.readdir(dayPath);
+      } catch {
+        continue;
+      }
+
+      const sprintFiles = files
+        .filter((f) => f.endsWith('.json'))
+        .filter((f) => {
+          const parsed = safeParseFilename(f);
+          return parsed.success && parsed.data.type === 'pending';
+        })
+        .sort()
+        .reverse();
+
+      for (const filename of sprintFiles) {
+        const filepath = path.join(dayPath, filename);
+        let raw: string;
+        try {
+          raw = await fs.readFile(filepath, 'utf-8');
+        } catch {
+          continue;
+        }
+        let json: unknown;
+        try {
+          json = JSON.parse(raw);
+        } catch {
+          continue;
+        }
+        const result = safeParseSprintPayload(json);
+        if (!result.success) continue;
+        return { filename, payload: result.data };
+      }
+    }
+
+    return null;
   }
 
   /**

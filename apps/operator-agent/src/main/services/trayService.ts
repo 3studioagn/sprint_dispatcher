@@ -141,6 +141,21 @@ export class TrayService {
   }
 
   /**
+   * Mostra balloon informativo (BL-C3-009 — feedback de "nenhum aviso
+   * para reabrir"). No-op em plataformas sem suporte. Não bloqueia.
+   */
+  displayInfoBalloon(message: string): void {
+    if (this.tray === null) return;
+    if (process.platform === 'win32') {
+      this.tray.displayBalloon({
+        title: 'Sprint Operator Agent',
+        content: message,
+        iconType: 'info',
+      });
+    }
+  }
+
+  /**
    * Mostra diálogo "Sobre" — utilitário invocado pelo handler do menu.
    */
   showAboutDialog(): void {

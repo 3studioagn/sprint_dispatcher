@@ -221,3 +221,48 @@ describe('AckButton — moved_to_history: false (regressão F-024)', () => {
     });
   });
 });
+
+describe('AckButton — modo reaberto (BL-C3-009)', () => {
+  it('reopened=true: renderiza label "Fechar" em vez de "Recebi"', () => {
+    render(<AckButton sprintId={SPRINT_ID} userId={USER_ID} reopened />);
+    expect(screen.getByRole('button', { name: /fechar/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /recebi/i })).not.toBeInTheDocument();
+  });
+
+  it('reopened=true: click chama overlay.closeReopened, NÃO sprint.acknowledge', async () => {
+    render(<AckButton sprintId={SPRINT_ID} userId={USER_ID} reopened />);
+    fireEvent.click(screen.getByRole('button', { name: /fechar/i }));
+
+    await waitFor(() => {
+      expect(window.api.overlay.closeReopened).toHaveBeenCalledTimes(1);
+    });
+    expect(window.api.sprint.acknowledge).not.toHaveBeenCalled();
+  });
+
+  it('reopened=true: NÃO mostra warning de moved_to_history (irrelevante em reopen)', async () => {
+    render(<AckButton sprintId={SPRINT_ID} userId={USER_ID} reopened />);
+    fireEvent.click(screen.getByRole('button', { name: /fechar/i }));
+
+    // Espera o handler async terminar
+    await waitFor(() => {
+      expect(window.api.overlay.closeReopened).toHaveBeenCalled();
+    });
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('reopened=true: falha em closeReopened mostra mensagem de erro inline', async () => {
+    vi.mocked(window.api.overlay.closeReopened).mockRejectedValueOnce(new Error('IPC offline'));
+    render(<AckButton sprintId={SPRINT_ID} userId={USER_ID} reopened />);
+    fireEvent.click(screen.getByRole('button', { name: /fechar/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(/Falha ao fechar/i);
+      expect(screen.getByRole('alert')).toHaveTextContent(/IPC offline/);
+    });
+  });
+
+  it('reopened=false (default): comportamento Recebi inalterado', () => {
+    render(<AckButton sprintId={SPRINT_ID} userId={USER_ID} reopened={false} />);
+    expect(screen.getByRole('button', { name: /recebi/i })).toBeInTheDocument();
+  });
+});

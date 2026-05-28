@@ -128,8 +128,46 @@ const handleTrayAction: TrayActionHandler = (action) => {
     case 'show-current':
       overlayService?.restoreCurrent();
       return;
+    case 'reopen-last':
+      void handleReopenLast();
+      return;
   }
 };
+
+/**
+ * BL-C3-009 — orquestra reabertura do último aviso via tray:
+ * 1. Carrega último arquivo do histórico local via `historyService`.
+ * 2. Se houver: chama `overlayService.reopenFromHistory(payload)`.
+ * 3. Se não: dispara balloon "Nenhum aviso para reabrir" (UX —
+ *    operador clicou esperando algo; precisa de feedback).
+ *
+ * Falhas não-fatais. Tipicamente disparado quando state === 'idle'
+ * (tray menu desabilita em sprint_active/config_error), então
+ * `historyService` está inicializado.
+ */
+async function handleReopenLast(): Promise<void> {
+  if (historyService === null || overlayService === null) {
+    // Boot incompleto / config error — tray menu já deveria desabilitar,
+    // mas defesa em profundidade contra clique de fila pendurada.
+    return;
+  }
+  try {
+    const last = await historyService.loadLastArchived();
+    if (last === null) {
+      // Nenhum aviso arquivado — operador precisa saber que clicar não
+      // fez nada visível. Balloon é o canal estabelecido (G-023) para
+      // sinalizar eventos do agent ao operador.
+      trayService.displayInfoBalloon('Nenhum aviso para reabrir no histórico local.');
+      return;
+    }
+    overlayService.reopenFromHistory(last.payload);
+  } catch (err) {
+    console.error('[reopen-last] falha ao carregar último arquivado', err);
+    trayService.displayInfoBalloon(
+      'Falha ao carregar histórico. Veja "Histórico local" para inspeção manual.',
+    );
+  }
+}
 
 /**
  * Resincroniza estado visual do tray baseado em `queueService.length()`.
@@ -321,6 +359,12 @@ function registerIpcHandlers(): void {
       }
     },
   );
+
+  // overlay:close-reopened — BL-C3-009 — operador clica "Fechar" em
+  // overlay reaberto via tray. Sem ack adicional; apenas hide().
+  ipcMain.handle('overlay:close-reopened', (): void => {
+    overlayService?.closeReopened();
+  });
 }
 
 // =============================================================================

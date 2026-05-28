@@ -125,4 +125,36 @@ describe('computeTrayMenu', () => {
       expect(sair).toBeUndefined();
     }
   });
+
+  describe('BL-C3-009 — item "Reabrir último aviso"', () => {
+    it('idle: habilitado com action reopen-last', () => {
+      const menu = computeTrayMenu(IDLE);
+      const reopen = menu.find((i) => i.label === 'Reabrir último aviso');
+      expect(reopen).toBeDefined();
+      expect(reopen?.enabled).toBe(true);
+      expect(reopen?.action).toBe('reopen-last');
+    });
+
+    it('sprint_active: desabilitado (show-current já cobre)', () => {
+      const menu = computeTrayMenu(SPRINT_1);
+      const reopen = menu.find((i) => i.label === 'Reabrir último aviso');
+      expect(reopen).toBeDefined();
+      expect(reopen?.enabled).toBe(false);
+      expect(reopen?.action).toBeNull();
+    });
+
+    it('config_error: desabilitado', () => {
+      const menu = computeTrayMenu(CONFIG_ERROR);
+      const reopen = menu.find((i) => i.label === 'Reabrir último aviso');
+      expect(reopen?.enabled).toBe(false);
+      expect(reopen?.action).toBeNull();
+    });
+
+    it('loading: desabilitado (estado transitório)', () => {
+      const menu = computeTrayMenu(LOADING);
+      const reopen = menu.find((i) => i.label === 'Reabrir último aviso');
+      expect(reopen?.enabled).toBe(false);
+      expect(reopen?.action).toBeNull();
+    });
+  });
 });

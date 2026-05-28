@@ -262,3 +262,164 @@ describe('HistoryService — Gate 6: initializeFromDisk', () => {
     expect(h.isAlreadyArchived('new-joao.json')).toBe(true);
   });
 });
+
+describe('HistoryService — BL-C3-009: loadLastArchived', () => {
+  const VALID_SPRINT_OLD = '01HX9K2M4F8N7P2Q5R3S6T7V8W';
+  const VALID_SPRINT_MID = '01HXAAABBBCCCDDDEEEFFFGGGH';
+  const VALID_SPRINT_NEW = '01HXBBBCCCDDDEEEFFFGGGHHHJ';
+
+  function makeSprintJson(sprintId: string, userId = 'joao'): string {
+    return JSON.stringify({
+      schema_version: '1.0',
+      sprint_id: sprintId,
+      criado_por: 'Renan',
+      criado_em: '2026-05-26T10:00:00.000Z',
+      user_id: userId,
+      title: 'Meta de teste',
+      body_html: 'corpo',
+      meta: 5,
+      deadline_at: '2026-05-26T21:00:00.000Z',
+    });
+  }
+
+  let userData: string;
+
+  beforeEach(async () => {
+    userData = path.join(TMP_ROOT, `loadlast-${Math.random().toString(36).slice(2, 10)}`);
+    await fs.mkdir(userData, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await fs.rm(TMP_ROOT, { recursive: true, force: true });
+  });
+
+  it('retorna null quando historico/ não existe', async () => {
+    const h = new HistoryService(userData);
+    expect(await h.loadLastArchived()).toBeNull();
+  });
+
+  it('retorna null quando historico/ existe mas vazio', async () => {
+    await fs.mkdir(path.join(userData, 'historico'), { recursive: true });
+    const h = new HistoryService(userData);
+    expect(await h.loadLastArchived()).toBeNull();
+  });
+
+  it('retorna a única sprint quando há apenas 1 arquivo', async () => {
+    const filename = `${VALID_SPRINT_OLD}-joao.json`;
+    const dayPath = path.join(userData, 'historico', '2026-05-26');
+    await fs.mkdir(dayPath, { recursive: true });
+    await fs.writeFile(path.join(dayPath, filename), makeSprintJson(VALID_SPRINT_OLD), 'utf-8');
+
+    const h = new HistoryService(userData);
+    const result = await h.loadLastArchived();
+    expect(result).not.toBeNull();
+    expect(result?.filename).toBe(filename);
+    expect(result?.payload.sprint_id).toBe(VALID_SPRINT_OLD);
+  });
+
+  it('retorna a sprint do dia mais recente quando há múltiplos dias', async () => {
+    const oldFile = `${VALID_SPRINT_OLD}-joao.json`;
+    const newFile = `${VALID_SPRINT_NEW}-joao.json`;
+    const oldDay = path.join(userData, 'historico', '2026-05-25');
+    const newDay = path.join(userData, 'historico', '2026-05-26');
+    await fs.mkdir(oldDay, { recursive: true });
+    await fs.mkdir(newDay, { recursive: true });
+    await fs.writeFile(path.join(oldDay, oldFile), makeSprintJson(VALID_SPRINT_OLD), 'utf-8');
+    await fs.writeFile(path.join(newDay, newFile), makeSprintJson(VALID_SPRINT_NEW), 'utf-8');
+
+    const h = new HistoryService(userData);
+    const result = await h.loadLastArchived();
+    expect(result?.filename).toBe(newFile);
+  });
+
+  it('retorna ULID mais novo (sort desc) dentro do mesmo dia', async () => {
+    const oldFile = `${VALID_SPRINT_OLD}-joao.json`;
+    const midFile = `${VALID_SPRINT_MID}-joao.json`;
+    const newFile = `${VALID_SPRINT_NEW}-joao.json`;
+    const day = path.join(userData, 'historico', '2026-05-26');
+    await fs.mkdir(day, { recursive: true });
+    await fs.writeFile(path.join(day, oldFile), makeSprintJson(VALID_SPRINT_OLD), 'utf-8');
+    await fs.writeFile(path.join(day, midFile), makeSprintJson(VALID_SPRINT_MID), 'utf-8');
+    await fs.writeFile(path.join(day, newFile), makeSprintJson(VALID_SPRINT_NEW), 'utf-8');
+
+    const h = new HistoryService(userData);
+    const result = await h.loadLastArchived();
+    expect(result?.filename).toBe(newFile);
+  });
+
+  it('ignora arquivos cancel-*.json (não faz sentido reabrir sprint cancelada)', async () => {
+    const sprintFile = `${VALID_SPRINT_OLD}-joao.json`;
+    const cancelFile = `cancel-${VALID_SPRINT_NEW}.json`;
+    const day = path.join(userData, 'historico', '2026-05-26');
+    await fs.mkdir(day, { recursive: true });
+    await fs.writeFile(path.join(day, sprintFile), makeSprintJson(VALID_SPRINT_OLD), 'utf-8');
+    await fs.writeFile(path.join(day, cancelFile), '{"type":"cancel"}', 'utf-8');
+
+    const h = new HistoryService(userData);
+    const result = await h.loadLastArchived();
+    expect(result?.filename).toBe(sprintFile);
+  });
+
+  it('pula arquivos corrompidos (JSON inválido)', async () => {
+    const corrupt = `${VALID_SPRINT_NEW}-joao.json`;
+    const valid = `${VALID_SPRINT_OLD}-joao.json`;
+    const day = path.join(userData, 'historico', '2026-05-26');
+    await fs.mkdir(day, { recursive: true });
+    await fs.writeFile(path.join(day, corrupt), '{ broken json', 'utf-8');
+    await fs.writeFile(path.join(day, valid), makeSprintJson(VALID_SPRINT_OLD), 'utf-8');
+
+    const h = new HistoryService(userData);
+    const result = await h.loadLastArchived();
+    expect(result?.filename).toBe(valid);
+  });
+
+  it('pula arquivos com schema inválido (faltando campo)', async () => {
+    const incomplete = `${VALID_SPRINT_NEW}-joao.json`;
+    const valid = `${VALID_SPRINT_OLD}-joao.json`;
+    const day = path.join(userData, 'historico', '2026-05-26');
+    await fs.mkdir(day, { recursive: true });
+    await fs.writeFile(path.join(day, incomplete), '{"missing":"everything"}', 'utf-8');
+    await fs.writeFile(path.join(day, valid), makeSprintJson(VALID_SPRINT_OLD), 'utf-8');
+
+    const h = new HistoryService(userData);
+    const result = await h.loadLastArchived();
+    expect(result?.filename).toBe(valid);
+  });
+
+  it('NÃO atualiza cache (leitura passiva — não chama markProcessed)', async () => {
+    const filename = `${VALID_SPRINT_OLD}-joao.json`;
+    const day = path.join(userData, 'historico', '2026-05-26');
+    await fs.mkdir(day, { recursive: true });
+    await fs.writeFile(path.join(day, filename), makeSprintJson(VALID_SPRINT_OLD), 'utf-8');
+
+    const h = new HistoryService(userData);
+    expect(h.isAlreadyArchived(filename)).toBe(false);
+    await h.loadLastArchived();
+    expect(h.isAlreadyArchived(filename)).toBe(false);
+  });
+
+  it('retorna null se todos os dias só têm cancels', async () => {
+    const cancel = `cancel-${VALID_SPRINT_NEW}.json`;
+    const day = path.join(userData, 'historico', '2026-05-26');
+    await fs.mkdir(day, { recursive: true });
+    await fs.writeFile(path.join(day, cancel), '{"type":"cancel"}', 'utf-8');
+
+    const h = new HistoryService(userData);
+    expect(await h.loadLastArchived()).toBeNull();
+  });
+
+  it('busca em dias anteriores se dia mais recente só tem cancels', async () => {
+    const sprintFile = `${VALID_SPRINT_OLD}-joao.json`;
+    const cancelFile = `cancel-${VALID_SPRINT_NEW}.json`;
+    const oldDay = path.join(userData, 'historico', '2026-05-25');
+    const newDay = path.join(userData, 'historico', '2026-05-26');
+    await fs.mkdir(oldDay, { recursive: true });
+    await fs.mkdir(newDay, { recursive: true });
+    await fs.writeFile(path.join(oldDay, sprintFile), makeSprintJson(VALID_SPRINT_OLD), 'utf-8');
+    await fs.writeFile(path.join(newDay, cancelFile), '{"type":"cancel"}', 'utf-8');
+
+    const h = new HistoryService(userData);
+    const result = await h.loadLastArchived();
+    expect(result?.filename).toBe(sprintFile);
+  });
+});

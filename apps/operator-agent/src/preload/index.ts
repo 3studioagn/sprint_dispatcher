@@ -86,6 +86,8 @@ const api: Api = {
       subscribePush<Record<string, never>>('overlay:minimize', () => {
         cb();
       }),
+    closeReopened: (): Promise<void> =>
+      ipcRenderer.invoke('overlay:close-reopened') as Promise<void>,
   },
 };
 
