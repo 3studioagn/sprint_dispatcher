@@ -98,6 +98,10 @@ entradas em ordem cronológica crescente — mais recente no fim.
   `@sprint/logger` com Pino — wrapper enxuto (W1.C6)
 - [ADR-021](#adr-021-expansao-da-suite-de-testes-para-production-grade-na-w1c8)
   — Expansão da suíte de testes para production-grade na W1.C8
+- [ADR-022](#adr-022-adocao-do-sprintui-kit-c9-como-package-compartilhado) —
+  Adoção do `@sprint/ui-kit` (C9) como package compartilhado
+- [ADR-023](#adr-023-nao-adocao-de-storybook-na-v10-do-sprintui-kit) — Não
+  adoção de Storybook na v1.0 do `@sprint/ui-kit`
 
 ---
 
@@ -2249,12 +2253,17 @@ entre adapters só apareceriam em produção.
 
 Decisões internas tomadas no scaffold e conteúdo do package `@sprint/ui-kit`,
 **não promovidas a ADR** porque estão dentro do escopo de implementação do
-componente. ADRs formais do C9 chegam em BL-C7-008 (**ADR-022: adoção do C9**) e
-BL-C7-009 (**ADR-023: não adoção de Storybook na v1.0**) — sessões futuras.
+componente. As decisões **arquiteturais** do C9 — adoção como package
+compartilhado e não adoção de Storybook na v1.0 — foram formalizadas em
+[ADR-022](#adr-022-adocao-do-sprintui-kit-c9-como-package-compartilhado) e
+[ADR-023](#adr-023-nao-adocao-de-storybook-na-v10-do-sprintui-kit) na sessão de
+fechamento da Wave 2 (BL-C7-008 e BL-C7-009). As notas abaixo permanecem como
+registro de decisões de implementação; os ADRs são a fonte de verdade das
+decisões arquiteturais.
 
 > **Atenção à numeração:** o prompt master original referenciava "ADR-003 /
 > ADR-004" para o C9, mas esses números já estão ocupados (ADR-003 = SMB;
-> ADR-004 = Polling). Os ADRs reais serão **ADR-022 e ADR-023** (próximos livres
+> ADR-004 = Polling). Os ADRs reais são **ADR-022 e ADR-023** (próximos livres
 > após ADR-021).
 
 ### Decisões
@@ -2576,3 +2585,134 @@ já existia em `@sprint/contracts`.
 - ADR-015 — composer do Leader W1 (refinado por BL-C2-006)
 - ADR-017 — main process do Leader W1 (estendido por C2-006/008/009)
 - Pendências W2: BL-C7-008/009 (ADRs), BL-C8-008 (testes ≥85% C9)
+
+---
+
+## ADR-022: Adoção do `@sprint/ui-kit` (C9) como package compartilhado
+
+- **Status:** Accepted
+- **Data:** 2026-05-28
+- **Decisores:** Renan (3Studio)
+
+### Contexto
+
+O redesign do overlay do Operator Agent na Wave 2 ('Hora do Rush!') exigiu
+decidir onde hospedar o código de apresentação: tokens visuais, componentes
+React, fontes, reset CSS. Até a W1, o Agent tinha `Overlay.tsx` local (em
+`apps/operator-agent/src/renderer/components/Overlay/`) com CSS Modules e
+constantes inline (cores hex, espaçamentos em pixels). O Leader, quando precisar
+de preview do aviso ou de tela de histórico (W3), teria que duplicar o styling
+para preservar coerência visual.
+
+Sem um package dedicado, três problemas surgiriam:
+
+1. **Drift visual entre Leader e Agent.** Dois lugares mantendo a mesma paleta
+   manualmente garante divergência ao longo do tempo (Lei de Murphy aplicada a
+   hex codes).
+2. **Tokens inline impossíveis de rastrear.** Trocar a cor primary `#F5A557` (ou
+   reescalar uma família de espaçamento) viraria caça ao tesouro por hex codes
+   em vez de uma edição num token central.
+3. **Reuso bloqueado.** Componentes acoplados ao app não podem ser
+   reaproveitados em outro app sem extração reativa — e extração depois de N
+   consumers é sempre mais cara que extração em greenfield.
+
+A W2 introduziu o redesign canônico ARTFLEXÍVEIS (DARK theme, primary warm
+orange, métrica gigante 4xl, header com title medium). É o momento natural para
+formalizar o ponto único de identidade visual antes que ele se espalhe.
+
+### Decisão
+
+Adicionamos `@sprint/ui-kit` como **quarto package compartilhado** do monorepo,
+junto a `@sprint/contracts`, `@sprint/fs-adapter` e `@sprint/logger`. Vive em
+`packages/ui-kit/` e hospeda:
+
+1. **Design tokens** em `src/tokens/tokens.css` com prefixo obrigatório
+   `--sprint-*` (cores, espaçamentos, font-sizes, font-weights, radii, sombras).
+   Tema DARK extraído da imagem 'Hora do Rush!' como identidade canônica.
+   Exportado via subpath `@sprint/ui-kit/tokens.css` para apps consumirem como
+   side-effect CSS (não bundlado no JS).
+2. **`<ThemeProvider>`** que importa `tokens.css` + reset CSS mínimo e aplica
+   uma `className` wrapper. Sem Context API — tokens propagam por cascata CSS,
+   idempotente em aninhamento.
+3. **Componentes React** com CSS Modules: `<Overlay>` (chrome do aviso
+   fullscreen), `<TextBlock>` (HTML sanitizado defensivamente via
+   `sanitizeBodyHtml` de `@sprint/contracts`), `<OverlayMinimized>` (pill com
+   bar full-width + corner SVGs), `<Pill>` (pill standalone para o modo
+   compact/expanded do Agent).
+4. **Stack de build divergente**: Vite library mode + `vite-plugin-dts`
+   (rollupTypes) + `vite-plugin-static-copy` para `tokens.css`. Diverge do
+   padrão source-first dos outros packages porque CSS Modules + bundle JS +
+   tree-shaking não compõem bem com `tsc` puro. Documentado em CLAUDE.md §4
+   ("Estrutura interna de `@sprint/ui-kit` (W2.C9)").
+5. **Migração não-big-bang**: apenas o overlay do Agent migra na W2
+   (BL-C3-015/016). O Leader migra quando precisar (preview de aviso, tela de
+   histórico) — provavelmente W3+. A migração progressiva reduz risco e isola o
+   escopo de cada wave.
+
+### Alternativas consideradas
+
+1. **Manter estilos inline em cada app.** Rejeitada — é a situação que esta
+   decisão substitui. Duplicação garantida assim que o Leader precisar do
+   preview/histórico; drift visual ao longo do tempo; ponto único de identidade
+   inexistente.
+2. **Um package só de tokens (sem componentes).** Tentadora pelo escopo
+   reduzido, mas resolve apenas metade do problema: componentes continuariam
+   duplicados, e o overlay (componente de maior porte do projeto, com
+   acessibilidade, estados, sanitização) é exatamente o que mais se beneficia da
+   unificação.
+3. **NPM público (extrair pra fora do monorepo).** Rejeitada — overhead de
+   publicar/versionar/instalar não justifica para um time pequeno com 2 apps
+   consumidores no mesmo monorepo. `workspace:*` resolve o problema sem
+   burocracia. Reavaliar se algum dia o ui-kit for compartilhado com outro
+   produto da ARTFLEXÍVEIS.
+4. **Tailwind/CSS-in-JS em vez de CSS Modules + tokens.** Rejeitada — diverge da
+   convenção 3Studio (CLAUDE.md §3 e ADR-007). CSS Modules + tokens é o padrão
+   dos outros projetos do estúdio; consistência operacional importa mais que
+   ergonomia marginal de outra abordagem.
+
+### Consequências
+
+**Aceitas:**
+
+- Identidade visual da Sprint Dispatcher passa a ter ponto único de mudança
+  (`tokens.css`). Mudança de marca/paleta vira PR de poucos diffs.
+- Overlay do Agent na W2 sai de 100% código local para 100% consumindo ui-kit
+  (BL-C3-015 deletou `SprintCard` e `AckButton` locais — subsumidos pelo
+  `<Overlay>` do ui-kit).
+- Zero hex/px hardcoded fora de tokens no renderer do Agent após BL-C3-016
+  (validado em audit explícito da sessão).
+- `@sprint/contracts` entra na dep tree de `@sprint/ui-kit` (via `<TextBlock>`)
+  — primeira ligação inter-package partindo do C9. Externalizado em
+  `vite.config.ts` (não vai pro bundle final).
+- Apps consomem via `workspace:*` em `package.json` (ESM bundle + tokens.css
+  side-effect import). Sem publicação a registry.
+- Cobertura ≥85% exigida pelo BL-C8-008 — materializada em coverage thresholds
+  no `vitest.config.ts` (real: 100/100/100/100 após esta sessão).
+- Setup divergente (Vite library mode) adiciona um arquivo de config a manter
+  (`vite.config.ts` no package + flow `pnpm dev` que rebuilda em watch). Custo
+  amortizado contra o benefício de tree-shaking + CSS bundling integrado.
+
+**Trade-offs:**
+
+- Mais um package no Turborepo pipeline e no Changesets `linked` array. Overhead
+  operacional pequeno mas real (changesets a gerar, versão a bumpar).
+- Apps consumidores precisam aguardar o build do ui-kit antes do dev server
+  resolver `@sprint/ui-kit/styles.css`. Mitigado em Sessão 42c com `predev` na
+  raiz + `emptyOutDir: !isWatchMode` no `vite.config.ts` do ui-kit (CLAUDE.md
+  §12 G-026).
+- Mudanças no ui-kit potencialmente afetam dois apps simultaneamente. Mitigado
+  pela cobertura ≥85% (BL-C8-008) e por testes consumindo o package via Testing
+  Library (regressões visuais via `toMatchSnapshot` ficam para W3+).
+
+### Referências
+
+- BL-C7-008 (este ADR)
+- BL-C9-001 a 006 (entrega do ui-kit — Sessão 20)
+- BL-C3-015/016 (migração do overlay do Agent — Sessão 21)
+- BL-C8-008 (cobertura ≥85% — Sessão 44, esta)
+- ADR-023 — não adoção de Storybook na v1.0 (decisão complementar)
+- ADR-014 — sanitização de `body_html` (base do `<TextBlock>`)
+- ADR-001 — monorepo com pnpm + Turborepo (define o slot para o package)
+- CLAUDE.md §4 ("Estrutura interna de `@sprint/ui-kit`") — convenções detalhadas
+- CLAUDE.md §12 G-026 — race do `pnpm dev` corrigida na Sessão 42c
+- Nota técnica C9 acima — decisões de implementação não-arquiteturais
