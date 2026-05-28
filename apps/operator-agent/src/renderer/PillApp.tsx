@@ -118,16 +118,21 @@ export default function PillApp(): JSX.Element {
   // Pré-pull: render um wrapper vazio para evitar flash de conteúdo
   // errado. ThemeProvider sempre envolve para garantir tokens
   // disponíveis caso o pull complete e renderize.
+  //
+  // `className="transparent-theme"` força o background do ThemeProvider
+  // a transparente (default do ui-kit é dark via .module.css) — sem
+  // isso, o canvas 340×160 do BrowserWindow aparece como retângulo
+  // preto em volta da pill (Sessão 25 fix). Override em global.css.
   if (info === null) {
     return (
-      <ThemeProvider>
+      <ThemeProvider className="transparent-theme">
         <div />
       </ThemeProvider>
     );
   }
 
   return (
-    <ThemeProvider>
+    <ThemeProvider className="transparent-theme">
       <div className="pill-positioner">
         <Pill
           label="Suas metas"

@@ -318,6 +318,12 @@ export class OverlayService {
       height,
       fullscreen: true,
       frame: false,
+      // transparent: true (Sessão 25 fix) — Renan pediu que o backdrop
+      // dark uniforme em volta do card sumisse. Com transparent + body
+      // .overlay-transparent-theme transparente + --sprint-color-backdrop
+      // sobrescrito para transparent, o operador vê apenas o card central
+      // e os apps abaixo permanecem visíveis na área ao redor.
+      transparent: true,
       alwaysOnTop: true,
       skipTaskbar: true,
       closable: true,

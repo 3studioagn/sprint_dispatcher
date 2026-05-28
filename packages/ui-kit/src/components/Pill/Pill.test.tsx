@@ -104,6 +104,58 @@ describe('Pill — a11y', () => {
   });
 });
 
+describe('Pill — prop position (Sessão 25)', () => {
+  it('default position é center → data-position="center"', () => {
+    render(<Pill label="Suas metas" value={20} />);
+    const positioner = screen.getByRole('button').parentElement?.parentElement;
+    // Positioner externo (span) tem inline style com left: 50%
+    expect(positioner?.style.left).toBe('50%');
+    expect(positioner?.style.transform).toContain('translateX(-50%)');
+    expect(screen.getByRole('button')).toHaveAttribute('data-position', 'center');
+  });
+
+  it('position="left" → left: 0% + transform translateX(-0%)', () => {
+    render(<Pill label="Suas metas" value={20} position="left" />);
+    const positioner = screen.getByRole('button').parentElement?.parentElement;
+    expect(positioner?.style.left).toBe('0%');
+    expect(positioner?.style.transform).toContain('translateX(-0%)');
+    expect(screen.getByRole('button')).toHaveAttribute('data-position', 'left');
+  });
+
+  it('position="right" → left: 100% + transform translateX(-100%)', () => {
+    render(<Pill label="Suas metas" value={20} position="right" />);
+    const positioner = screen.getByRole('button').parentElement?.parentElement;
+    expect(positioner?.style.left).toBe('100%');
+    expect(positioner?.style.transform).toContain('translateX(-100%)');
+    expect(screen.getByRole('button')).toHaveAttribute('data-position', 'right');
+  });
+
+  it('position=25 (number) → left: 25%', () => {
+    render(<Pill label="Suas metas" value={20} position={25} />);
+    const positioner = screen.getByRole('button').parentElement?.parentElement;
+    expect(positioner?.style.left).toBe('25%');
+    expect(screen.getByRole('button')).toHaveAttribute('data-position', 'numeric');
+  });
+
+  it('position fora do range (-10) é clamped para 0', () => {
+    render(<Pill label="Suas metas" value={20} position={-10} />);
+    const positioner = screen.getByRole('button').parentElement?.parentElement;
+    expect(positioner?.style.left).toBe('0%');
+  });
+
+  it('position fora do range (150) é clamped para 100', () => {
+    render(<Pill label="Suas metas" value={20} position={150} />);
+    const positioner = screen.getByRole('button').parentElement?.parentElement;
+    expect(positioner?.style.left).toBe('100%');
+  });
+
+  it('position NaN cai no default 50%', () => {
+    render(<Pill label="Suas metas" value={20} position={Number.NaN} />);
+    const positioner = screen.getByRole('button').parentElement?.parentElement;
+    expect(positioner?.style.left).toBe('50%');
+  });
+});
+
 describe('Pill — variant', () => {
   it('default não adiciona classe urgent', () => {
     render(<Pill label="Suas metas" value={20} />);

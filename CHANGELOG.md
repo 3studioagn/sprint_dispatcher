@@ -9,6 +9,48 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Fixed — Sessão 25 (2026-05-28)
+
+- **Pill canvas com retângulo dark em volta** — `ThemeProvider.module.css`
+  do ui-kit aplica background dark no `.themeProvider` div, pintando
+  todo canvas 340×160 do BrowserWindow do pill. Fix: PillApp passa
+  `className="transparent-theme"` ao ThemeProvider; `global.css` define
+  `.transparent-theme { background: transparent }`. Pill window agora
+  mostra APENAS a pill.
+- **Overlay com backdrop dark cobrindo a tela** — `overlayService`
+  adiciona `transparent: true` no BrowserWindow; App.tsx passa
+  `className="overlay-transparent-theme"`; `global.css` sobrescreve
+  `--sprint-color-backdrop` para `transparent` no escopo da div. O
+  override propaga via CSS cascade para o `.overlay` do ui-kit. Operador
+  vê APENAS o card central; apps abaixo permanecem visíveis ao redor.
+
+### Added — Sessão 25 (2026-05-28)
+
+- **`<Pill>` prop `position`** no `@sprint/ui-kit` — aceita
+  `'left' | 'center' | 'right' | number` (0-100 percent). Atalhos
+  para 0/50/100% + percent contínuo. Pill refatorada em 3 spans
+  (positioner + entrance + button) para separar transform inline da
+  animação. Pattern paralelo ao `<OverlayMinimized>`.
+- **Animações fluidas** no `@sprint/ui-kit`:
+  - Overlay `.card`: entrance `overlay-card-enter` 420ms cubic-bezier
+    expo (fade + slide do topo + scale 0.96→1).
+  - Overlay `.acknowledgeButton`: pulse infinito 2400ms no glow do
+    shadow — chama atenção sutil.
+  - Pill `.pillEntrance`: `pill-enter` 480ms cubic-bezier expo (slide
+    + fade quando aparece).
+  - Pill `.pill`: transitions compact↔expanded com cubic-bezier(0.34,
+    1.4, 0.64, 1) — overshoot pequeno spring imersivo. Duração 320ms
+    (era 250ms ease-in-out).
+  - Todas respeitam `@media (prefers-reduced-motion: reduce)`.
+
+### Notes — Sessão 25
+
+- Total testes: ui-kit 53 → 60 (+7 do prop position). Agent 283 estável.
+- `.pill-positioner` no global.css mudou de flex para `position:
+  relative` (contexto de absolute para a `<Pill>`).
+- 2 changesets: `c9-pill-position-animations.md` (ui-kit minor) +
+  `c3-transparent-canvas.md` (Agent minor).
+
 ### Changed — Sessão 24 (2026-05-28) — Redesign pill standalone
 
 - **Novo componente `<Pill>` no `@sprint/ui-kit`** — standalone (sem

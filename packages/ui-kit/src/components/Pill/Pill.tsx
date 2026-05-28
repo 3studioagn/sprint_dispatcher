@@ -1,6 +1,33 @@
+import type { CSSProperties } from 'react';
+
 import styles from './Pill.module.css';
 
 export type PillVariant = 'default' | 'urgent';
+
+/**
+ * Posição horizontal da pill no container (Sessão 25).
+ *
+ * - Strings nomeadas (`'left'`, `'center'`, `'right'`): atalhos para
+ *   percentuais 0%, 50%, 100% respectivamente.
+ * - Number (0..100): percentual horizontal contínuo. Útil para hosts
+ *   que implementam drag livre (W3 polish).
+ *
+ * Default: `'center'`. Posicionamento via `align-self` ou `margin`
+ * computado em CSS — host (Operator Agent PillApp) só passa a prop;
+ * Pill cuida do resto.
+ */
+export type PillPosition = 'left' | 'center' | 'right' | number;
+
+function resolvePillPositionPercent(position: PillPosition): number {
+  if (position === 'left') return 0;
+  if (position === 'right') return 100;
+  if (position === 'center') return 50;
+  if (typeof position === 'number') {
+    if (Number.isNaN(position)) return 50;
+    return Math.max(0, Math.min(100, position));
+  }
+  return 50;
+}
 
 export interface PillProps {
   /**
@@ -38,6 +65,13 @@ export interface PillProps {
    * pill. Host alterna `expanded` (ou ignora se desejar UX read-only).
    */
   onClick?: () => void;
+  /**
+   * Posição horizontal da pill no container (Sessão 25). Aceita atalhos
+   * (`'left' | 'center' | 'right'`) ou number 0..100 (percentual). O
+   * host (Agent PillApp) pode passar valor numérico para drag livre em
+   * W3. Default `'center'`.
+   */
+  position?: PillPosition;
   /**
    * Reservado — variant `urgent` será estilizado em wave futura (W4).
    * Hoje renderiza igual ao default.
@@ -84,34 +118,54 @@ export function Pill({
   date,
   expanded = false,
   onClick,
+  position = 'center',
   variant = 'default',
 }: PillProps) {
   const containerClass =
     variant === 'urgent' ? `${styles.pill} ${styles['pill--urgent']}` : styles.pill;
   const stateClass = expanded ? styles['pill--expanded'] : styles['pill--compact'];
   const ariaLabel = unit ? `${label}: ${String(value)} ${unit}` : `${label}: ${String(value)}`;
+  const percent = resolvePillPositionPercent(position);
+  // Pill posicionada absolutamente dentro do container do host.
+  // `left: N%` ancora o lado esquerdo da pill em N% do container;
+  // `translateX(-N%)` desloca a pill em N% de sua PRÓPRIA largura,
+  // resultando em alinhamento por âncora: N=0 alinha-esquerda;
+  // N=50 centraliza; N=100 alinha-direita. Mesmo padrão do
+  // `<OverlayMinimized>` (BL-C9-006). Host deve fornecer
+  // `position: relative` no parent (Agent usa `.pill-positioner`).
+  const positionerStyle: CSSProperties = {
+    position: 'absolute',
+    top: 0,
+    left: `${percent}%`,
+    transform: `translateX(-${percent}%)`,
+  };
 
   return (
-    <button
-      type="button"
-      className={`${containerClass} ${stateClass}`}
-      onClick={onClick}
-      aria-label={ariaLabel}
-      aria-expanded={expanded}
-      data-mode={expanded ? 'expanded' : 'compact'}
-    >
-      {expanded ? (
-        <ExpandedContent
-          label={label}
-          value={value}
-          {...(unit !== undefined ? { unit } : {})}
-          {...(deadline !== undefined ? { deadline } : {})}
-          {...(date !== undefined ? { date } : {})}
-        />
-      ) : (
-        <CompactContent label={label} value={value} />
-      )}
-    </button>
+    <span className={styles.pillPositioner} style={positionerStyle}>
+      <span className={styles.pillEntrance}>
+        <button
+          type="button"
+          className={`${containerClass} ${stateClass}`}
+          onClick={onClick}
+          aria-label={ariaLabel}
+          aria-expanded={expanded}
+          data-mode={expanded ? 'expanded' : 'compact'}
+          data-position={typeof position === 'number' ? 'numeric' : position}
+        >
+          {expanded ? (
+            <ExpandedContent
+              label={label}
+              value={value}
+              {...(unit !== undefined ? { unit } : {})}
+              {...(deadline !== undefined ? { deadline } : {})}
+              {...(date !== undefined ? { date } : {})}
+            />
+          ) : (
+            <CompactContent label={label} value={value} />
+          )}
+        </button>
+      </span>
+    </span>
   );
 }
 

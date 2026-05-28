@@ -39,27 +39,55 @@ body {
 }
 
 /*
- * BL-C3-017 — janela do pill (?pill na query). Body background NÃO deve
- * cobrir o canvas inteiro do BrowserWindow do pill: a `<Pill>` desenha
- * apenas a própria badge no topo-centro. Áreas vazias do canvas
- * (340×160) ficariam dark sem reset, criando "moldura" indesejada
- * visível ao operador. main.tsx adiciona .pill-mode ao body quando
- * window.location.search contém ?pill.
+ * BL-C3-017 — janela do pill (?pill na query). Body + html + #root
+ * precisam ser transparentes para o canvas 340×160 do BrowserWindow
+ * mostrar APENAS a pill (sem retângulo dark em volta — fix Sessão 25).
+ * main.tsx adiciona .pill-mode ao body quando window.location.search
+ * contém ?pill.
  */
-body.pill-mode {
+body.pill-mode,
+body.pill-mode #root {
   background: transparent;
 }
 
 /*
- * Centraliza a `<Pill>` horizontalmente no topo do canvas do
- * BrowserWindow do pill (Sessão 24). Window é 340×160; pill compact
- * ~220×52 e expanded ~280×140. Sempre alinhada ao topo do canvas
- * (= topo do monitor) — efeito "pendurada do borda superior".
+ * Sessão 25 — override do background do <ThemeProvider> do ui-kit nas
+ * janelas onde transparência é necessária. ThemeProvider.module.css do
+ * ui-kit aplica `background: var(--sprint-color-background)` (dark)
+ * no .themeProvider — sem este override, pill window mostra retângulo
+ * dark e overlay window mostra fundo dark uniforme. Renan reportou os
+ * dois. Specificity: ambas classes são single-class iguais; este
+ * stylesheet carrega DEPOIS do `@sprint/ui-kit/styles.css` (ver
+ * main.tsx — import order matters), então este `background` vence
+ * sem precisar de !important.
+ */
+.transparent-theme {
+  background: transparent;
+}
+
+/*
+ * Overlay window — além do background transparente do ThemeProvider,
+ * sobrescreve o token `--sprint-color-backdrop` no escopo da div para
+ * que o `.overlay` do ui-kit (que usa
+ * `background: var(--sprint-color-backdrop)`) fique 100% transparente.
+ * Operador vê APENAS o card central; apps abaixo permanecem visíveis
+ * fora dele.
+ */
+.overlay-transparent-theme {
+  background: transparent;
+  --sprint-color-backdrop: transparent;
+}
+
+/*
+ * Container de posicionamento da `<Pill>` no canvas do BrowserWindow do
+ * pill (Sessão 24 + 25). Window é 340×160; pill compact ~220×52 e
+ * expanded ~280×140. A prop `position` do `<Pill>` posiciona-a via
+ * `position: absolute; left: N%; translateX(-N%)` ancorada ao topo.
+ * Este container fornece o contexto `position: relative` necessário e
+ * ocupa toda a área do BrowserWindow.
  */
 .pill-positioner {
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
+  position: relative;
   width: 100%;
   height: 100%;
 }

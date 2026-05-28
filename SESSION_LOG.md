@@ -66,6 +66,100 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 25 — 2026-05-28 — Canvas transparentes + animações fluidas
+
+**Wave atual:** W2 — em curso **Método:** extensão da Sessão 24 após Renan
+validar visualmente e reportar 3 issues **Duração estimada:** ~1h (1 commit)
+**Itens trabalhados:** [fix transparências pill+overlay, prop position no
+<Pill>, animações fluidas no ui-kit]
+
+### Objetivo da sessão
+
+3 issues + 1 polish reportadas por Renan:
+
+1. "Na badge, ela está ficando com um espaço preto em volta dela, eu preciso que
+   seja somente a badge."
+2. "Preciso que a gente consiga mover ela para as laterais, usando o position."
+3. "A overlay está ficando com o fundo preto, preciso que apareça somente o card
+   do meio e esse que está preto seja transparente."
+4. "Preciso de animações e transições de estado mais fluidas e imersivas
+   também."
+
+### O que foi feito
+
+- **Fix transparência do pill** — `ThemeProvider.module.css` do ui-kit aplica
+  `background: var(--sprint-color-background)` no `.themeProvider` div, pintando
+  todo canvas 340×160 do BrowserWindow do pill. PillApp passa
+  `className="transparent-theme"` ao ThemeProvider; `global.css` define
+  `.transparent-theme { background: transparent }`.
+
+- **Fix overlay transparente** — `overlayService` adiciona `transparent: true`
+  no BrowserWindow. App.tsx passa `className="overlay-transparent-theme"`.
+  `global.css` sobrescreve `--sprint-color-backdrop` para `transparent` no
+  escopo da div — propaga para o `.overlay` do ui-kit. Operador vê APENAS o card
+  central.
+
+- **Pill prop position** — `<Pill>` ui-kit ganha
+  `position?: 'left' | 'center' | 'right' | number` (0-100 percent). Refatorada
+  em 3 spans: positioner outer (position absolute + left% + translateX),
+  entrance middle (animação), pill button (transitions). PillApp passa
+  `'center'` por ora.
+
+- **Animações fluidas** (ui-kit):
+  - Overlay `.card`: entrance `overlay-card-enter` 420ms cubic-bezier expo
+    (fade + slide do topo + scale 0.96→1).
+  - Overlay `.acknowledgeButton`: pulse infinito 2400ms no glow.
+  - Pill `.pillEntrance`: `pill-enter` 480ms cubic-bezier expo (slide
+    - fade).
+  - Pill `.pill`: transitions com cubic-bezier(0.34, 1.4, 0.64, 1) — overshoot
+    pequeno spring. Duração 320ms (antes 250ms).
+  - Todas respeitam `prefers-reduced-motion: reduce`.
+
+- **`.pill-positioner` ajustado** — antes flex; agora `position: relative`
+  (contexto para `<Pill>` absoluta).
+
+### Estado atual
+
+- 3 issues visuais resolvidas + animações implementadas.
+- 60 testes verdes no ui-kit (+7 do prop position).
+- 283 testes verdes no Agent (estável).
+- Lint + type-check + build clean.
+- 2 changesets: `c9-pill-position-animations.md` + `c3-transparent-canvas.md`.
+
+### Decisões tomadas
+
+- Override de background do ThemeProvider via `className` prop + CSS custom (não
+  modificar ui-kit's `.themeProvider` direto) — host decide quando quer
+  transparência.
+- `--sprint-color-backdrop` override no escopo do `.overlay-transparent-theme` —
+  propaga via CSS cascade para o `.overlay` do ui-kit sem precisar modificar o
+  componente.
+- Pill em 3 spans — separa responsabilidades, evita conflito de transform entre
+  posicionamento e animação.
+- Cubic-bezier(0.16, 1, 0.3, 1) "ease-out expo" para entrance.
+- Cubic-bezier(0.34, 1.4, 0.64, 1) "spring suave" para transitions de expand —
+  overshoot pequeno = imersivo sem exagero.
+- Pulse com 60% do ciclo no estado base — sutil.
+
+### Bloqueios encontrados
+
+- Conflito de `transform` entre positioner inline e entrance animation. Fix:
+  separar em 3 spans (cada elemento dono de seu transform).
+
+### Próximo passo
+
+Push da branch + validação visual + abertura de PR.
+
+### Observações para a próxima sessão
+
+- **Pill window 340×160 ainda fixa no centro do topo** — prop position posiciona
+  DENTRO desse range. Para mover REAL para extremos da tela, W3 trará window
+  relocation via setBounds + IPC.
+- **Animações respeitam `prefers-reduced-motion`** — operador com setting de
+  acessibilidade ativo NÃO verá pulse/slide.
+
+---
+
 ## Sessão 24 — 2026-05-28 — Redesign pill standalone (sem bar, expand inline)
 
 **Wave atual:** W2 — em curso **Método:** extensão das Sessões 21/22/23 após

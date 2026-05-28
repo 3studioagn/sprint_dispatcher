@@ -26,6 +26,7 @@ export type {
   OverlayMinimizedPosition,
   OverlayMinimizedVariant,
   PillProps,
+  PillPosition,
   PillVariant,
   TextBlockProps,
 } from './components';

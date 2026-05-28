@@ -31,8 +31,13 @@ export default function App(): JSX.Element {
   // key={sprint_id ?? 'idle'} força remount do <Overlay> quando a sprint
   // troca via push sprint:incoming — reseta loading/error/warning sem
   // useEffect/cleanup manual (padrão estabelecido no W1 + ADR-024).
+  //
+  // `className="overlay-transparent-theme"` força background do
+  // ThemeProvider + `--sprint-color-backdrop` a transparentes — operador
+  // vê APENAS o card central; apps abaixo permanecem visíveis na área
+  // ao redor do card (Sessão 25 fix). Overrides em global.css.
   return (
-    <ThemeProvider>
+    <ThemeProvider className="overlay-transparent-theme">
       <Overlay key={sprint?.sprint_id ?? 'idle'} />
     </ThemeProvider>
   );

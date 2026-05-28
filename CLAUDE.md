@@ -519,6 +519,45 @@ apps/operator-agent/src/
 >   (queue/overlay/archive), Overlay refatorado (loading/error/warning/ reopen).
 >   Coverage thresholds inalterados (W1.C8 baseline).
 
+> **Atualização W2 — Canvas transparentes + animações fluidas (Sessão 25):**
+>
+> Sessão 25 atende 3 issues visuais reportadas por Renan após validar a Sessão
+> 24:
+>
+> **(1) Pill com retângulo dark em volta** — `ThemeProvider.module.css` do
+> ui-kit aplica `background: var(--sprint-color-background)` no `.themeProvider`
+> div. PillApp passa `className="transparent-theme"`; `global.css` override
+> garante background transparente. Pill window agora mostra APENAS a pill no
+> canvas 340×160 (resto transparent).
+>
+> **(2) Overlay com backdrop dark cobrindo a tela inteira** — `overlayService`
+> adiciona `transparent: true` no BrowserWindow. App.tsx passa
+> `className="overlay-transparent-theme"`. `global.css` sobrescreve
+> `--sprint-color-backdrop` para `transparent` no escopo da div — propaga para o
+> `.overlay` do ui-kit que usa esse token via `var(--sprint-color-backdrop)`.
+> Operador vê APENAS o card central; apps abaixo permanecem visíveis ao redor.
+>
+> **(3) Pill com prop position** — `<Pill>` ganha
+> `position?: 'left' | 'center' | 'right' | number` (atalhos para 0/50/100% +
+> percent contínuo 0-100). Pill é estruturada em 3 spans: positioner outer
+> (inline style com left% + translateX), entrance middle (animação), pill button
+> (transitions). PillApp passa `'center'` por ora; futuro (W3) traz
+> drag-and-drop ou config UI.
+>
+> **Animações fluidas (bônus pedido pelo Renan):**
+>
+> - **Overlay card**: entrance `overlay-card-enter` 420ms cubic-bezier expo
+>   (fade + slide do topo + scale 0.96→1).
+> - **Overlay botão "Recebi"**: pulse sutil 2400ms infinito no glow do shadow.
+> - **Pill entrance**: `pill-enter` 480ms cubic-bezier expo (slide do topo +
+>   fade).
+> - **Pill transitions compact ↔ expanded**: cubic-bezier(0.34, 1.4, 0.64, 1)
+>   com overshoot pequeno = spring imersivo. Duração 320ms (antes era 250ms
+>   ease-in-out).
+> - Todas respeitam `@media (prefers-reduced-motion: reduce)`.
+>
+> **Total testes:** Agent 283 estável; ui-kit 60 (+7 do prop position).
+
 > **Atualização W2 — Redesign pill standalone (Sessão 24):**
 >
 > Sessão 24 redesigna o pill conforme feedback visual e comportamental do Renan
