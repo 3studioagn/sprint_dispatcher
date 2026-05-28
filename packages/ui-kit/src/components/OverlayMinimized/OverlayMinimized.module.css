@@ -1,0 +1,64 @@
+/**
+ * <OverlayMinimized> — pill compacto que replica a imagem "minimizada"
+ *
+ * Visual: pill horizontal dark com ícone check pontilhado laranja,
+ * label muted e valor branco bold em sequência inline. Substitui o
+ * <Overlay> fullscreen após auto-close (orquestração no Agent em
+ * BL-C3-017).
+ *
+ * **Positioning NÃO está aqui** — host (Agent) decide se renderiza
+ * em BrowserWindow frameless topmost, em portal fixed, ou em outro
+ * mecanismo. O pill renderiza só seu próprio shape; localização na
+ * tela é responsabilidade do consumidor.
+ *
+ * Magnitudes via tokens --sprint-*.
+ */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sprint-space-3);
+  background: var(--sprint-color-background);
+  color: var(--sprint-color-text);
+  padding: var(--sprint-space-3) var(--sprint-space-5);
+  border-radius: var(--sprint-radius-pill);
+  box-shadow: var(--sprint-shadow-md);
+  border: none;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color 120ms ease-in-out;
+}
+
+.pill:hover {
+  background: var(--sprint-color-surface);
+}
+
+.pill:focus-visible {
+  outline: 2px solid var(--sprint-color-primary);
+  outline-offset: 3px;
+}
+
+/* Variant urgent — placeholder visual (wave 4) */
+.pill--urgent {
+  /* TODO: enfatizar urgência (pulse, borda laranja, etc.) */
+}
+
+.icon {
+  flex-shrink: 0;
+  color: var(--sprint-color-primary);
+  width: 20px;
+  height: 20px;
+}
+
+.label {
+  font-size: var(--sprint-font-size-base);
+  color: var(--sprint-color-text-muted);
+  font-weight: var(--sprint-font-weight-regular);
+}
+
+.value {
+  font-size: var(--sprint-font-size-xl);
+  color: var(--sprint-color-text);
+  font-weight: var(--sprint-font-weight-bold);
+  line-height: var(--sprint-line-height-tight);
+}
