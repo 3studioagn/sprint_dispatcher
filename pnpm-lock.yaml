@@ -136,6 +136,9 @@ importers:
       '@sprint/fs-adapter':
         specifier: workspace:*
         version: link:../../packages/fs-adapter
+      '@sprint/ui-kit':
+        specifier: workspace:*
+        version: link:../../packages/ui-kit
       date-fns:
         specifier: ^3.6.0
         version: 3.6.0

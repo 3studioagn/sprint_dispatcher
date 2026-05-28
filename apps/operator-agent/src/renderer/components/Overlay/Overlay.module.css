@@ -1,11 +1,13 @@
-.overlay {
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  height: 100vh;
-  padding: var(--space-12) var(--space-16);
-  gap: var(--space-8);
-  background: var(--color-bg);
-}
+/*
+ * Overlay (host wrapper) — CSS Module aplicado ao conteúdo que vai no
+ * body slot do `<Overlay>` do `@sprint/ui-kit`. O chrome (background,
+ * card, botão) vem do próprio ui-kit; aqui ficam só os estilos do
+ * conteúdo específico do Agent (status row, body text, meta gigante,
+ * erros inline).
+ *
+ * BL-C3-016 (Fase 6) vai migrar referências a `--color-*` / `--space-*`
+ * (tokens locais do W1) para tokens do ui-kit (`--sprint-*`).
+ */
 
 .empty {
   display: flex;
@@ -17,15 +19,58 @@
   background: var(--color-bg);
 }
 
-.header {
+.sprintBody {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-6);
+  text-align: center;
+}
+
+.statusRow {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: var(--space-4);
+  width: 100%;
 }
 
-.footer {
+.bodyText {
+  font-size: var(--font-size-xl);
+  max-width: 1200px;
+  line-height: 1.4;
+}
+
+.metaWrapper {
   display: flex;
-  justify-content: center;
-  padding-bottom: var(--space-8);
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.metaLabel {
+  font-size: var(--font-size-lg);
+  color: var(--color-text-muted);
+  letter-spacing: 0.1em;
+}
+
+.metaValue {
+  font-size: var(--font-size-meta);
+  font-weight: 800;
+  color: var(--color-accent);
+  line-height: 1;
+  font-feature-settings: 'tnum';
+}
+
+.error {
+  font-size: var(--font-size-base);
+  color: var(--color-danger);
+  margin-top: var(--space-2);
+}
+
+.warning {
+  font-size: var(--font-size-base);
+  color: var(--color-warning);
+  margin-top: var(--space-2);
 }
