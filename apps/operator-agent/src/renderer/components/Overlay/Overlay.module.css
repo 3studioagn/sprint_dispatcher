@@ -1,12 +1,13 @@
 /*
- * Overlay (host wrapper) — CSS Module aplicado ao conteúdo que vai no
- * body slot do `<Overlay>` do `@sprint/ui-kit`. O chrome (background,
- * card, botão) vem do próprio ui-kit; aqui ficam só os estilos do
- * conteúdo específico do Agent (status row, body text, meta gigante,
- * erros inline).
+ * Overlay (host wrapper) — CSS Module aplicado ao body slot do
+ * `<Overlay>` do `@sprint/ui-kit`. O chrome (background, card, header,
+ * botão) vem do próprio ui-kit; aqui ficam só os estilos do conteúdo
+ * específico do Agent (status row + body text + meta gigante + erros
+ * inline).
  *
- * BL-C3-016 (Fase 6) vai migrar referências a `--color-*` / `--space-*`
- * (tokens locais do W1) para tokens do ui-kit (`--sprint-*`).
+ * Magnitudes EXCLUSIVAMENTE via tokens `--sprint-*` (BL-C3-016). Card
+ * do ui-kit já limita largura via max-width: 720px — não precisa
+ * duplicar constraint aqui.
  */
 
 .empty {
@@ -14,16 +15,16 @@
   align-items: center;
   justify-content: center;
   height: 100vh;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xl);
-  background: var(--color-bg);
+  color: var(--sprint-color-text-muted);
+  font-size: var(--sprint-font-size-xl);
+  background: var(--sprint-color-background);
 }
 
 .sprintBody {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-6);
+  gap: var(--sprint-space-6);
   text-align: center;
 }
 
@@ -31,46 +32,45 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: var(--space-4);
+  gap: var(--sprint-space-4);
   width: 100%;
 }
 
 .bodyText {
-  font-size: var(--font-size-xl);
-  max-width: 1200px;
-  line-height: 1.4;
+  font-size: var(--sprint-font-size-xl);
+  line-height: var(--sprint-line-height-normal);
 }
 
 .metaWrapper {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-2);
-  margin-top: var(--space-4);
+  gap: var(--sprint-space-2);
+  margin-top: var(--sprint-space-4);
 }
 
 .metaLabel {
-  font-size: var(--font-size-lg);
-  color: var(--color-text-muted);
+  font-size: var(--sprint-font-size-lg);
+  color: var(--sprint-color-text-muted);
   letter-spacing: 0.1em;
 }
 
 .metaValue {
-  font-size: var(--font-size-meta);
-  font-weight: 800;
-  color: var(--color-accent);
-  line-height: 1;
+  font-size: var(--sprint-font-size-4xl);
+  font-weight: var(--sprint-font-weight-bold);
+  color: var(--sprint-color-primary);
+  line-height: var(--sprint-line-height-tight);
   font-feature-settings: 'tnum';
 }
 
 .error {
-  font-size: var(--font-size-base);
-  color: var(--color-danger);
-  margin-top: var(--space-2);
+  font-size: var(--sprint-font-size-base);
+  color: var(--sprint-color-danger);
+  margin-top: var(--sprint-space-2);
 }
 
 .warning {
-  font-size: var(--font-size-base);
-  color: var(--color-warning);
-  margin-top: var(--space-2);
+  font-size: var(--sprint-font-size-base);
+  color: var(--sprint-color-warning);
+  margin-top: var(--sprint-space-2);
 }

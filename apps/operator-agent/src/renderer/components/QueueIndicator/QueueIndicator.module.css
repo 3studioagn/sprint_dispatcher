@@ -1,10 +1,17 @@
+/*
+ * QueueIndicator — pill amarelo "+N na fila" exibido quando há sprints
+ * aguardando além da atualmente exibida.
+ *
+ * Tokens via @sprint/ui-kit (BL-C3-016).
+ */
+
 .indicator {
-  background: var(--color-warning);
-  color: var(--color-bg);
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-pill);
-  font-size: var(--font-size-sm);
-  font-weight: 700;
+  background: var(--sprint-color-warning);
+  color: var(--sprint-color-warning-on);
+  padding: var(--sprint-space-2) var(--sprint-space-4);
+  border-radius: var(--sprint-radius-pill);
+  font-size: var(--sprint-font-size-sm);
+  font-weight: var(--sprint-font-weight-bold);
   letter-spacing: 0.02em;
   align-self: flex-start;
 }
