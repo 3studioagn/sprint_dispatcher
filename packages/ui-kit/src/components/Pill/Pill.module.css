@@ -4,19 +4,23 @@
  * Topo reto + cantos inferiores arredondados — encaixa visualmente sob o
  * topo do monitor, simulando "pendurada" do borda. Sombra projeta para
  * baixo destacando a saliência. Background preto puro
- * (`--sprint-color-background-deep`, Sessão 29) — escolhido sobre
- * `--sprint-color-background` (#1A1A1A) para máximo contraste com o
- * desktop atrás (backdrop transparente).
+ * (`--sprint-color-background-deep`, Sessão 29).
  *
- * Transição compact ↔ expanded animada via `padding` e `min-width` com
- * Material standard easing (`cubic-bezier(0.4, 0, 0.2, 1)`) — Sessão 29
- * substituiu a curva luxe (0.19, 1, 0.22, 1) e o stagger 140ms anteriores;
- * Renan reportou sensação "primeiro cresce pra baixo, depois pro lado".
- * Sem stagger, curva natural single-rate → crescimento orgânico
- * simultâneo em ambas direções.
+ * **Transição compact ↔ expanded** (Sessão 30, "linear/se extendendo"):
+ * animação em três dimensões simultâneas — `padding`, `min-width` e
+ * `max-height` — com Material standard easing single-rate. Sessões
+ * 27/28/29 só animavam `padding` + `min-width`; o conteúdo (que vai
+ * de `inline-flex row` a `flex column`) reflowava INSTANTANEAMENTE
+ * quando o React trocava `CompactContent` por `ExpandedContent`,
+ * causando o jump "primeiro pra baixo, depois pro lado". A Sessão 30
+ * adiciona `max-height` à transição com `overflow: hidden` no `.pill`
+ * clipando o conteúdo enquanto o container cresce — ambas dimensões
+ * crescem em paralelo, sensação de "se extendendo" sem salto.
  *
  * Magnitudes EXCLUSIVAMENTE via tokens `--sprint-*` (zero hex/px
- * hardcoded fora de tokens).
+ * hardcoded fora de tokens). Exceção documentada: `max-height` usa
+ * pixels literais (56px/200px) porque dependem do conteúdo renderizado;
+ * não há token semântico apropriado.
  */
 
 /**
@@ -62,10 +66,11 @@
    * drag sem o browser interferir com gestos default (scroll, zoom,
    * etc.) — necessário para drag horizontal do pill (Sessão 26). */
   touch-action: none;
-  /* Hints para o compositor — pill anima padding/min-width durante o
-   * expand. `will-change` avisa o browser para promover a layer GPU,
-   * resultando em animação mais suave (Sessão 27 refine). */
-  will-change: padding, min-width;
+  /* Hints para o compositor — pill anima padding/min-width/max-height
+   * durante o expand. `will-change` avisa o browser para promover a
+   * layer GPU, resultando em animação mais suave (Sessão 27 refine;
+   * `max-height` adicionado na Sessão 30). */
+  will-change: padding, min-width, max-height;
 
   /* Topo reto + cantos inferiores arredondados — "saída do topo do monitor" */
   border-radius: 0 0 var(--sprint-radius-md) var(--sprint-radius-md);
@@ -73,24 +78,27 @@
   /* Sombra desce — reforça a sensação de "pendurada" */
   box-shadow: 0 6px 16px -2px rgba(0, 0, 0, 0.55);
 
-  /* Transições compact ↔ expanded (Sessão 29 — Renan reportou que a curva
-   * luxe (0.19, 1, 0.22, 1) com stagger 140ms ainda dava sensação
-   * "primeiro cresce pra baixo, depois pro lado levemente"). Solução:
+  /* Transição compact ↔ expanded (Sessão 30 — Renan: "ainda dá um salto
+   * crescendo primeiro pra baixo e depois pras laterais; preciso que
+   * seja mais linear e fluida, como se fosse um efeito de se extendendo
+   * mesmo, sem dar esse salto"). Root cause das sessões 27-29: só
+   * `padding` + `min-width` animavam, mas o reflow do conteúdo
+   * (`inline-flex row` → `flex column`) era INSTANTÂNEO no DOM swap
+   * (CompactContent vs ExpandedContent), causando jump de altura.
    *
-   * - Easing: cubic-bezier(0.4, 0, 0.2, 1) — Material standard "fast out,
-   *   slow in". Acelera natural no início, desacelera natural no fim,
-   *   sem plateau extremo. Curva mais usada do setor para mudanças de
-   *   tamanho — perceptualmente "orgânica".
-   * - Duração: 480ms (era 620ms). Mais curto = menos chance de sensação
-   *   "lenta/arrastada" entre o início e o fim.
-   * - Sem stagger no content emerge (ver abaixo) — padding/min-width E
-   *   conteúdo crescem em paralelo. Resultado: pill cresce em AMBAS
-   *   direções simultaneamente, sem ordem perceptível.
-   * - Inclui `transform` na lista para o `:active` scale animar
-   *   suavemente. */
+   * Solução: animar TAMBÉM `max-height`. Com `overflow: hidden` no .pill,
+   * o conteúdo expanded é clipado durante o crescimento — pill cresce
+   * suavemente em ambas direções, conteúdo emerge "naturalmente" de
+   * dentro da pill que se expande.
+   *
+   * - Easing: cubic-bezier(0.4, 0, 0.2, 1) Material standard. Mantida.
+   * - Duração: 480ms uniforme em padding/min-width/max-height. Single
+   *   rate = sem ordem perceptível, todas as dimensões caminham juntas.
+   * - `transform` separado para o `:active` scale (140ms). */
   transition:
     padding 480ms cubic-bezier(0.4, 0, 0.2, 1),
     min-width 480ms cubic-bezier(0.4, 0, 0.2, 1),
+    max-height 480ms cubic-bezier(0.4, 0, 0.2, 1),
     transform 140ms ease-out;
 }
 
@@ -143,15 +151,16 @@
    * (12 → 8px); horizontal space-5 → space-6 (20 → 24px). */
   padding: var(--sprint-space-2) var(--sprint-space-6);
   min-width: 0;
+  /* Sessão 30: max-height clipa o conteúdo expanded durante a transição
+   * compact ← expanded. 56px = padding-top 8 + padding-bottom 8 + content
+   * ~40px (icon + texto Inter base) com folga. */
+  max-height: 56px;
 }
 
 .compactLayout {
   display: inline-flex;
   align-items: center;
   gap: var(--sprint-space-3);
-  /* Sessão 29: Material curve + 280ms + SEM stagger. Container e
-   * conteúdo crescem juntos — sem ordem perceptível "primeiro X depois Y". */
-  animation: pill-content-emerge 280ms cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
 /* ============================================================
@@ -166,34 +175,19 @@
    * imagem-alvo mais ampla. */
   padding: var(--sprint-space-3) var(--sprint-space-6) var(--sprint-space-4);
   min-width: 320px;
+  /* Sessão 30: max-height generoso para acomodar o layout 2-rows com
+   * folga (metricRow ~52px + gap 12 + footerRow ~24px + paddings 12+16 =
+   * ~116px; 200px protege contra crescimento futuro de tipografia ou
+   * conteúdo). Durante a transição compact → expanded, max-height anima
+   * 56 → 200 em paralelo com padding e min-width — pill cresce
+   * smoothly em ambas direções sem reflow visível. */
+  max-height: 200px;
 }
 
 .expandedLayout {
   display: flex;
   flex-direction: column;
   gap: var(--sprint-space-3);
-  /* Sessão 29: SEM stagger (era 140ms). Container e conteúdo emergem
-   * em paralelo. Material curve + 280ms iguais ao .compactLayout —
-   * comportamento simétrico bidirecional. */
-  animation: pill-content-emerge 280ms cubic-bezier(0.4, 0, 0.2, 1) both;
-}
-
-@keyframes pill-content-emerge {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .compactLayout,
-  .expandedLayout {
-    animation: none;
-  }
 }
 
 .metricRow {

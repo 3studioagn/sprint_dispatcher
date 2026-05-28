@@ -9,7 +9,38 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Changed — Sessão 30 (2026-05-28) — Pill se extende linearmente em ambas dimensões
+
+Renan reportou após Sessão 29 que a animação seguia "dando um salto,
+crescendo primeiro pra baixo e depois pras laterais". Root cause das
+sessões 27-29: só `padding` + `min-width` animavam, mas o reflow do
+conteúdo (`inline-flex row` → `flex column`) era INSTANTÂNEO quando o
+React trocava `CompactContent` por `ExpandedContent`. Fix:
+
+- **`max-height` adicionado à transição** — `.pill` ganha
+  `max-height 480ms cubic-bezier(0.4, 0, 0.2, 1)` na lista (mesma
+  curva/duração de padding/min-width). `overflow: hidden` já existente
+  clipa o conteúdo enquanto o container cresce.
+- **`.pill--compact { max-height: 56px }`** — clipa o `ExpandedContent`
+  no frame zero da transição.
+- **`.pill--expanded { max-height: 200px }`** — generoso para acomodar
+  o layout 2-rows com folga.
+- **`will-change`** atualizado para `padding, min-width, max-height`.
+- **Animações de content emerge removidas** — `.compactLayout` e
+  `.expandedLayout` não têm mais `animation: pill-content-emerge`. O
+  conteúdo é revelado puramente pelo crescimento do container; sem
+  fade/translate paralelo. Remove também o keyframe e o bloco
+  `@media (prefers-reduced-motion)` do content layout.
+
+Resultado: pill cresce em 3 dimensões simultaneamente
+(altura/largura/padding) com curva Material single-rate. Conteúdo
+emerge de cima pra baixo conforme a altura cresce, sem salto.
+
 ### Changed — Sessão 29 (2026-05-28) — Animação smooth + layout refinado do Pill
+
+_(Animação parcialmente superseded pela Sessão 30 — `max-height` foi
+adicionado e content animations removidas. Layout/cor da Sessão 29
+preservados.)_
 
 Renan reportou após Sessão 28 que a curva luxe + stagger ainda dava
 sensação "primeiro cresce pra baixo, depois pro lado levemente". Pediu

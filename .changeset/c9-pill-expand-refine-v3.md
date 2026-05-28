@@ -2,44 +2,43 @@
 '@sprint/ui-kit': minor
 ---
 
-feat(C9): animação smooth + layout refinado do Pill (Sessão 29)
+feat(C9): pill se extende linearmente em ambas dimensões (Sessão 30)
 
-Renan reportou após Sessão 28 (curva luxe + stagger 140ms) que a animação seguia
-"travada", com sensação "primeiro cresce pra baixo, depois pro lado levemente".
-Também pediu refino do layout compact (mais largo + menos alto) e expanded
-(matching imagem 2 — "20 Artes" em linha) + cor preto puro.
+Renan reportou após Sessão 29 que a animação seguia "dando um salto, crescendo
+primeiro pra baixo e depois pras laterais". Pediu animação "linear e fluida,
+como se fosse um efeito de se extendendo mesmo, sem dar esse salto".
 
-**Animação smooth (single-rate, sem stagger):**
+**Root cause das sessões 27-29:**
 
-- Easing: `cubic-bezier(0.4, 0, 0.2, 1)` (Material standard, "fast out, slow
-  in") substitui curva luxe `(0.19, 1, 0.22, 1)`. Sem plateau extremo — acelera
-  natural no início, desacelera natural no fim.
-- Duração: 480ms no container (era 620ms); 280ms no content emerge (era 460ms).
-- **Sem stagger** — `.expandedLayout` `animation-delay` 140ms → 0ms. Container e
-  conteúdo crescem em paralelo, sem ordem perceptível.
-- Keyframe `pill-content-emerge` translateY 8px → 4px (sutil).
+Só `padding` + `min-width` animavam. Quando o React trocava `CompactContent`
+(`inline-flex row`) por `ExpandedContent` (`flex column`), o reflow do conteúdo
+era INSTANTÂNEO — altura do content saltava de ~30px para ~100px no frame zero.
+As propriedades CSS animadas (padding/min-width) só interpolam suas próprias
+dimensões; não há como interpolar entre dois conteúdos diferentes.
 
-**Layout compact (mais largo, menos alto):**
+**Solução: animar `max-height` também.**
 
-- `.pill--compact` padding `space-3 / space-5` → `space-2 / space-6` (12/20 →
-  8/24px). Vertical menor (badge mais baixa), horizontal maior (badge mais larga
-  lateralmente).
+- `.pill` ganha `max-height` na lista de transitions (480ms Material curve,
+  mesma duração de padding/min-width).
+- `.pill--compact { max-height: 56px }` — clipa o `ExpandedContent` no frame
+  zero da transição compact → expanded.
+- `.pill--expanded { max-height: 200px }` — generoso para acomodar o layout
+  2-rows com folga.
+- `overflow: hidden` no `.pill` (já existente) garante que o conteúdo excedente
+  é clipado durante o crescimento.
 
-**Layout expanded (matching imagem 2):**
+Resultado: pill cresce em 3 dimensões simultaneamente (altura/largura/padding)
+com curva Material single-rate. O `ExpandedContent` é revelado de cima pra baixo
+conforme a altura cresce, sem salto.
 
-- `.pill--expanded` padding `space-4 / space-6 / space-5` →
-  `space-3 / space-6 / space-4` (16/24/20 → 12/24/16). Menos altura total; badge
-  mais horizontal.
-- `min-width` 280px → 320px.
-- `.metricGroup` `flex-direction: column` → `row` com `align-items: baseline`.
-  "20" + "Artes" em linha (não empilhados), alinhados pela base do número.
-- `.unit` sem `margin-top` (gap do flex cobre o espaço horizontal).
-- `.expandedLayout` `gap` `space-4` → `space-3` (mais compacto).
+**Mudanças pequenas auxiliares:**
 
-**Cor preto puro:**
+- `will-change: padding, min-width, max-height` (adiciona max-height).
+- Remove `animation: pill-content-emerge` de `.compactLayout` e
+  `.expandedLayout` (e o keyframe) — a transição agora é puramente do container;
+  conteúdo não tem entrance separada.
+- Remove `@media (prefers-reduced-motion)` block para
+  `.compactLayout`/`.expandedLayout` (sem animation = não precisa desligar).
 
-- `.pill` background `--sprint-color-background` (#1A1A1A) →
-  `--sprint-color-background-deep` (#000000, novo token semântico em
-  `tokens.css`). Máximo contraste sobre o backdrop translúcido.
-
-Total ui-kit: 60 testes verdes (mudanças cobertas pela suite existente).
+Total ui-kit: 60 testes verdes (CSS de timing/layout não tem testes
+específicos).

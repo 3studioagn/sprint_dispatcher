@@ -66,6 +66,108 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 30 — 2026-05-28 — Pill se extende linearmente em ambas dimensões
+
+**Wave atual:** W2 — em curso **Método:** extensão da Sessão 29 após Renan
+reportar que ainda há "salto crescendo primeiro pra baixo e depois pras
+laterais" **Duração estimada:** ~30min (1 commit) **Itens:** [animação click
+compact ↔ expanded — iteração 6, root cause fix]
+
+### Objetivo da sessão
+
+> "A animação ainda está dando um salto e crescendo primeiro pra baixo e depois
+> para as laterais. Preciso que isso seja mais linear e fluida. Como se fosse um
+> efeito de se extendendo mesmo, mas sem dar esse salto."
+
+5 iterações anteriores (25-29) refinaram easing curve, duration, stagger. Mas o
+problema fundamental persistia: o reflow do conteúdo era instantâneo, fazendo
+height saltar enquanto width crescia animado.
+
+### O que foi feito
+
+**Root cause identificado:** só `padding` + `min-width` animavam. Quando React
+troca `CompactContent` (`inline-flex row`, ~30px de altura) por
+`ExpandedContent` (`flex column`, ~100px de altura), o reflow do conteúdo era
+INSTANTÂNEO no frame zero. CSS transitions só interpolam dimensões da mesma
+propriedade — não há como interpolar entre dois conteúdos diferentes. Resultado:
+altura saltava, largura crescia animada → "primeiro pra baixo, depois pro lado".
+
+**Fix em `Pill.module.css`:**
+
+- **`max-height` adicionado às transitions** — `.pill` ganha
+  `max-height 480ms cubic-bezier(0.4, 0, 0.2, 1)` (mesma curva/duração de
+  padding/min-width). `overflow: hidden` (já existente) clipa o conteúdo
+  excedente durante o crescimento.
+- **`.pill--compact { max-height: 56px }`** — clipa o `ExpandedContent` no frame
+  zero da transição. Conforme `max-height` cresce de 56 → 200, o conteúdo é
+  REVELADO de cima pra baixo.
+- **`.pill--expanded { max-height: 200px }`** — generoso para acomodar 2 rows
+  com folga (calculado: ~116px atual + 84px de margem).
+- **`will-change`** atualizado para `padding, min-width, max-height`.
+- **Animações de content emerge removidas** — `.compactLayout` e
+  `.expandedLayout` não têm mais `animation: pill-content-emerge`. Container faz
+  tudo. Remove keyframe e `@media (prefers-reduced-motion)` block do content
+  layout.
+
+### Estado atual
+
+- 60 testes verdes no ui-kit (CSS de timing não tem testes específicos).
+- Build ui-kit OK (`dist/index.js` 9.39 kB; `dist/assets/style.css` similar).
+- Agent inalterado.
+- 1 changeset: `c9-pill-expand-refine-v3.md` reescrito com a nova solução.
+
+### Decisões tomadas
+
+- **`max-height` como propriedade animada** — pragmático. Alternativas
+  consideradas: (a) `grid-template-rows: 0fr → 1fr` (truque moderno, mas exige
+  refactor do layout interno para grid); (b) `transform: scaleY` (distorce
+  conteúdo); (c) animação via JS (overkill). Max-height é o mais simples;
+  trade-off: limite máximo fixo (200px) que precisa ser ajustado se conteúdo
+  crescer significativamente.
+- **`200px` para expanded** — folga de ~84px sobre o conteúdo atual (~116px).
+  Suporta crescimento tipográfico ou adição de uma 3ª linha no futuro sem
+  reajustar.
+- **Remover content emerge animations** — com o container animando
+  altura/largura/padding em paralelo, o conteúdo já tem entrance "natural"
+  (revelado pelo clip). Animação extra fica supérflua e poderia até reintroduzir
+  o feeling "step" entre fases.
+- **Mantém `overflow: hidden`** no `.pill` — já estava lá antes (do
+  pre-refactor), agora é load-bearing para o efeito clip-while-growing.
+- **`will-change: max-height`** — adicionado mesmo sabendo que `max-height` não
+  é uma propriedade GPU-friendly tradicionalmente. Sinaliza intent ao
+  compositor; browser decide.
+
+### Bloqueios encontrados
+
+Nenhum.
+
+### Próximo passo
+
+Aguardar validação visual do Renan. 6ª iteração — se ainda houver feedback,
+provavelmente requer JS measurement em vez de max-height fixo (overkill mas
+resolve qualquer edge case).
+
+### Observações para a próxima sessão
+
+- **`max-height` é a primeira propriedade animada que NÃO está coberta por token
+  semântico** (56px/200px hardcoded). Documentado na header doc do CSS como
+  exceção; se padronizar, considerar tokens `--sprint-pill-height-compact` /
+  `--sprint-pill-height-expanded`.
+- **Iteração 25 → 30 sobre a mesma animação** documenta evolução do diagnóstico:
+  começou com "easing", virou "duration", virou "stagger", virou "curva", e a
+  verdade era "reflow do conteúdo é instantâneo". Lição: ao primeiro feedback
+  "anima ruim", inspect runtime real (Electron DevTools com slow motion) antes
+  de iterar em curvas. Stop digging if multiple iterations on the same axis
+  don't fix it.
+- **`prefers-reduced-motion: reduce`** continua coberto pelo block do `.pill`
+  (`transition: none; will-change: auto`). Sem animations no content layout, não
+  precisa de override extra ali.
+- **Se Renan pedir 7ª iteração** — primeiro reproduzir LOCAL em dev Electron com
+  console.time e check de paint flash. Não iterar cego em curvas/durations sem
+  evidência runtime.
+
+---
+
 ## Sessão 29 — 2026-05-28 — Animação smooth + layout refinado do Pill
 
 **Wave atual:** W2 — em curso **Método:** extensão da Sessão 28 após Renan
