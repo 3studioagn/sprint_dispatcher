@@ -466,6 +466,59 @@ apps/operator-agent/src/
   windows-latest, `pnpm --filter ... run make`, upload-artifact. Build local
   falha pelo ESET (G-009).
 
+> **Atualização W2 — BL-C3-009/010/011/012/015/016 (Sessão 21):**
+>
+> Refinamento completo do C3 na W2. Mudanças por camada:
+>
+> - **`components/SprintCard/` e `components/AckButton/` deletados** —
+>   funcionalidade (loading state, error inline, warning F-024, title + body
+>   - meta gigante) subsumida pelo novo `Overlay.tsx` que consome `<Overlay>` do
+>     `@sprint/ui-kit` (BL-C3-015). `<DeadlineBadge>` e `<QueueIndicator>`
+>     preservados (reused no body slot).
+> - **`<ThemeProvider>` do `@sprint/ui-kit` envolve App.tsx** — tokens
+>   `--sprint-*` em `:root` por cascata. `styles/global.css` reduzido a reset +
+>   body básico via tokens do ui-kit. Zero hex/px hardcoded fora de tokens
+>   (BL-C3-016).
+> - **Meta gigante usa `--sprint-font-size-4xl` (120px)** — antes 160px local.
+>   Tier canônico "métrica gigante" definido no C9.
+> - **PollingService refatorado** (BL-C3-011): `listPending` sem filter userId
+>   (capta cancels broadcast); sprints de outros operadores filtradas inline em
+>   `processSprint`. Adiciona `processCancel`: `queueService.removeBySprintId` +
+>   `overlayService.hide()` se exibida
+>   - archive + delete. `overlayService?` agora em PollingDeps.
+> - **QueueService ordenação por `criado_em`** (BL-C3-010): insert ordenado
+>   preservando items[0] (sprint exibida não-preempted).
+>   `removeBySprintId(sprintId)` adicionado (BL-C3-011).
+> - **HistoryService.loadLastArchived** (BL-C3-009): lê último JSON válido em
+>   `<userData>/historico/<dia>/`, filtrando cancels via `safeParseFilename`.
+>   NÃO atualiza cache (leitura passiva).
+> - **OverlayService.reopenFromHistory + closeReopened** (BL-C3-009): abre
+>   janela em modo "reopen" sem timer e sem currentItem; flag `reopenedMode`
+>   rastreia para closeReopened ser no-op fora do modo.
+>   `showSprint`/`hide`/`destroy` resetam o flag.
+> - **PollingService.processSprint chama `historyService.archive` em
+>   deadline-passed** (BL-C3-012): antes só `markProcessed`; agora arquiva
+>   localmente para auditoria. Fallback markProcessed em falha.
+> - **TrayState ganha ação `'reopen-last'`** (BL-C3-009): enabled iff
+>   `kind === 'idle'`. Item "Reabrir último aviso" no menu.
+>   `trayService.displayInfoBalloon` para feedback "nenhum aviso para reabrir".
+> - **IPC novos** (BL-C3-009): `IncomingSprintEvent.reopened?` (opcional);
+>   `Api.overlay.closeReopened()`; handler `overlay:close-reopened` →
+>   `overlayService.closeReopened()`.
+> - **Renderer**: `useCurrentSprintStore` ganha `isReopened`.
+>   `useIncomingSprint` passa `event.reopened ?? false`. Label do botão do
+>   `<Overlay>` dinâmico: "Confirmando…" (loading), "Fechar" (reopened),
+>   "Recebi" (normal). Guard `if (loading) return;` contra double-click — ui-kit
+>   button não tem disabled prop.
+> - **Auto-close decision**: `autoCloseSeconds={0}` no `<Overlay>` do ui-kit.
+>   Timer permanece no main (`overlayService.minimizeAfterMs`). Única fonte de
+>   verdade evita race entre timers.
+> - **Total testes do Agent**: 199 (W1) → 240 (W2). +41 testes cobrindo
+>   ordenação por criado_em, archive em deadline-passed, loadLastArchived,
+>   reopenFromHistory/closeReopened, tray "reopen-last", processCancel
+>   (queue/overlay/archive), Overlay refatorado (loading/error/warning/ reopen).
+>   Coverage thresholds inalterados (W1.C8 baseline).
+
 ### Estrutura interna de `@sprint/logger` (W1.C6 — Sessão 17)
 
 Pacote enxuto, source-first. Espelha a estrutura de `contracts` e `fs-adapter`

@@ -2340,3 +2340,126 @@ BL-C7-009 (**ADR-023: não adoção de Storybook na v1.0**) — sessões futuras
 - ADR-014 (sanitização) — base para defesa em profundidade do `<TextBlock>`
 - G-010 (CLAUDE.md §12) — padrão `tsconfig.node.json` para configs Vite
 - Backlog v1.1 §6/C9
+
+## Nota técnica — BL-C3-009 a 016 (refinamento C3 na W2 — Sessão 21)
+
+- **Status:** Accepted
+- **Data:** 2026-05-28
+- **Decisores:** Renan (3Studio), Claude Opus 4.7
+
+### Contexto
+
+Wave 2 do projeto exige refinamento do componente C3 (Operator Agent)
+adicionando 5 features novas (BL-C3-009/010/011/012) e refatorando a camada
+visual para adotar o `@sprint/ui-kit` recém-entregue na W2 (BL-C3-015/016).
+Sessão única atômica que toca código existente (diferente das sessões anteriores
+que entregaram componentes inteiros do zero).
+
+### Decisão
+
+Implementação ordenada por dependência: features de comportamento (main process)
+primeiro, refactor visual (renderer) por último. Ordem:
+
+1. BL-C3-012 (deadline guard)
+2. BL-C3-010 (fila por criado_em)
+3. BL-C3-009 (reabertura via tray)
+4. BL-C3-011 (detecção de cancelamento)
+5. BL-C3-015 (refactor para @sprint/ui-kit)
+6. BL-C3-016 (ThemeProvider + zero hardcoding)
+
+### Decisões técnicas durante implementação
+
+1. **`historyService.archive` em deadline-passed (BL-C3-012)** — antes só
+   `markProcessed` (memória); agora arquiva localmente para auditoria alinhando
+   com a leitura literal de "move para histórico". Fallback `markProcessed` em
+   falha de archive preserva dedup em memória.
+
+2. **Ordenação por `criado_em` no QueueService.enqueue (BL-C3-010)** —
+   `Date.parse` timezone-aware; empate em criado_em mantém FIFO de chegada.
+   Invariante crítica: `items[0]` (sprint atualmente exibida) NÃO é preempted.
+   Sprints novas com criado_em mais antigo entram em `items[1]`. Preempção do
+   overlay no meio da exibição quebraria `handleAck` (peek mismatch) e seria má
+   UX (operador confundiria qual sprint está confirmando).
+
+3. **Tray "Reabrir último aviso" habilitado iff `kind === 'idle'` (BL-C3-009)**
+   — mutuamente exclusivo com "Mostrar sprint atual" (visível em
+   `sprint_active`). Simplifica UX (sempre só 1 ação de visualização
+   disponível). Em `config_error` ambos desabilitados.
+
+4. **`reopenedMode` flag no OverlayService (BL-C3-009)** — overlay reaberto NÃO
+   toca em `currentItem` (preserva null/idle do main). `closeReopened` no-op
+   fora do modo (defesa contra IPC adulterado). `showSprint`/`hide`/`destroy`
+   resetam o flag — fluxo normal sempre supersede reopen (cenário raro: sprint
+   chega durante reopen).
+
+5. **IncomingSprintEvent.reopened?: boolean (BL-C3-009)** — campo opcional.
+   Renderer ramifica label do botão ("Fechar" vs "Recebi") e handler
+   (`overlay.closeReopened` vs `sprint.acknowledge`).
+
+6. **`listPending` SEM filter userId (BL-C3-011)** — antes filtrava `{ userId }`
+   mas isso descartava cancels (broadcast). Agora sem filter; sprints de outros
+   operadores filtradas inline em `processSprint`. Cancels processados via novo
+   `processCancel`.
+
+7. **`overlayService?` opcional em PollingDeps (BL-C3-011)** — cancel handling
+   precisa de acesso ao overlay para hide() quando exibida. Composição via dep
+   injection mantém testabilidade isolada (mock no testKit).
+
+8. **`removeBySprintId` no QueueService (BL-C3-011)** — idempotente; NÃO emite
+   `nextSprint` mesmo removendo items[0] (caller orquestra próxima exibição —
+   mesma semântica de `dequeue`).
+
+9. **Refactor para `<Overlay>` do ui-kit (BL-C3-015)** — substituição completa
+   do componente Overlay.tsx local + componentes auxiliares (`SprintCard`,
+   `AckButton` deletados). DeadlineBadge + QueueIndicator preservados (reused no
+   body slot). Window management (`overlayService.createWindow`: fullscreen,
+   alwaysOnTop:'screen-saver', skipTaskbar) permanece no main; ui-kit é só
+   apresentacional.
+
+10. **`autoCloseSeconds={0}` no `<Overlay>` do ui-kit (BL-C3-015)** — ui-kit tem
+    timer próprio (`useEffect` com setTimeout). Para evitar timer duplicado com
+    o main (`overlayService.minimizeAfterMs`), desabilitamos o do ui-kit. Main
+    fica como única fonte de verdade do ciclo de vida da janela. Documentação no
+    Overlay.tsx do Agent.
+
+11. **Loading/error/warning UX no body slot (BL-C3-015)** — ui-kit `<Overlay>`
+    button não tem `disabled` prop. Guard `if (loading) return;` no handler
+    previne double-click. Surface de erro/warning inline preserva UX do W1
+    (regressão F-024 mantida).
+
+12. **Label dinâmico do botão (BL-C3-015 + BL-C3-009)** — "Confirmando…"
+    (loading), "Fechar" (reopened), "Recebi" (normal). "Recebi" diverge do
+    default "Recebido" do ui-kit por convenção UX consolidada no W1.
+
+13. **`key={sprint?.sprint_id ?? 'idle'}` no `<Overlay>` em App.tsx
+    (BL-C3-015)** — força remount em troca de sprint; reseta loading/
+    error/warning sem useEffect manual. Mesmo pattern do W1 com
+    `key={sprint_id}` em AckButton (agora deletado).
+
+14. **Meta gigante usa `--sprint-font-size-4xl` (120px) (BL-C3-016)** — antes
+    160px local; agora 120px (tier canônico "métrica gigante" definido no C9).
+    Visual ligeiramente menor mas dentro do "operador vê de longe".
+
+15. **`global.css` reduzido + zero hardcoding (BL-C3-016)** — tokens locais
+    (`--color-*`, `--space-*`, `--font-size-*`, `--radius-*`) removidos.
+    ThemeProvider importa tokens.css que registra `--sprint-*` em `:root`
+    globalmente. `min-width: 140px` no DeadlineBadge e `max-width: 1200px` no
+    Overlay removidos (largura content-driven; card do ui-kit limita via
+    `max-width: 720px`).
+
+### Métricas
+
+- Tests: 199 (W1 baseline) → 240 (W2 final). +41 novos cobrindo todas as novas
+  capacidades.
+- Lint, type-check, build do Agent: zero warnings.
+- Componentes deletados: AckButton (4 arquivos) + SprintCard (4 arquivos).
+  Subsumidos pelo novo Overlay.tsx.
+- Hardcoding visual em src/renderer: 0 hex, 0 px hardcoded (1 px em comentário).
+
+### Referências
+
+- Sessão de implementação: BL-C3-w2-refinamento (Wave 2, Sessão 21)
+- CLAUDE.md §4 "Atualização W2 — BL-C3-009/010/011/012/015/016" — detalhes por
+  camada
+- Backlog v1.1 §6/C3 (itens 009-016)
+- ADR-019 — arquitetura W1.C3 (base sobre a qual W2 refatora)

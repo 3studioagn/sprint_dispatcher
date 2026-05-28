@@ -9,6 +9,57 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Added — Sessão 21 (2026-05-28) — Refinamento C3 (Operator Agent) na W2
+
+- **BL-C3-012** — Sprint com `deadline_at` no passado é arquivada localmente
+  via `historyService.archive()` sem exibir overlay e sem ack de
+  visualização. Fallback `markProcessed` em falha de archive preserva dedup
+  em memória. +3 testes em [pollingService.test.ts](apps/operator-agent/src/main/services/pollingService.test.ts).
+- **BL-C3-010** — `QueueService.enqueue` ordena por `payload.criado_em` (ISO
+  ascendente, `Date.parse` timezone-aware). Empate FIFO. Invariante crítica:
+  `items[0]` (sprint atualmente exibida) preservada de preempção. +8 testes.
+- **BL-C3-009** — Reabertura via tray ("Reabrir último aviso") lê último
+  `.json` válido em `<userData>/historico/<dia>/`. Caminhos separados de
+  ack: `reopenFromHistory` sem timer, sem touch em currentItem; renderer
+  ramifica botão para "Fechar" via `IncomingSprintEvent.reopened?`. Novo IPC
+  `overlay:close-reopened`. Tray item enabled iff `kind === 'idle'`. +30
+  testes (historyService 11, trayState 4, overlayService 10, AckButton/
+  Overlay 5).
+- **BL-C3-011** — `PollingService.processCancel` substitui stub; `listPending`
+  sem filter userId (cancels broadcast); sprints de outros operadores
+  filtradas inline em `processSprint`. `queueService.removeBySprintId` +
+  `overlayService.hide()` se exibida + archive cancel + delete shared.
+  `overlayService?` injetado em `PollingDeps`. +15 testes (pollingService 8,
+  queueService 7).
+
+### Changed — Sessão 21 (2026-05-28)
+
+- **BL-C3-015** — Overlay do renderer refatorado para consumir `@sprint/ui-kit`
+  (`<Overlay>` + `<TextBlock>` + `<ThemeProvider>`). Window management
+  permanece no main (overlayService.createWindow). `autoCloseSeconds={0}`
+  no `<Overlay>` do ui-kit: main process é única fonte do timer
+  (`overlayService.minimizeAfterMs`). Label dinâmico: "Confirmando…"
+  (loading), "Fechar" (reopened), "Recebi" (normal). Componentes deletados:
+  `AckButton` e `SprintCard` (funcionalidade subsumida pelo novo `Overlay.tsx`).
+  Preservados: `DeadlineBadge`, `QueueIndicator` (reused no body slot).
+- **BL-C3-016** — Identidade visual via `<ThemeProvider>` do ui-kit. Tokens
+  locais (`--color-*`, `--space-*`, `--font-size-*`, `--radius-*`) removidos
+  de `global.css`; CSS modules de Overlay/DeadlineBadge/QueueIndicator
+  migrados para `--sprint-*`. Meta gigante usa `--sprint-font-size-4xl`
+  (120px, tier canônico do C9; antes 160px local). `min-width: 140px`
+  (DeadlineBadge) e `max-width: 1200px` (Overlay) removidos — content-
+  driven + card do ui-kit limita 720px. Audit: 0 hex/px hardcoded fora de
+  comentários.
+
+### Notes — Sessão 21
+
+- 240 testes verdes no Agent (199 W1 → 240 W2; +41 novos). Lint + type-check
+  + build clean.
+- 6 changesets em `.changeset/c3-XXX-*.md` para sprint-operator-agent (minor).
+- 7 commits separados na branch `feature/BL-C3-w2-refinamento`.
+- Próxima sessão sugerida: C2 (Leader) na W2 + BL-C4-004 (writeCancel) —
+  fecha cancelamento ponta-a-ponta.
+
 ### Fixed
 
 <!-- ↓↓↓ Sessão 19 (2026-05-27) — Correções pós-auditoria W1 (Caminho 2) ↓↓↓ -->

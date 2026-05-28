@@ -66,6 +66,150 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 21 — 2026-05-28 — Refinamento C3 (Operator Agent) na W2 (BL-C3-009/010/011/012/015/016)
+
+**Wave atual:** W2 (Refinement + Design System) — em curso **Método:** sessão
+única atômica refinando o componente C3 inteiro **Duração estimada:** ~5h (7
+commits) **Itens trabalhados:** [BL-C3-012, BL-C3-010, BL-C3-009, BL-C3-011,
+BL-C3-015, BL-C3-016]
+
+### Objetivo da sessão
+
+Implementar integralmente os 6 itens C3 que pertencem à Wave 2 em uma única
+sessão, em ordem que respeita dependências e minimiza risco de regressão:
+features de comportamento (main process) primeiro, refactor visual (renderer)
+por último. Critério-mestre: ao final, cenário E2E manual do W1 passa sem
+regressão.
+
+### O que foi feito
+
+- **Fase 0 (mapeamento exaustivo do Agent existente)** — 8 perguntas
+  respondidas: entry main + BrowserWindow lazy; polling setTimeout recursivo 3s;
+  payload via push `sprint:incoming` + pull `sprint:request-current`; timer no
+  main (`overlayService.minimizeAfterMs`); ack em 2 momentos (writeDisplayed +
+  writeAcknowledged); historico em `<userData>/historico/YYYY-MM-DD/<filename>`;
+  tray menu 4 itens; renderer CSS Modules locais com tokens
+  `--color-*`/`--font-size-*`/`--space-*`.
+
+- **Fase 1 (commit `a0b02b4` — BL-C3-012 deadline guard)** — pollingService
+  ProcessSprint chama `historyService.archive(payload, filename, rawContent)` no
+  branch deadline-passed em vez de só `markProcessed`. Fallback markProcessed em
+  falha. +3 testes (move arquivo via archive, fallback, precondição não-ack
+  visualização). Total 199→202.
+
+- **Fase 2 (commit `9e9c08b` — BL-C3-010 fila por criado_em)** —
+  QueueService.enqueue insere por ordem ascendente de `payload.criado_em` via
+  `Date.parse` (timezone-aware). Empate FIFO; items[0] (sprint exibida)
+  preservada de preempção. +8 testes. Total 202→210.
+
+- **Fase 3 (commit `2a95b16` — BL-C3-009 reabertura via tray)** —
+  historyService.loadLastArchived (filtra cancels via safeParseFilename),
+  overlayService.reopenFromHistory + closeReopened, IncomingSprintEvent.
+  reopened?, Api.overlay.closeReopened, IPC `overlay:close-reopened`,
+  TrayMenuAction 'reopen-last' enabled iff idle, trayService.displayInfoBalloon.
+  Renderer: useCurrentSprintStore.isReopened, AckButton ramifica para "Fechar".
+  +30 testes. Total 210→240.
+
+- **Fase 4 (commit `6f33f19` — BL-C3-011 detecção de cancelamento)** —
+  pollingService.processCancel substitui stub; listPending sem filter userId
+  (capta cancels broadcast); sprints de outros operadores filtradas inline.
+  queueService.removeBySprintId (idempotente, sem nextSprint event).
+  overlayService injetado em PollingDeps. main/index.ts wire. +15 testes. Total
+  240→252.
+
+- **Fase 5 (commit `d274034` — BL-C3-015 refactor para ui-kit)** — Agent
+  adiciona @sprint/ui-kit como dep workspace. Overlay.tsx reescrito consumindo
+  `<Overlay>` + `<TextBlock>` do ui-kit; App.tsx wrap com `<ThemeProvider>`.
+  autoCloseSeconds={0} no `<Overlay>` (main controla timer).
+  Loading/error/warning UX no body slot; label dinâmico
+  "Confirmando…"/"Fechar"/"Recebi"; guard if (loading) return contra
+  double-click. AckButton e SprintCard deletados (subsumidos). Total 252→240
+  (deletei 24 testes órfãos + adicionei 12 novos).
+
+- **Fase 6 (commit `8b8255f` — BL-C3-016 ThemeProvider + zero hardcoding)** —
+  global.css reduzido (sem tokens locais; só reset + body com `--sprint-*`).
+  Overlay/DeadlineBadge/QueueIndicator CSS migrados para `--sprint-*`. Meta
+  gigante usa --sprint-font-size-4xl (120px). Removidos `min-width: 140px`
+  (DeadlineBadge) e `max-width: 1200px` (Overlay — redundante, card do ui-kit
+  limita 720px). Audit: 0 hex hardcoded, 0 px hardcoded em src/renderer (exceto
+  comentário).
+
+- **Fase 7 (este commit final consolidação)** — 6 changesets em
+  `.changeset/c3-XXX-*.md`, CLAUDE.md §4 nova subseção "Atualização W2",
+  DECISIONS.md nova nota técnica (15 decisões documentadas), SESSION_LOG.md
+  (esta entrada), CHANGELOG.md raiz atualizado.
+
+### Estado atual
+
+- **6 BLs concluídos:** BL-C3-009/010/011/012/015/016 (todos ✅ via commits
+  separados na branch `feature/BL-C3-w2-refinamento`).
+- **240 testes verdes no Agent** (199 W1 → 240 W2; -24 deletados + 41 novos).
+- **Lint + type-check + build do Agent**: clean.
+- **6 changesets** registrados para sprint-operator-agent (minor).
+
+### Decisões tomadas
+
+15 decisões técnicas documentadas em DECISIONS.md "Nota técnica — BL-C3-009 a
+016" — destaques:
+
+- archive em deadline-passed (não só markProcessed)
+- ordenação por criado_em preservando items[0]
+- reopen flag separado de currentItem
+- listPending sem filter para capturar cancels broadcast
+- removeBySprintId não emite nextSprint
+- autoCloseSeconds={0} (main é única fonte de timer)
+- AckButton + SprintCard deletados (funcionalidade no novo Overlay)
+- meta 120px (--sprint-font-size-4xl) em vez de 160px local
+- min-width/max-width hardcoded removidos (content-driven)
+
+### Bloqueios encontrados
+
+3 fricções, todas resolvidas inline:
+
+1. **Lint `unbound-method`** em testes do BL-C3-012 ao acessar
+   `kit.historyService.archive` direto em expect. Fix: spy em variável tipada
+   `MockInstance<Parameters<HistoryService['archive']>, ...>`.
+2. **`vi.spyOn<HistoryService, 'archive'>` generic syntax inválido** — trocado
+   para `MockInstance` import explícito de 'vitest'.
+3. **`Parameters<typeof PollingService>`** errado para classe — substituído por
+   `NonNullable<PollingDeps['overlayService']>` e vi.fn parametrizado
+   explicitamente.
+
+### Próximo passo
+
+Fase 8 (gate final) — bateria completa do monorepo (install --frozen-lockfile,
+lint, type-check, build, test). Push para `develop`. Renan revisa e abre PR.
+
+**Próxima sessão sugerida:** **C2 (Leader) na W2** — BL-C2-006 (customização
+título/corpo), BL-C2-008 (tela de acks), BL-C2-009 (cancelamento — par do
+BL-C3-011 desta sessão), trazendo **BL-C4-004 (writeCancel)** junto. Isso fecha
+o ciclo de cancelamento ponta-a-ponta: Leader escreve cancel via C4 → Agent
+detecta (já pronto desta sessão).
+
+Em paralelo possíveis:
+
+- BL-C7-008 (ADR-022: adoção do C9)
+- BL-C7-009 (ADR-023: não-Storybook)
+- BL-C8-008 (testes ≥85% do C9)
+
+### Observações para a próxima sessão
+
+- **AckButton e SprintCard foram DELETADOS** — não tente importar. A
+  funcionalidade (loading state, error inline, F-024 warning, meta gigante,
+  title/body) vive agora no `Overlay.tsx` do renderer.
+- **`window.api.overlay.closeReopened`** é o novo handler IPC para fechar
+  overlay em modo reaberto. Não chama acknowledge.
+- **Tray menu "Reabrir último aviso"** habilitado iff `kind === 'idle'`. Se
+  sessão futura quiser permitir reopen em sprint_active, decisão precisa passar
+  por Renan (UX implications).
+- **Cancel handling assume `overlayService` está injetado no PollingService**.
+  Sem ele, processCancel ainda funciona (remove fila + archive + delete) mas não
+  fecha overlay. Cenário só ocorre em testes isolados.
+- **Aprovação visual do Renan pendente** (critério BL-C3-016) — para validar
+  quando o PR for revisado.
+
+---
+
 ## Sessão 20 — 2026-05-28 — C9 Design System / UI Kit inteiro (BL-C9-001 a 006)
 
 **Wave atual:** W2 (Refinement + Design System) — em curso **Método:** sessão
