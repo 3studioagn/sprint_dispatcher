@@ -141,9 +141,12 @@
 }
 
 .label {
+  /* Sessão 40 — Renan: "diminua o font weight de Suas metas". regular
+   * (400) → light (300). Token light + import do Inter 300 introduzidos
+   * em tokens.css na mesma sessão. */
   font-size: var(--sprint-font-size-xl);
   color: var(--sprint-color-text-muted);
-  font-weight: var(--sprint-font-weight-regular);
+  font-weight: var(--sprint-font-weight-light);
   white-space: nowrap;
 }
 

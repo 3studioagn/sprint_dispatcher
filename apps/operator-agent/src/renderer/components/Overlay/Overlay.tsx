@@ -225,7 +225,9 @@ export function Overlay(): JSX.Element {
     }
   }
 
-  const ackLabel = loading ? 'Confirmando…' : isReopened ? 'Fechar' : 'Recebi';
+  // Sessão 40 — Renan: label "Recebi" → "RECEBIDO" (caixa alta) para
+  // matching design final do CTA.
+  const ackLabel = loading ? 'Confirmando…' : isReopened ? 'Fechar' : 'RECEBIDO';
 
   return (
     <UIOverlay

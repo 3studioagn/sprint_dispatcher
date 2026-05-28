@@ -48,9 +48,10 @@
    * próprio para que o header possa ter bg distinto sem gap no topo. */
   /* Sessão 32: max-width 720 → 520px. Renan reportou que o card
    * estava largo demais comparado com a imagem-alvo (proporção mais
-   * quadrada/portrait do design 'Hora do Rush!'). 520px aproxima a
-   * proporção sem comprometer legibilidade da meta gigante (4xl). */
-  max-width: 520px;
+   * quadrada/portrait do design 'Hora do Rush!').
+   * Sessão 40: 520 → 480px — Renan: "o box da overlay é levemente
+   * menor na largura, pros elementos ficarem mais juntos". */
+  max-width: 480px;
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -89,7 +90,10 @@
    * fina, matching proporção do design alvo. */
   background: var(--sprint-color-surface-subtle);
   text-align: center;
-  padding: var(--sprint-space-4) var(--sprint-space-6);
+  /* Sessão 40 — Renan: "aumente um pouco mais o padding do box que
+   * tem a frase 'É hora de correr'". Vertical space-4 (16) →
+   * space-5 (20); horizontal mantém space-6 (24). */
+  padding: var(--sprint-space-5) var(--sprint-space-6);
 }
 
 .title {
@@ -123,7 +127,9 @@
   background: var(--sprint-color-primary);
   color: var(--sprint-color-primary-on);
   font-family: inherit;
-  font-size: var(--sprint-font-size-lg);
+  /* Sessão 40 — Renan: "aumente levemente a font" do botão. lg (18)
+   * → xl (24). Mantém peso bold da Sessão 34. */
+  font-size: var(--sprint-font-size-xl);
   /* Sessão 34: weight semibold → bold. Match peso do texto "Recebido"
    * no design alvo (apresentação firme do call-to-action principal). */
   font-weight: var(--sprint-font-weight-bold);

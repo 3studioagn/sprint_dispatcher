@@ -26,7 +26,7 @@
  * @font-face em sessão futura (W3).
  */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 :root {
   /* ============================================================
@@ -148,6 +148,7 @@
   --sprint-font-size-4xl: 7.5rem; /* 120px — métrica gigante ("20") */
 
   /* Weights */
+  --sprint-font-weight-light: 300;
   --sprint-font-weight-regular: 400;
   --sprint-font-weight-medium: 500;
   --sprint-font-weight-semibold: 600;
