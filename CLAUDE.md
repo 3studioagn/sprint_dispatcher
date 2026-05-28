@@ -948,23 +948,31 @@ packages/ui-kit/
   com "not found by the project service".
 - **`src/test-setup.ts` dentro de `src/`** (não na raiz) — match
   `include: ["src/**/*.ts"]` do tsconfig.json sem precisar de exception.
-- **Coverage thresholds OFF** nesta sessão — apenas 31 smoke tests. Meta de 85%+
-  entregue em BL-C8-008 (sessão dedicada).
+- **Coverage thresholds OFF nesta sessão** — apenas 31 smoke tests.
+  **Atualização Sessão 44 (BL-C8-008):** thresholds ativos no `vitest.config.ts`
+  — 85% lines/ functions/statements + 80% branches (cobertura real atual:
+  100/100/100/100). `include: ['src/**/*.{ts,tsx}']` +
+  `exclude: ['src/**/*.test.*', 'src/**/index.ts', 'src/test-setup.ts']` evita
+  inflação artificial. Falha de threshold bloqueia merge (sanity check confirmou
+  exit 1 do vitest).
 - **`commitlint.config.cjs`** ampliado para aceitar scope `C9` (sem isso, todos
   os commits desta sessão seriam rejeitados).
 
-**Pendências conhecidas (waves futuras):**
+**Itens C9-relacionados entregues nas waves seguintes:**
 
-- **BL-C3-015 (W2)** — Operator Agent refatora overlay para consumir
-  `@sprint/ui-kit`. Adiciona path alias `@sprint/ui-kit` em
-  `apps/operator-agent/tsconfig.json`. Substitui markup atual por
-  `<ThemeProvider>` + `<Overlay>` + `<TextBlock>`.
-- **BL-C3-017 (W2)** — orquestração `<Overlay>` ↔ `<OverlayMinimized>` no Agent
-  (state machine + window management — BrowserWindow frameless+topmost para o
-  pill).
-- **BL-C7-008 (W3)** — ADR-022: adoção do C9.
-- **BL-C7-009 (W3)** — ADR-023: não adoção de Storybook na v1.0.
-- **BL-C8-008 (W3)** — testes unitários ≥ 85% no ui-kit.
+- ✅ **BL-C3-015 (W2)** — Operator Agent refatorou overlay para consumir
+  `@sprint/ui-kit`. Path alias `@sprint/ui-kit` em
+  `apps/operator-agent/tsconfig.json`; markup substituído por `<ThemeProvider>`
+  - `<Overlay>` + `<TextBlock>`. Mergeado em Sessão 21.
+- ✅ **BL-C3-017 (W2)** — orquestração `<Overlay>` ↔
+  `<OverlayMinimized>`/`<Pill>` no Agent (state machine + window management —
+  `pillService` com BrowserWindow frameless+topmost). Mergeado em Sessões 22-26.
+- ✅ **BL-C7-008** — ADR-022: adoção do C9. Mergeado em Sessão 44 (esta) — vive
+  em `DECISIONS.md`, NÃO em `docs/adr/`.
+- ✅ **BL-C7-009** — ADR-023: não adoção de Storybook na v1.0. Mergeado em
+  Sessão 44 (esta).
+- ✅ **BL-C8-008** — testes unitários ≥ 85% no ui-kit (real: 100/100/100/100,
+  threshold ativo em 85/85/80/85). Mergeado em Sessão 44 (esta).
 
 ---
 
@@ -990,13 +998,13 @@ Backlog (perguntar a Renan se necessário).
 
 ## 6. Waves de Desenvolvimento
 
-| Wave | Nome                     | Duração est. | Status       |
-| ---- | ------------------------ | ------------ | ------------ |
-| W0   | Foundation               | 1 semana     | ✅ concluída |
-| W1   | MVP Core                 | 2 semanas    | ✅ concluída |
-| W2   | Refinement + Design Sys  | 1 semana     | 🔄 em curso  |
-| W3   | Production Readiness     | 1 semana     | ⏸️           |
-| W4   | Hardening & Future-proof | 1 semana     | ⏸️           |
+| Wave | Nome                     | Duração est. | Status                       |
+| ---- | ------------------------ | ------------ | ---------------------------- |
+| W0   | Foundation               | 1 semana     | ✅ concluída                 |
+| W1   | MVP Core                 | 2 semanas    | ✅ concluída                 |
+| W2   | Refinement + Design Sys  | 1 semana     | ✅ concluída                 |
+| W3   | Production Readiness     | 1 semana     | ⏸️ aguardando aceite do gate |
+| W4   | Hardening & Future-proof | 1 semana     | ⏸️                           |
 
 > **Atualize esta tabela ao fim de cada wave.**
 
@@ -1090,15 +1098,18 @@ Thresholds materializados nos `vitest.config.ts` de cada workspace. `pnpm test`
 | `@sprint/contracts`            |   98% |       98% |      95% |        98% |
 | `@sprint/fs-adapter`           |   95% |       95% |      95% |        95% |
 | `@sprint/logger`               |   95% |       95% |      90% |        95% |
+| `@sprint/ui-kit`               |   85% |       85% |      80% |        85% |
 | `sprint-operator-agent` (main) |   90% |       90% |      85% |        90% |
 | `sprint-leader`                |   95% |       90% |      90% |        95% |
 
-Cobertura realmente exercida (Sessão 18 — pós W1.C8 expansion):
-`@sprint/contracts` **100/100/100/100** (230 → 317 testes; threshold 98/95/98/98
-com folga); `@sprint/fs-adapter` **100/99.53/100/100** (235 → 294 testes;
-threshold 95/95/95/95 com folga); `@sprint/logger` **100/100/100/100** (57
-testes); `sprint-operator-agent` **97.76/91.47/95.4/97.76** (190 testes);
-`sprint-leader` **96.89/94.51/93.84/96.89** (198 testes).
+Cobertura realmente exercida (Sessão 18 — pós W1.C8 expansion; `@sprint/ui-kit`
+adicionado na Sessão 44 — BL-C8-008): `@sprint/contracts` **100/100/100/100**
+(230 → 317 testes; threshold 98/95/98/98 com folga); `@sprint/fs-adapter`
+**100/99.53/100/100** (235 → 294 testes; threshold 95/95/95/95 com folga);
+`@sprint/logger` **100/100/100/100** (57 testes); `@sprint/ui-kit`
+**100/100/100/100** (60 → 64 testes; threshold 85/85/80/85 com folga);
+`sprint-operator-agent` **97.76/91.47/95.4/97.76** (190 testes); `sprint-leader`
+**96.89/94.51/93.84/96.89** (198 testes).
 
 **Total monorepo: 1056 testes verdes.** Thresholds materializados — build falha
 automaticamente se cobertura regredir.

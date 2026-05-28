@@ -66,6 +66,171 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 44 — 2026-05-28 — Fechamento da Wave 2 (QA do C9 + ADRs)
+
+**Wave atual:** W2 — **fechamento** **Duração estimada:** ~1.5h **Itens:**
+[BL-C8-008, BL-C7-008, BL-C7-009] **Branch:** `feature/BL-w2-fechamento-qa-adrs`
+
+### Objetivo da sessão
+
+Executar os três últimos itens da Wave 2 e avaliar o Gate W2 → W3:
+
+- BL-C8-008 (M) — cobertura unitária ≥85% nos componentes do `@sprint/ui-kit` +
+  threshold ativo bloqueando merge.
+- BL-C7-008 (XS) — ADR sobre adoção do C9 (ui-kit) como package compartilhado.
+- BL-C7-009 (XS) — ADR sobre não adoção de Storybook na v1.0.
+
+### O que foi feito (4 commits)
+
+**Commit 1 (`9a6f4a8`) —
+`test(C8): cobertura unitária ≥85% dos componentes do @sprint/ui-kit [BL-C8-008]`:**
+
+- Cobertura baseline já estava alta (99.41/95.38/100/99.41) — não precisava de
+  expansão de zero; trabalho real foi fechar 3 branches defensivos.
+- 4 testes novos:
+  - `TextBlock`: composição de `className` opcional (ramo do ternário) +
+    `bodyHtml` vazio.
+  - `OverlayMinimized`: fallback `return 50` em `resolvePercent` quando
+    `position` chega fora do tipo (cast em runtime).
+  - `Pill`: mesmo padrão de fallback em `resolvePillPositionPercent`.
+- `vitest.config.ts`: substituído o `TODO(BL-C8-008)` por thresholds reais
+  (85/85/80/85) + `include`/`exclude` explícitos (exclui barrels `index.ts` e
+  `.test.*` para não diluir denominador).
+- Sanity check: subi temporariamente `lines: 105` e confirmei que o vitest
+  reporta `Coverage for lines (100%) does not meet global threshold (105%)` com
+  exit 1 — pnpm/turbo propagam, build CI quebra. DoD do item atendido.
+- Cobertura final: **100/100/100/100** em todos os arquivos. Testes do ui-kit:
+  60 → **64**.
+
+**Commit 2 (`db6aa7a`) —
+`docs(C7): ADR-022 adoção do @sprint/ui-kit (C9) como package compartilhado [BL-C7-008]`:**
+
+- ADR-022 em `DECISIONS.md` (NÃO `docs/adr/` — essa pasta não existe; todos os
+  ADRs vivem em `DECISIONS.md` desde o W0/W1). Numeração correta segundo
+  CLAUDE.md §4.5 do C9 (ADR-003 / ADR-004 do prompt já estavam ocupados por SMB
+  / polling).
+- Template seguido: Status / Data / Decisores / Contexto / Decisão (5 pontos
+  numerados) / Alternativas consideradas (4 opções rejeitadas + 1 escolhida) /
+  Consequências (Aceitas + Trade-offs) / Referências.
+- Índice de ADRs (topo do `DECISIONS.md`) atualizado.
+- "Nota técnica C9" atualizada para apontar aos ADRs formais agora criados (em
+  vez de "sessões futuras"). Notas permanecem como registro de decisões de
+  implementação não-arquiteturais.
+
+**Commit 3 (`1906792`) —
+`docs(C7): ADR-023 não adoção de Storybook na v1.0 do @sprint/ui-kit [BL-C7-009]`:**
+
+- ADR-023 em `DECISIONS.md`. Mesmo template do ADR-022 + bloco "Critério de
+  reavaliação" com 3 gatilhos (3+ devs em UI, 10+ componentes, designer não-dev
+  contratado).
+- Alternativas avaliadas: Storybook 8, Ladle, Histoire, Chromatic, "apenas
+  testes + preview HTML" (escolhida).
+- Referencia ADR-022 (decisão pré-requisito) + BL-C8-004 (E2E Playwright, W3) +
+  BL-C8-008 (substituto operacional na v1.0).
+
+**Commit 4 (este) — `docs: consolidação + avaliação do Gate W2→W3`:**
+
+- `CHANGELOG.md`: nova entrada Sessão 44 no topo do `[Unreleased]`.
+- `CLAUDE.md`: tabela §6 atualizada (W2 ✅ concluída); §7.7.1 ganha linha do
+  `@sprint/ui-kit` (85/85/80/85 threshold, 100/100/100/100 real, 64 testes);
+  §4.5 do C9 atualizada — pendências "BL-C3-015/017, BL-C7-008/009, BL-C8-008"
+  todas marcadas ✅ entregues.
+- `.changeset/c8-008-coverage-threshold.md`: changeset `patch` para
+  `@sprint/ui-kit` (BL-C8-008 — sem mudança de API pública).
+- Avaliação do Gate W2 → W3 (abaixo).
+
+### Estado atual
+
+- ✅ BL-C8-008 — cobertura 100/100/100/100, threshold ativo (real bloqueia merge
+  em regressão).
+- ✅ BL-C7-008 — ADR-022 (adoção do C9).
+- ✅ BL-C7-009 — ADR-023 (não Storybook v1.0).
+- Branch local com 4 commits separados, sem squash.
+- Testes monorepo: ui-kit 60 → 64. Demais workspaces intocados.
+- Lint, type-check, build do ui-kit: zero warnings.
+
+### Avaliação do Gate W2 → W3
+
+| Critério do Gate W2 → W3                                          | Item(ns)                                    | Status                                                                                                                          |
+| ----------------------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Acompanhamento de acks em tempo quase-real                        | BL-C2-008                                   | ✅ (Sessão 43)                                                                                                                  |
+| Cancelamento implementado e testado (Leader + fs-adapter + Agent) | BL-C2-009 + BL-C4-004 + BL-C3-011           | ✅ ponta-a-ponta                                                                                                                |
+| Tray icon completo (reabrir, status, menu)                        | BL-C3-009 (reabrir, menu)                   | ⚠️ **VERIFICAR** — reabrir + menu prontos; ícone de **status de conexão** vermelho/verde é BL-C3-013, marcado **W3** no backlog |
+| Histórico local consultável                                       | BL-C3-008 + BL-C3-009 (reabertura via tray) | ⚠️ **VERIFICAR** — Agent grava histórico em disco e reabre via tray; **tela** de histórico do Leader é BL-C2-010 (W3/Could)     |
+| `@sprint/ui-kit` publicado internamente, testes ≥85%              | BL-C8-008                                   | ✅ (esta) — workspace-internal via `workspace:*`, real 100%                                                                     |
+| Overlay do Agent migrado para ui-kit, sem regressão               | BL-C3-015/016                               | ✅ (Sessão 21)                                                                                                                  |
+| ADR-022 e ADR-023 em `DECISIONS.md`                               | BL-C7-008/009                               | ✅ (esta)                                                                                                                       |
+
+**Ressalvas sinalizadas (decisão de escopo de gate é do Renan):**
+
+1. **"Tray icon completo — status":** o item de tray do Agent (BL-C3-009)
+   entregou "reabrir último aviso" + menu. O **indicador visual de status de
+   conexão** (vermelho/amarelo/verde refletindo presença da pasta compartilhada)
+   é BL-C3-013, classificado como **W3** no backlog v1.1. Possíveis caminhos:
+   (a) aceitar o gate com essa ressalva (tray funcionalmente completo do ponto
+   de vista do operador, status de conexão vira primeira tarefa da W3); (b)
+   antecipar BL-C3-013 para fechar o gate pelo critério literal.
+2. **"Histórico local consultável":** depende da interpretação. (i) Pelo lado do
+   Agent, o histórico **está** consultável — `historyService` arquiva em
+   `<userData>/historico/<dia>/`, tray expõe "Reabrir último aviso" e dedup
+   pós-restart funciona. (ii) Pelo lado do Leader, a **tela** de histórico do
+   Leader (BL-C2-010) está classificada como **W3/Could** no backlog v1.1.
+   Caminhos: (a) aceitar o gate considerando o histórico do Agent como
+   suficiente; (b) entregar BL-C2-010 antes do gate.
+
+### Decisões tomadas
+
+- **Numeração dos ADRs:** 022 e 023, NÃO 003 e 004 como o prompt master sugeria.
+  O CLAUDE.md §4.5 do C9 já antecipava a numeração correta. ADR-003 (SMB) e
+  ADR-004 (polling) já estavam ocupados desde o BL-C0-007 (Sessão 01). Decisão
+  validada com Renan via `AskUserQuestion` na abertura.
+- **Localização dos ADRs:** `DECISIONS.md` (arquivo único, padrão local desde o
+  W0), NÃO `docs/adr/` (essa pasta não existe). Confirmado via
+  `find . -path ./node_modules -prune -o -path "*adr*"`.
+- **Threshold de branches em 80 (não 85):** coerência com a política dos demais
+  workspaces (§7.7.1 do CLAUDE.md). Cobertura real é 100% — margem para
+  fallbacks defensivos futuros sem inflar com testes artificiais.
+- **`include`/`exclude` explícitos no coverage do ui-kit:** evita inflação
+  artificial (barrels `index.ts` são re-exports triviais) e auto-medição errada
+  (`.test.*` não deve contar a si mesmo no denominador).
+- **Testes do fallback `return 50`:** cobertos via cast `as unknown as`. Não é
+  teatro de cobertura — é defesa documentada em comentário inline contra valores
+  vindos de runtime sem validação a montante (IPC/JSON). Mantém intenção
+  alinhada com o princípio §2.3 do prompt ("cobertura honesta").
+
+### Bloqueios encontrados
+
+Nenhum bloqueio técnico. A única divergência foi o **prompt master vs estado
+real do repo** (ADRs assumidos em `docs/adr/` com ADR-003/004 livres) —
+resolvida em <5min na abertura via inspeção do repo + `AskUserQuestion`.
+
+### Próximo passo
+
+- **Decisão do Renan no Gate W2 → W3:** aceitar com as 2 ressalvas sinalizadas
+  (BL-C3-013 e BL-C2-010 viram primeiras tarefas da W3), OU entregar uma das
+  duas antes da transição.
+- Após decisão: PR único da branch atual; merge sem squash em `develop`.
+- **Sessão futura:** abertura da W3 (instalador MSI BL-C5-002, auto-start
+  BL-C5-003, file transport do logger BL-C6-003, reconexão+status BL-C3-013,
+  tela de histórico do Leader BL-C2-010, E2E Playwright BL-C8-004, ADR-024+
+  sobre instalador).
+
+### Observações para a próxima sessão
+
+- **`DECISIONS.md` é a fonte de verdade para ADRs** — esquece `docs/adr/`. Se um
+  futuro prompt mencionar esse caminho, ignore e use `DECISIONS.md`.
+- **Próximo ADR disponível: ADR-024.** Sessão 44 fecha em 023.
+- **Política de threshold do ui-kit:** branches em 80 é deliberado (não cobre
+  `0xx` defensivo via teste artificial). Se um componente novo introduzir branch
+  defensivo e cobertura de branches cair para 79, a decisão é cobrir o branch
+  (cast adversarial) OU revisar o threshold para 78 (e documentar). Não inflar
+  com `expect(true).toBe(true)`.
+- **`pnpm --filter @sprint/ui-kit test:coverage`** é o comando canônico para
+  auditoria de cobertura desse package (note os `:` no script name —
+  `pnpm --filter X test -- --coverage` não propaga o flag).
+
+---
+
 ## Sessão 43 — 2026-05-28 — Leader W2 + writeCancel (ciclo de cancelamento ponta-a-ponta)
 
 **Wave atual:** W2 — em curso **Duração estimada:** ~3h **Itens:** [BL-C4-004,

@@ -9,6 +9,56 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Added — Sessão 44 (2026-05-28) — Fechamento da Wave 2 (QA do C9 + ADRs)
+
+Última sessão da W2. Entrega os 3 itens restantes do gate: cobertura unitária
+do `@sprint/ui-kit` com threshold ativo e dois ADRs formalizando as decisões
+arquiteturais do C9.
+
+**`@sprint/ui-kit` — BL-C8-008:**
+
+- Cobertura 99.41/95.38/100/99.41 (baseline) → **100/100/100/100**
+  (lines/branches/functions/statements) em todos os arquivos.
+- 4 testes novos cobrindo os 3 branches defensivos remanescentes:
+  - `TextBlock` — composição de `className` opcional.
+  - `OverlayMinimized` — fallback `return 50` em `resolvePercent` quando
+    `position` chega fora do tipo (cast em runtime).
+  - `Pill` — mesmo padrão de fallback em `resolvePillPositionPercent`.
+  - `TextBlock` — `bodyHtml` vazio (smoke).
+- `vitest.config.ts` ativa thresholds: lines/functions/statements ≥85,
+  branches ≥80. Substituiu o TODO(BL-C8-008). Sanity check confirma
+  bloqueio de merge em regressão.
+- Coverage exclui barrels (`index.ts`) e `.test.*` para não diluir o
+  denominador.
+- Total de testes do ui-kit: 60 → **64**.
+
+**`DECISIONS.md` — BL-C7-008 e BL-C7-009:**
+
+- **ADR-022:** adoção do `@sprint/ui-kit` (C9) como quarto package
+  compartilhado do monorepo. Formaliza decisão materializada em
+  BL-C9-001..006 (Sessão 20) e BL-C3-015/016 (Sessão 21). Migração não-
+  big-bang: Agent migrou na W2; Leader migra em W3+ quando precisar.
+- **ADR-023:** não adoção de Storybook (nem Ladle/Histoire/Chromatic)
+  na v1.0 do `@sprint/ui-kit`. Verificação visual fica com Vitest +
+  Testing Library + preview HTML standalone + Agent real + E2E
+  Playwright (W3). Reavaliação automática quando 3+ devs UI OU 10+
+  componentes OU designer não-dev contratado.
+- Índice de ADRs (topo do `DECISIONS.md`) atualizado.
+- Nota técnica C9 atualizada para apontar aos ADRs formais agora
+  criados (em vez de "sessões futuras"). Notas permanecem como
+  registro de decisões de implementação; ADRs são a fonte de verdade
+  arquitetural.
+
+### Tests — Sessão 44
+
+- `@sprint/ui-kit`: 60 → **64** (+4). Cobertura threshold ativo.
+- fs-adapter, Leader, Agent, contracts, logger: intocados.
+
+### Status da Wave 2
+
+Wave 2 oficialmente **completa**. Próximo: avaliação manual do Gate W2 → W3
+(SESSION_LOG.md Sessão 44).
+
 ### Added — Sessão 43 (2026-05-28) — Leader W2 + writeCancel
 
 Encerra o C2 (Leader) na Wave 2 com 4 BLs entregues em commits atômicos
