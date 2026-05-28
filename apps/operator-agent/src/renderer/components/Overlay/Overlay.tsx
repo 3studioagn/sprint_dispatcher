@@ -1,13 +1,14 @@
 /**
- * Overlay — root visual do renderer, consumindo `@sprint/ui-kit`
- * (BL-C3-015).
+ * Overlay — root visual do renderer, consumindo `<Overlay>` do
+ * `@sprint/ui-kit` (BL-C3-015, redesenhado na Sessão 31).
  *
- * **Chrome do overlay vem do ui-kit** (`<Overlay>` exporta header com
- * título, body slot, botão de acknowledge). O Agent supre:
+ * **Chrome do overlay vem do ui-kit** (`<Overlay>` exporta card preto
+ * com header bar surface-elevated, body slot e botão "Recebido" laranja
+ * com glow). O Agent supre no body slot:
  *
- * - Conteúdo estruturado no body slot: `<DeadlineBadge>` +
- *   `<QueueIndicator>` (header secundário) + corpo HTML via
- *   `<TextBlock>` do ui-kit + meta gigante.
+ * - Conteúdo estruturado matching design 'Hora do Rush!': metricRow
+ *   ("20 Artes" baseline + "Até 18:00h" coluna) + footerRow
+ *   (✓ "Suas metas" + badge "27/05").
  * - Handler `onAcknowledge` que invoca o IPC apropriado:
  *   - Modo normal: `window.api.sprint.acknowledge` → main `handleAck`
  *     (ack final + archive + dequeue + próxima).
@@ -28,17 +29,94 @@
  * (`alwaysOnTop: 'screen-saver'`), skipTaskbar, multi-monitor. Ver
  * `overlayService.createWindow`. Este componente renderiza dentro da
  * BrowserWindow já configurada.
+ *
+ * **Sessão 31:** redesign do body matching imagem-alvo enviada pelo
+ * Renan. Mudanças vs estado anterior:
+ *
+ * - Layout: metricRow (value+unit baseline + deadline coluna) +
+ *   footerRow (✓ + label + data badge). Mesmo padrão da `<Pill>`
+ *   expanded (consistência cross-component).
+ * - Remove: `<DeadlineBadge>`, `<QueueIndicator>`, `<TextBlock>` com
+ *   `body_html`, bloco "META" gigante laranja. Esses componentes
+ *   continuam exportados; podem ser reusados em telas futuras
+ *   (histórico, queue overlay) sem precisar reescrever.
+ * - Hardcoded: label "Suas metas" + unit "Artes" (não existem no
+ *   `SprintPayload` schema — débito a resolver em W3+ com bump de
+ *   `schema_version`).
  */
 
 import type { SprintPayload } from '@sprint/contracts';
-import { Overlay as UIOverlay, TextBlock } from '@sprint/ui-kit';
+import { Overlay as UIOverlay } from '@sprint/ui-kit';
 import { useState } from 'react';
 
 import { useCurrentSprintStore } from '../../stores';
-import { DeadlineBadge } from '../DeadlineBadge';
-import { QueueIndicator } from '../QueueIndicator';
 
 import styles from './Overlay.module.css';
+
+/** Label hardcoded — não existe no SprintPayload (W3+ adiciona `kind`). */
+const SPRINT_LABEL = 'Suas metas';
+/** Unit hardcoded — não existe no SprintPayload (W3+ adiciona `unit`). */
+const SPRINT_UNIT = 'Artes';
+
+/**
+ * Formata deadline ISO em "HH:MMh" no horário local do operador.
+ * Mesmo helper do PillApp — duplicado intencionalmente para evitar
+ * acoplamento prematuro entre módulos; promover para `utils/` quando
+ * 3º consumer aparecer.
+ */
+function formatDeadline(iso: string): string {
+  try {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return '--:--h';
+    const hh = String(date.getHours()).padStart(2, '0');
+    const mm = String(date.getMinutes()).padStart(2, '0');
+    return `${hh}:${mm}h`;
+  } catch {
+    return '--:--h';
+  }
+}
+
+/**
+ * Formata deadline ISO em "DD/MM" (sem ano — informação supérflua
+ * para meta do dia). Mesmo helper do PillApp.
+ */
+function formatDate(iso: string): string {
+  try {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return '--/--';
+    const dd = String(date.getDate()).padStart(2, '0');
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    return `${dd}/${mm}`;
+  } catch {
+    return '--/--';
+  }
+}
+
+/**
+ * Ícone check pontilhado — SVG inline. Mesmo design do `<Pill>` no
+ * ui-kit (canônico ARTFLEXÍVEIS). Duplicado intencionalmente para
+ * manter o Agent self-contained; promover para `@sprint/ui-kit`
+ * quando houver 3º consumer.
+ */
+function DottedCheckIcon(): JSX.Element {
+  return (
+    <svg
+      className={styles.icon}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="10" strokeWidth="2" strokeDasharray="3 3" />
+      <path
+        d="M8 12.5 L11 15.5 L16.5 9.5"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 interface SprintBodyProps {
   sprint: SprintPayload;
@@ -49,14 +127,22 @@ interface SprintBodyProps {
 function SprintBody({ sprint, error, warning }: SprintBodyProps): JSX.Element {
   return (
     <div className={styles.sprintBody}>
-      <div className={styles.statusRow}>
-        <DeadlineBadge deadlineIso={sprint.deadline_at} />
-        <QueueIndicator />
+      <div className={styles.metricRow}>
+        <div className={styles.metricGroup} aria-label={`Meta: ${sprint.meta} ${SPRINT_UNIT}`}>
+          <span className={styles.valueBig}>{sprint.meta}</span>
+          <span className={styles.unit}>{SPRINT_UNIT}</span>
+        </div>
+        <div className={styles.deadlineGroup}>
+          <span className={styles.deadlineLabel}>Até</span>
+          <span className={styles.deadlineValue}>{formatDeadline(sprint.deadline_at)}</span>
+        </div>
       </div>
-      <TextBlock bodyHtml={sprint.body_html} className={styles.bodyText ?? ''} />
-      <div className={styles.metaWrapper} aria-label={`Meta: ${sprint.meta}`}>
-        <span className={styles.metaLabel}>META</span>
-        <span className={styles.metaValue}>{sprint.meta}</span>
+      <div className={styles.footerRow}>
+        <div className={styles.labelGroup}>
+          <DottedCheckIcon />
+          <span className={styles.label}>{SPRINT_LABEL}</span>
+        </div>
+        <span className={styles.dateBadge}>{formatDate(sprint.deadline_at)}</span>
       </div>
       {error !== null && (
         <p className={styles.error} role="alert">

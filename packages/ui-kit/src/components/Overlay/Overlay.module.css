@@ -2,18 +2,24 @@
  * <Overlay> — styling
  *
  * Replica a estrutura visual do design 'Hora do Rush!' anexado na
- * sessão. Card dark centralizado, header com título, body slot
- * preenchido pelo host (Agent em BL-C3-015), footer com botão de
- * acknowledge laranja com glow expressivo.
+ * sessão. Card preto com cantos arredondados grandes; HEADER BAR com
+ * background distinto (surface-elevated) ocupa o topo do card e
+ * exibe o title; body slot preenchido pelo host; botão "Recebido"
+ * laranja com glow expressivo na base, com gap visível em volta.
  *
  * Magnitudes EXCLUSIVAMENTE via tokens --sprint-* (zero hex hardcoded).
  *
- * Layout:
+ * Layout (Sessão 31 refactor — antes header era inline ao card com
+ * border-bottom; agora é uma seção visual distinta com bg próprio):
+ *
  * - .overlay: wrapper fullscreen com backdrop discreto
- * - .card: container centralizado, dark background, border-radius lg
- * - .header: título centralizado + divider sutil abaixo
- * - .body: slot para conteúdo estruturado do consumidor
- * - .acknowledgeButton: laranja com glow, full-width
+ * - .card: container centralizado, preto puro, border-radius lg,
+ *   SEM padding interno (cada section controla o seu)
+ * - .header: bar com bg surface-elevated, cantos arredondados topo,
+ *   padding interno, title centralizado
+ * - .body: padding interno generoso, slot para conteúdo do consumidor
+ * - .acknowledgeButton: laranja com glow, margem nas laterais/bottom
+ *   para criar respiração visual entre body e botão
  */
 
 .overlay {
@@ -35,15 +41,18 @@
 }
 
 .card {
-  background: var(--sprint-color-background);
+  background: var(--sprint-color-background-deep);
   border-radius: var(--sprint-radius-lg);
   box-shadow: var(--sprint-shadow-lg);
-  padding: var(--sprint-space-8);
+  /* Sessão 31: padding REMOVIDO do .card — cada section controla o
+   * próprio para que o header possa ter bg distinto sem gap no topo. */
   max-width: 720px;
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: var(--sprint-space-6);
+  /* `overflow: hidden` garante que os cantos arredondados do card
+   * clipam o bg do header (que ocupa toda a largura no topo). */
+  overflow: hidden;
   /* Entrance animation (Sessão 25) — fade + slide do topo + slight scale.
    * cubic-bezier(0.16, 1, 0.3, 1) é o "ease-out expo" (snappy +
    * decelerating) — sensação de "aterrissou de cima" sem bouncing. */
@@ -68,9 +77,12 @@
 }
 
 .header {
+  /* Sessão 31: bg distinto matching design alvo — header é uma "bar"
+   * cinza médio sobre o body preto, criando hierarquia visual clara
+   * entre title e conteúdo. */
+  background: var(--sprint-color-surface-elevated);
   text-align: center;
-  padding-bottom: var(--sprint-space-5);
-  border-bottom: 1px solid var(--sprint-color-border);
+  padding: var(--sprint-space-5) var(--sprint-space-6);
 }
 
 .title {
@@ -82,13 +94,20 @@
 }
 
 .body {
+  /* Sessão 31: padding generoso para criar respiração entre header
+   * e conteúdo estruturado do host (Agent renderiza metricRow +
+   * footerRow no body slot). */
+  padding: var(--sprint-space-6);
   font-size: var(--sprint-font-size-lg);
   line-height: var(--sprint-line-height-normal);
   color: var(--sprint-color-text);
 }
 
 .acknowledgeButton {
-  width: 100%;
+  /* Sessão 31: margin nas laterais e bottom (era width: 100% +
+   * sem margin) para criar gap visível entre body e botão, matching
+   * design alvo onde o botão "Recebido" tem respiração ao redor. */
+  margin: 0 var(--sprint-space-6) var(--sprint-space-6);
   background: var(--sprint-color-primary);
   color: var(--sprint-color-primary-on);
   font-family: inherit;
@@ -96,6 +115,8 @@
   font-weight: var(--sprint-font-weight-semibold);
   padding: var(--sprint-space-4) var(--sprint-space-6);
   border-radius: var(--sprint-radius-pill);
+  border: none;
+  cursor: pointer;
   box-shadow: var(--sprint-shadow-primary-glow);
   transition:
     background-color 120ms ease-in-out,

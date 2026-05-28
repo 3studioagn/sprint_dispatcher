@@ -1,13 +1,17 @@
 /*
  * Overlay (host wrapper) — CSS Module aplicado ao body slot do
- * `<Overlay>` do `@sprint/ui-kit`. O chrome (background, card, header,
- * botão) vem do próprio ui-kit; aqui ficam só os estilos do conteúdo
- * específico do Agent (status row + body text + meta gigante + erros
- * inline).
+ * `<Overlay>` do `@sprint/ui-kit`. Chrome (card, header, botão) vem do
+ * próprio ui-kit; aqui ficam só os estilos do conteúdo específico do
+ * Agent.
  *
- * Magnitudes EXCLUSIVAMENTE via tokens `--sprint-*` (BL-C3-016). Card
- * do ui-kit já limita largura via max-width: 720px — não precisa
- * duplicar constraint aqui.
+ * Sessão 31 — refactor para matchar design 'Hora do Rush!' enviado
+ * pelo Renan. Layout: metricRow (value+unit baseline + deadline coluna)
+ * + footerRow (✓ + label + data badge). Mesma estrutura visual da
+ * `<Pill>` expanded do ui-kit, escalada para overlay fullscreen.
+ *
+ * Magnitudes EXCLUSIVAMENTE via tokens `--sprint-*`. Card do ui-kit já
+ * limita largura via max-width: 720px — não precisa duplicar
+ * constraint aqui.
  */
 
 .empty {
@@ -20,57 +24,121 @@
   background: var(--sprint-color-background);
 }
 
+/* ============================================================
+ * Body slot — duas linhas estruturadas matching imagem-alvo
+ * ============================================================ */
+
 .sprintBody {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: var(--sprint-space-6);
-  text-align: center;
+  gap: var(--sprint-space-5);
 }
 
-.statusRow {
+/* ----- Row 1: métrica gigante + deadline coluna ----- */
+
+.metricRow {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: var(--sprint-space-4);
-  width: 100%;
+  gap: var(--sprint-space-6);
 }
 
-.bodyText {
-  font-size: var(--sprint-font-size-xl);
-  line-height: var(--sprint-line-height-normal);
-}
-
-.metaWrapper {
+.metricGroup {
+  /* Row + baseline alignment — "20" grande + "Artes" pequeno em linha,
+   * ancorados pela base do número. Mesmo padrão da `<Pill>` expanded do
+   * ui-kit (Sessão 29). */
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--sprint-space-2);
-  margin-top: var(--sprint-space-4);
+  flex-direction: row;
+  align-items: baseline;
+  gap: var(--sprint-space-3);
 }
 
-.metaLabel {
-  font-size: var(--sprint-font-size-lg);
-  color: var(--sprint-color-text-muted);
-  letter-spacing: 0.1em;
-}
-
-.metaValue {
+.valueBig {
+  /* 4xl (120px) para "20" gigante matching design — operador de longe
+   * deve ler a meta sem esforço. */
   font-size: var(--sprint-font-size-4xl);
   font-weight: var(--sprint-font-weight-bold);
-  color: var(--sprint-color-primary);
+  line-height: var(--sprint-line-height-tight);
+  color: var(--sprint-color-text);
+  font-feature-settings: 'tnum';
+}
+
+.unit {
+  font-size: var(--sprint-font-size-xl);
+  color: var(--sprint-color-text-muted);
+  font-weight: var(--sprint-font-weight-regular);
+}
+
+.deadlineGroup {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--sprint-space-1);
+}
+
+.deadlineLabel {
+  font-size: var(--sprint-font-size-lg);
+  color: var(--sprint-color-text-muted);
+}
+
+.deadlineValue {
+  font-size: var(--sprint-font-size-3xl);
+  font-weight: var(--sprint-font-weight-bold);
+  color: var(--sprint-color-text);
   line-height: var(--sprint-line-height-tight);
   font-feature-settings: 'tnum';
 }
+
+/* ----- Row 2: ✓ label + data badge ----- */
+
+.footerRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--sprint-space-4);
+}
+
+.labelGroup {
+  display: flex;
+  align-items: center;
+  gap: var(--sprint-space-3);
+}
+
+.icon {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  color: var(--sprint-color-primary);
+}
+
+.label {
+  font-size: var(--sprint-font-size-xl);
+  color: var(--sprint-color-text-muted);
+  font-weight: var(--sprint-font-weight-regular);
+  white-space: nowrap;
+}
+
+.dateBadge {
+  font-size: var(--sprint-font-size-base);
+  color: var(--sprint-color-text-muted);
+  background: var(--sprint-color-surface);
+  padding: var(--sprint-space-2) var(--sprint-space-4);
+  border-radius: var(--sprint-radius-pill);
+  font-feature-settings: 'tnum';
+}
+
+/* ----- Surfaces de erro/warning (preservadas do W1) ----- */
 
 .error {
   font-size: var(--sprint-font-size-base);
   color: var(--sprint-color-danger);
   margin-top: var(--sprint-space-2);
+  text-align: center;
 }
 
 .warning {
   font-size: var(--sprint-font-size-base);
   color: var(--sprint-color-warning);
   margin-top: var(--sprint-space-2);
+  text-align: center;
 }

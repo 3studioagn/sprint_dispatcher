@@ -66,6 +66,125 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 31 — 2026-05-28 — Overlay matchando design 'Hora do Rush!'
+
+**Wave atual:** W2 — em curso **Método:** refactor coordenado ui-kit + Agent
+após Renan validar pill (sessões 24-30 ok) e pedir ajuste do overlay **Duração
+estimada:** ~1h (1 commit) **Itens:** [`<Overlay>` chrome do ui-kit +
+`SprintBody` do Agent matching imagem-alvo]
+
+### Objetivo da sessão
+
+> "Agora precisamos arrumar somente a overlay, ela está muito diferente e
+> precisa ficar exatamente igual ao design que estou te enviando."
+
+Imagem-alvo entregue: card preto com header bar cinza médio ("Hora do Rush!"),
+body com layout 2-rows (metric+deadline | label+date) idêntico à `<Pill>`
+expanded escalado, botão "Recebido" laranja com glow + respiração ao redor.
+
+### O que foi feito
+
+Refactor em duas camadas (ui-kit chrome + Agent body slot):
+
+**`@sprint/ui-kit` · `<Overlay>` chrome:**
+
+- `.card` background `--sprint-color-background` (#1A1A1A) →
+  `--sprint-color-background-deep` (#000000, token introduzido na Sessão 29).
+- `.card` sem padding direto + `overflow: hidden` para clipar o bg do header nos
+  cantos arredondados.
+- `.header` ganha bg `--sprint-color-surface-elevated` (#2A2A2A) + padding
+  próprio. Substitui o `border-bottom` por contraste de superfícies.
+- `.body` ganha padding próprio.
+- `.acknowledgeButton` perde `width: 100%` e ganha `margin: 0 space-6 space-6` +
+  `border: none` + `cursor: pointer`.
+
+**`sprint-operator-agent` · `<Overlay>` body slot:**
+
+- Refactor completo do `SprintBody`. Estrutura nova:
+  - metricRow (top): metricGroup (value 4xl + unit "Artes" baseline) +
+    deadlineGroup ("Até" + "HH:MMh" coluna).
+  - footerRow (bottom): labelGroup (✓ pontilhado laranja + "Suas metas") +
+    dateBadge ("DD/MM" pill surface).
+- Remove do body slot: `<DeadlineBadge>`, `<QueueIndicator>`, `<TextBlock>` com
+  `body_html`, bloco "META" gigante laranja. Componentes preservados (dead code
+  aceito; podem ser reusados em telas futuras de histórico ou queue).
+- Helpers locais `formatDeadline` (HH:MMh) + `formatDate` (DD/MM) duplicados do
+  PillApp.
+- `DottedCheckIcon` local — SVG inline duplicado do `<Pill>` do ui-kit.
+- Hardcoded: label "Suas metas" + unit "Artes" não existem no `SprintPayload`
+  schema. Documentado como débito W3+ (precisa bump de `schema_version`).
+
+**Tests atualizados (Agent · `Overlay.test.tsx`):**
+
+- Remove teste de `<DeadlineBadge>` (label "PRAZO").
+- Atualiza teste de "META" para "meta gigante + unit 'Artes' baseline".
+- Adiciona testes para deadline formatted + footer "Suas metas" + date badge.
+
+### Estado atual
+
+- 298 testes verdes no Agent (estável; 19 no Overlay.test.tsx, +1 vs Sessão 30).
+- 60 testes verdes no ui-kit (estável — mudanças foram apenas CSS, não afetam
+  testes funcionais de structure/aria/button/timer).
+- Lint + tsc --noEmit + vite build limpos em ambos os packages.
+- 1 changeset: `c9-c3-overlay-redesign-design-alvo.md` (ui-kit + Agent minor).
+
+### Decisões tomadas
+
+- **Background do `.card` preto puro** (`--background-deep`) — matching design
+  alvo + consistência com a `<Pill>` introduzida na Sessão 29.
+- **Header como "bar" com bg distinto** (surface-elevated) em vez de
+  border-bottom — replica fielmente o design e cria hierarquia visual mais forte
+  entre title e conteúdo.
+- **`overflow: hidden` no `.card`** — load-bearing agora para o efeito da header
+  bar nos cantos arredondados. Sem isso, o bg do header "vazaria" sobre os
+  cantos.
+- **Layout interno espelha `<Pill>` expanded** — consistência visual
+  cross-component (pill é "versão miniatura" do overlay) + reusa vocabulário do
+  designer.
+- **Remove `<TextBlock body_html />`** — design alvo não exibe corpo textual
+  livre. Schema preserva `body_html` (não-breaking); apenas o consumer overlay
+  deixa de renderizar. Outros consumers futuros (notification log, tooltip)
+  podem reusar.
+- **Componentes `<DeadlineBadge>` + `<QueueIndicator>` preservados** — ainda
+  exportados e com tests verdes. Dead code aceito para evitar delete prematuro
+  (W3+ pode reusar em queue overlay ou histórico).
+- **Hardcoded label/unit** — pragmático para destravar UX. Débito documentado
+  para resolução em W3+ (schema bump).
+- **DottedCheckIcon e helpers duplicados** — regra dos 3 consumidores; promover
+  ao ui-kit quando 3º caller aparecer.
+
+### Bloqueios encontrados
+
+- `tsc --noEmit` falha quando `dist/index.d.ts` do ui-kit está stale (G-010
+  análogo). Fix: rebuild ui-kit antes de tipar Agent. Sequence documentada:
+  `pnpm --filter @sprint/ui-kit build` antes de
+  `pnpm --filter sprint-operator-agent build`. Em CI, `turbo build` já respeita
+  topology.
+
+### Próximo passo
+
+Aguardar validação visual do Renan. Se aprovado, branch fica pronta para
+PR/merge. Renan disse "somente a overlay" — se houver feedback remanescente,
+deve ser refinamento desse mesmo escopo (nenhuma outra área foi tocada).
+
+### Observações para a próxima sessão
+
+- **Sessões 24-31 fecharam ciclo "visual fidelity" do BL-C9 e BL-C3-015** com 5
+  iterações na Pill + 1 refactor coordenado no Overlay. Documentação do design
+  alvo está espalhada em screenshots da sessão; vale consolidar em
+  `dev/SCOPE_REVISITED.md` ou similar quando entrar em W3 hardening.
+- **`<DeadlineBadge>` e `<QueueIndicator>`** ficam dead code no Agent. Tests
+  ainda passam (compoenent isolado), mas se Renan decidir que nunca vão ser
+  reusados, deletar em sessão dedicada (com cleanup de tests + import barrel).
+- **Schema bump pendente** para `kind` + `unit` em `SprintPayload`. Quando
+  entrar, propagar para Leader (form de dispatch deve permitir escolher) + Agent
+  (renderizar valor real em vez de hardcode).
+- **`overflow: hidden` no `.card`** pode quebrar tooltips ou popovers futuros
+  que devam transbordar — débito a considerar em sessões de W3+ que adicionarem
+  essa UX.
+
+---
+
 ## Sessão 30 — 2026-05-28 — Pill se extende linearmente em ambas dimensões
 
 **Wave atual:** W2 — em curso **Método:** extensão da Sessão 29 após Renan

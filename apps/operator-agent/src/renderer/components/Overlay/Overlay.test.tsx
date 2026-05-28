@@ -1,15 +1,20 @@
 /**
  * Testes do Overlay — placeholder, render, click flow + reopen mode +
- * loading/error/warning UX (BL-C3-015).
+ * loading/error/warning UX (BL-C3-015; redesign Sessão 31).
  *
  * Refatorado para consumir `<Overlay>` do `@sprint/ui-kit`. Mudanças
- * vs W1:
+ * vs W1 (e atualizações na Sessão 31):
  * - `aria-labelledby` mudou de `'sprint-title'` para
  *   `'sprint-overlay-title'` (definido pelo ui-kit).
  * - Botão sem autoFocus (default do ui-kit) — operador clica
  *   manualmente.
  * - Loading/error/warning agora no body slot — não mais no AckButton
  *   componente separado (deletado).
+ * - Sessão 31: estrutura visual do body matchando design 'Hora do
+ *   Rush!'. Não há mais DeadlineBadge (label "PRAZO") nem bloco
+ *   "META" gigante; agora é `metricGroup` (value+unit baseline) +
+ *   `deadlineGroup` (Até+HH:MMh) na primeira linha; `labelGroup`
+ *   (✓+"Suas metas") + dateBadge ("DD/MM") na segunda.
  */
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -51,21 +56,32 @@ describe('Overlay — render inicial', () => {
     expect(screen.getByRole('heading', { name: /meta especial/i })).toBeInTheDocument();
   });
 
-  it('renderiza DeadlineBadge no body slot', () => {
-    const sprint = makePayload({ deadlineIso: '2026-05-26T18:30:00.000Z' });
+  it('renderiza deadline formatado como HH:MMh no body slot', () => {
+    // 18:30 local time (UTC-3 BR) → ISO 21:30Z. Test usa data sem timezone
+    // ambiguity: 14:00 BRT = 17:00Z.
+    const sprint = makePayload({ deadlineIso: '2026-05-26T17:00:00-03:00' });
     useCurrentSprintStore.setState({ sprint, isReopened: false });
     useQueueStore.setState({ length: 1 });
     render(<Overlay />);
-    expect(screen.getByText(/^prazo$/i)).toBeInTheDocument();
+    expect(screen.getByText('Até')).toBeInTheDocument();
+    expect(screen.getByText('17:00h')).toBeInTheDocument();
   });
 
-  it('renderiza meta gigante com label "META"', () => {
+  it('renderiza meta gigante + unit "Artes" baseline (matching design)', () => {
     const sprint = makePayload({ meta: 12 });
     useCurrentSprintStore.setState({ sprint, isReopened: false });
     render(<Overlay />);
-    expect(screen.getByText('META')).toBeInTheDocument();
     expect(screen.getByText('12')).toBeInTheDocument();
-    expect(screen.getByLabelText(/meta: 12/i)).toBeInTheDocument();
+    expect(screen.getByText('Artes')).toBeInTheDocument();
+    expect(screen.getByLabelText(/meta: 12 artes/i)).toBeInTheDocument();
+  });
+
+  it('renderiza footer com "Suas metas" + badge data DD/MM', () => {
+    const sprint = makePayload({ deadlineIso: '2026-05-27T15:00:00-03:00' });
+    useCurrentSprintStore.setState({ sprint, isReopened: false });
+    render(<Overlay />);
+    expect(screen.getByText('Suas metas')).toBeInTheDocument();
+    expect(screen.getByText('27/05')).toBeInTheDocument();
   });
 });
 

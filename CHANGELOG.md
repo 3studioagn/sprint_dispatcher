@@ -9,6 +9,43 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Changed — Sessão 31 (2026-05-28) — Overlay matchando design 'Hora do Rush!'
+
+Renan: "Agora precisamos arrumar somente a overlay, ela está muito
+diferente e precisa ficar exatamente igual ao design que estou te
+enviando." Refactor em duas camadas:
+
+**ui-kit · `<Overlay>` chrome:**
+
+- `.card` background `--sprint-color-background` → `--background-deep`
+  (preto puro). Sem padding direto; `overflow: hidden` clipa o bg do
+  header nos cantos arredondados.
+- `.header` ganha background `--sprint-color-surface-elevated` (#2A2A2A)
+  + padding próprio. Substitui o `border-bottom` por contraste de
+  superfícies. Matching "bar" cinza médio sobre body preto do design.
+- `.body` ganha padding próprio.
+- `.acknowledgeButton` perde `width: 100%`, ganha `margin: 0 space-6
+  space-6` + `border: none` + `cursor: pointer` — respiração visual
+  entre body e botão.
+
+**Agent · `<Overlay>` body slot:**
+
+- Refactor completo do `SprintBody`. Estrutura nova matching imagem:
+  metricRow (value 4xl + unit "Artes" baseline | "Até" + "HH:MMh"
+  coluna) + footerRow (✓ + "Suas metas" | "DD/MM" badge).
+- Remove do body slot: `<DeadlineBadge>`, `<QueueIndicator>`,
+  `<TextBlock>` com `body_html`, bloco "META" gigante laranja.
+  Componentes preservados (podem ser reusados em telas futuras).
+- Helpers locais `formatDeadline` + `formatDate` duplicados do PillApp
+  (promover para `utils/` quando 3º consumer aparecer).
+- `DottedCheckIcon` local — SVG inline duplicado do `<Pill>` do
+  ui-kit.
+- Hardcoded: label "Suas metas" + unit "Artes" (débito a resolver em
+  W3+ com bump de `schema_version` no SprintPayload).
+
+**Tests:** 298 verdes no Agent (estável); 60 verdes no ui-kit
+(estável). `Overlay.test.tsx` atualizado para cobrir nova estrutura.
+
 ### Changed — Sessão 30 (2026-05-28) — Pill se extende linearmente em ambas dimensões
 
 Renan reportou após Sessão 29 que a animação seguia "dando um salto,
