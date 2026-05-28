@@ -249,4 +249,32 @@ describe('Overlay — modo reaberto (BL-C3-009)', () => {
     });
     expect(screen.queryByText(/Histórico local não foi atualizado/i)).not.toBeInTheDocument();
   });
+
+  it('reset loading após closeReopened — button volta para "Fechar" enabled (Sessão 23 fix)', async () => {
+    // CRÍTICO: main BrowserWindow.hide() não destrói o renderer; React
+    // tree fica mounted com state preservado. Sem reset, loading=true
+    // persiste e bloqueia click futuro quando overlay re-abre via pill
+    // (sintoma reportado: "não consigo fechar a overlay novamente").
+    let resolveFn: (() => void) | undefined;
+    vi.mocked(window.api.overlay.closeReopened).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveFn = resolve;
+      }),
+    );
+
+    render(<Overlay />);
+    fireEvent.click(screen.getByRole('button', { name: /fechar/i }));
+
+    // Durante invoke: label é "Confirmando…"
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /confirmando/i })).toBeInTheDocument();
+    });
+
+    // Resolve closeReopened — loading DEVE resetar via finally.
+    resolveFn?.();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /fechar/i })).toBeInTheDocument();
+    });
+  });
 });

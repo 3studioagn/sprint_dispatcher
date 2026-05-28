@@ -40,7 +40,7 @@ import { EventEmitter } from 'node:events';
 import path from 'node:path';
 
 import type { SprintPayload } from '@sprint/contracts';
-import { BrowserWindow } from 'electron';
+import { BrowserWindow, screen } from 'electron';
 
 import type { IncomingSprintEvent } from '../../shared/ipc-types';
 import type { QueueItem } from '../../shared/types/queue';
@@ -301,7 +301,21 @@ export class OverlayService {
   }
 
   private createWindow(): BrowserWindow {
+    // BL-C3-004 + Sessão 23 fix: `fullscreen: true` no construtor sozinho
+    // é inconsistente em Electron 42 + Win11 (especialmente com `frame: false`
+    // e DPI scaling) — janela renderiza em tamanho default no canto da tela
+    // em vez de cobrir o display. Solução: dimensionar e posicionar
+    // explicitamente via `display.bounds` (inclui taskbar — TOPMOST overlay
+    // deve cobrir TUDO). `setBounds` aplicado após criação reforça caso o
+    // construtor ignore.
+    const display = screen.getPrimaryDisplay();
+    const { x, y, width, height } = display.bounds;
+
     const win = new BrowserWindow({
+      x,
+      y,
+      width,
+      height,
       fullscreen: true,
       frame: false,
       alwaysOnTop: true,
@@ -324,6 +338,10 @@ export class OverlayService {
         preload: path.join(__dirname, '../preload/index.js'),
       },
     });
+    // Defensivo — reforça dimensões caso o construtor `fullscreen: true`
+    // tenha sido sobreescrito por defaults do Electron em alguma combinação
+    // de DPI/multi-display/sandbox.
+    win.setBounds(display.bounds);
     win.setAlwaysOnTop(true, 'screen-saver');
     win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 

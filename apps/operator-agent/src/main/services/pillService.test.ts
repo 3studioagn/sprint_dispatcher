@@ -79,6 +79,10 @@ import { PillService } from './pillService';
 const SPRINT_ID_1 = '01HX9K2M4F8N7P2Q5R3S6T7V8W';
 const SPRINT_ID_2 = '01HXAAABBBCCCDDDEEEFFFGGGH';
 
+// "now" fixo bem ANTES do deadline default em makePayload — garante
+// que startDeadlineTimer agende em vez de dismissar imediatamente.
+const FIXED_NOW = new Date('2026-05-26T10:00:00.000Z');
+
 function makePayload(opts: { sprintId?: string; title?: string; meta?: number } = {}) {
   return parseSprintPayload({
     schema_version: '1.0',
@@ -105,7 +109,7 @@ describe('PillService — estado inicial', () => {
   beforeEach(() => {
     mockBrowserWindow.mockClear();
     mockBrowserWindowInstances.length = 0;
-    service = new PillService();
+    service = new PillService({ now: () => FIXED_NOW });
   });
 
   afterEach(() => {
@@ -136,7 +140,7 @@ describe('PillService — show (primeira chamada)', () => {
   beforeEach(() => {
     mockBrowserWindow.mockClear();
     mockBrowserWindowInstances.length = 0;
-    service = new PillService();
+    service = new PillService({ now: () => FIXED_NOW });
   });
 
   afterEach(() => {
@@ -203,7 +207,7 @@ describe('PillService — show (subsequente, mesma janela)', () => {
   beforeEach(() => {
     mockBrowserWindow.mockClear();
     mockBrowserWindowInstances.length = 0;
-    service = new PillService();
+    service = new PillService({ now: () => FIXED_NOW });
   });
 
   afterEach(() => {
@@ -252,7 +256,7 @@ describe('PillService — hide', () => {
   beforeEach(() => {
     mockBrowserWindow.mockClear();
     mockBrowserWindowInstances.length = 0;
-    service = new PillService();
+    service = new PillService({ now: () => FIXED_NOW });
   });
 
   afterEach(() => {
@@ -289,13 +293,207 @@ describe('PillService — hide', () => {
   });
 });
 
+describe('PillService — deadline timer (Sessão 23)', () => {
+  let service: PillService;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(FIXED_NOW);
+    mockBrowserWindow.mockClear();
+    mockBrowserWindowInstances.length = 0;
+    service = new PillService({ now: () => FIXED_NOW });
+  });
+
+  afterEach(() => {
+    service.destroy();
+    vi.useRealTimers();
+  });
+
+  function makePayloadWithDeadline(deadlineIso: string) {
+    return parseSprintPayload({
+      schema_version: '1.0',
+      sprint_id: SPRINT_ID_1,
+      criado_por: 'TestRenan',
+      criado_em: '2026-05-26T09:00:00.000Z',
+      user_id: 'joao',
+      title: 'Hora do Rush',
+      body_html: 'corpo',
+      meta: 4,
+      deadline_at: deadlineIso,
+    });
+  }
+
+  it('show com deadline futuro: pill mostrado (não dismissed imediato)', () => {
+    // FIXED_NOW = 2026-05-26T10:00; deadline = 2026-05-26T11:00 (1h futuro)
+    service.show(makePayloadWithDeadline('2026-05-26T11:00:00.000Z'));
+    expect(service.isShown()).toBe(true);
+    expect(service.getCurrent()).not.toBeNull();
+  });
+
+  it('show com deadline JÁ EXPIRADO: dismissa imediato (sem criar janela)', () => {
+    // FIXED_NOW = 2026-05-26T10:00; deadline = 2026-05-26T09:00 (1h passado)
+    service.show(makePayloadWithDeadline('2026-05-26T09:00:00.000Z'));
+    expect(service.getCurrent()).toBeNull();
+    expect(service.getFullPayload()).toBeNull();
+    expect(mockBrowserWindow).not.toHaveBeenCalled();
+  });
+
+  it('timer dispara dismiss quando deadline alcançado', () => {
+    // Deadline 1h após FIXED_NOW = 3_600_000 ms
+    service.show(makePayloadWithDeadline('2026-05-26T11:00:00.000Z'));
+    expect(service.isShown()).toBe(true);
+
+    // Avança 1h - 1ms → ainda não disparou
+    vi.advanceTimersByTime(3_600_000 - 1);
+    expect(service.isShown()).toBe(true);
+
+    // Avança 1ms → timer dispara → dismiss
+    vi.advanceTimersByTime(1);
+    expect(service.getCurrent()).toBeNull();
+    expect(service.getFullPayload()).toBeNull();
+    expect(lastWindow().hide).toHaveBeenCalled();
+  });
+
+  it('show consecutivo reseta timer para o deadline mais novo', () => {
+    service.show(makePayloadWithDeadline('2026-05-26T11:00:00.000Z')); // +1h
+    service.show(makePayloadWithDeadline('2026-05-26T12:00:00.000Z')); // +2h (substitui)
+
+    // Avança 1h05min — sob o primeiro deadline mas antes do segundo
+    vi.advanceTimersByTime(3_900_000);
+    expect(service.isShown()).toBe(true); // timer do 1º foi cancelado
+
+    // Avança até o 2º deadline (mais 55min = 3_300_000)
+    vi.advanceTimersByTime(3_300_000);
+    expect(service.getCurrent()).toBeNull();
+  });
+
+  it('dismiss cancela timer (não dispara após cancelamento)', () => {
+    service.show(makePayloadWithDeadline('2026-05-26T11:00:00.000Z'));
+    service.dismiss();
+
+    // Avança muito além do deadline original — timer não dispara dismiss
+    // duplo nem cria efeito colateral (já está null).
+    expect(() => {
+      vi.advanceTimersByTime(10_000_000);
+    }).not.toThrow();
+    expect(service.getCurrent()).toBeNull();
+  });
+
+  it('destroy cancela timer', () => {
+    service.show(makePayloadWithDeadline('2026-05-26T11:00:00.000Z'));
+    service.destroy();
+
+    expect(() => {
+      vi.advanceTimersByTime(10_000_000);
+    }).not.toThrow();
+  });
+});
+
+describe('PillService — hideWindow / showWindow split (Sessão 23)', () => {
+  let service: PillService;
+
+  function makePayloadOK() {
+    return parseSprintPayload({
+      schema_version: '1.0',
+      sprint_id: SPRINT_ID_1,
+      criado_por: 'TestRenan',
+      criado_em: '2026-05-26T09:00:00.000Z',
+      user_id: 'joao',
+      title: 'Hora do Rush',
+      body_html: 'corpo',
+      meta: 4,
+      deadline_at: '2026-05-26T11:00:00.000Z',
+    });
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(FIXED_NOW);
+    mockBrowserWindow.mockClear();
+    mockBrowserWindowInstances.length = 0;
+    service = new PillService({ now: () => FIXED_NOW });
+  });
+
+  afterEach(() => {
+    service.destroy();
+    vi.useRealTimers();
+  });
+
+  it('hideWindow oculta janela mas preserva currentInfo + fullPayload', () => {
+    service.show(makePayloadOK());
+    expect(service.getCurrent()).not.toBeNull();
+
+    service.hideWindow();
+
+    expect(lastWindow().hide).toHaveBeenCalled();
+    expect(service.getCurrent()).not.toBeNull(); // ← state preservado
+    expect(service.getFullPayload()).not.toBeNull();
+  });
+
+  it('showWindow re-exibe janela com state preservado (pós hideWindow)', () => {
+    service.show(makePayloadOK());
+    service.hideWindow();
+    const w = lastWindow();
+    w.show.mockClear();
+    w.webContents.send.mockClear();
+
+    service.showWindow();
+
+    expect(w.show).toHaveBeenCalledTimes(1);
+    // Push pill:update enviado para atualizar conteúdo. Inspeção direta
+    // evita unsafe-assignment do nested objectContaining.
+    expect(w.webContents.send).toHaveBeenCalledTimes(1);
+    const [channel, payload] = w.webContents.send.mock.calls[0] as [
+      string,
+      { info: { sprintId: string } },
+    ];
+    expect(channel).toBe('pill:update');
+    expect(payload.info.sprintId).toBe(SPRINT_ID_1);
+  });
+
+  it('showWindow sem state (após dismiss) é no-op', () => {
+    service.show(makePayloadOK());
+    service.dismiss();
+
+    service.showWindow();
+
+    // Janela foi criada apenas no show inicial; showWindow após dismiss
+    // não cria nova nem chama show (state vazio).
+    expect(mockBrowserWindow).toHaveBeenCalledTimes(1);
+    // Janela existente está hidden após dismiss — showWindow não a revela.
+    expect(lastWindow().isVisible()).toBe(false);
+  });
+
+  it('dismiss limpa state + cancela timer + oculta janela', () => {
+    service.show(makePayloadOK());
+
+    service.dismiss();
+
+    expect(service.getCurrent()).toBeNull();
+    expect(service.getFullPayload()).toBeNull();
+    expect(lastWindow().hide).toHaveBeenCalled();
+
+    // Timer cancelado — não dispara dismiss extra
+    vi.advanceTimersByTime(10_000_000);
+    expect(service.getCurrent()).toBeNull();
+  });
+
+  it('hide() ainda funciona como alias para dismiss (retrocompat)', () => {
+    service.show(makePayloadOK());
+    service.hide();
+
+    expect(service.getCurrent()).toBeNull();
+    expect(service.getFullPayload()).toBeNull();
+  });
+});
+
 describe('PillService — destroy', () => {
   let service: PillService;
 
   beforeEach(() => {
     mockBrowserWindow.mockClear();
     mockBrowserWindowInstances.length = 0;
-    service = new PillService();
+    service = new PillService({ now: () => FIXED_NOW });
   });
 
   it('destroy destrói janela + reseta estado', () => {

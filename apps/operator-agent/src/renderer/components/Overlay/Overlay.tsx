@@ -100,10 +100,19 @@ export function Overlay(): JSX.Element {
     try {
       if (reopened) {
         // BL-C3-009: fecha overlay sem novo ack.
-        await window.api.overlay.closeReopened();
-        // Main faz hide(); o renderer aguarda próxima sprint:incoming
-        // (que via key remonta este componente) — loading permanece
-        // até remount/unmount, prevenindo double-click visualmente.
+        try {
+          await window.api.overlay.closeReopened();
+        } catch (err) {
+          setError(err instanceof Error ? err.message : String(err));
+        } finally {
+          // CRÍTICO (Sessão 23 fix): main hide() apenas oculta a janela
+          // — o renderer continua mounted e preserva state. Sem reset
+          // explícito de loading, button fica preso em "Confirmando…" +
+          // disabled, e quando operador clica no pill de novo (re-show
+          // do MESMO renderer), button continua bloqueado e overlay
+          // não fecha "novamente". Reset garante UX recuperável.
+          setLoading(false);
+        }
         return;
       }
       // Fluxo normal — BL-C3-007.

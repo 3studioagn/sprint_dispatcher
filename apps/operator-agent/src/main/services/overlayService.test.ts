@@ -28,7 +28,7 @@ import type { QueueItem } from '../../shared/types/queue';
 // `vi.hoisted` que move a declaração junto. Mesmo padrão recomendado pela
 // doc do vitest 1.x para fábricas que precisam de spies inspecionáveis.
 
-const { mockBrowserWindow, mockBrowserWindowInstances } = vi.hoisted(() => {
+const { mockBrowserWindow, mockBrowserWindowInstances, mockScreen } = vi.hoisted(() => {
   // Tipo inferido pelo retorno de `makeMockWindow` — evita o variance
   // issue de `ReturnType<typeof vi.fn>` (Mock<any[], unknown>) vs
   // `vi.fn(() => Promise.resolve())` (Mock<[], Promise<void>>).
@@ -38,6 +38,7 @@ const { mockBrowserWindow, mockBrowserWindowInstances } = vi.hoisted(() => {
     return {
       setAlwaysOnTop: vi.fn(),
       setVisibleOnAllWorkspaces: vi.fn(),
+      setBounds: vi.fn(),
       once: vi.fn(),
       show: vi.fn(() => {
         isVisible = true;
@@ -65,11 +66,22 @@ const { mockBrowserWindow, mockBrowserWindowInstances } = vi.hoisted(() => {
     instances.push(w);
     return w;
   });
-  return { mockBrowserWindow: constructor, mockBrowserWindowInstances: instances };
+  const screen = {
+    getPrimaryDisplay: vi.fn(() => ({
+      bounds: { x: 0, y: 0, width: 1920, height: 1080 },
+      workAreaSize: { width: 1920, height: 1040 },
+    })),
+  };
+  return {
+    mockBrowserWindow: constructor,
+    mockBrowserWindowInstances: instances,
+    mockScreen: screen,
+  };
 });
 
 vi.mock('electron', () => ({
   BrowserWindow: mockBrowserWindow,
+  screen: mockScreen,
 }));
 
 // ============================================================================
@@ -470,6 +482,28 @@ describe('OverlayService — BrowserWindow construction args (regressão F-002)'
         alwaysOnTop: true,
       }),
     );
+  });
+
+  it('Sessão 23 fix: constructor recebe width/height da tela primária (fullscreen real)', () => {
+    service.showSprint(makeItem(), 1);
+    expect(mockBrowserWindow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        x: 0,
+        y: 0,
+        width: 1920,
+        height: 1080,
+      }),
+    );
+  });
+
+  it('Sessão 23 fix: setBounds chamado com display.bounds (defesa contra fullscreen ignorado)', () => {
+    service.showSprint(makeItem(), 1);
+    expect(lastWindow().setBounds).toHaveBeenCalledWith({
+      x: 0,
+      y: 0,
+      width: 1920,
+      height: 1080,
+    });
   });
 });
 

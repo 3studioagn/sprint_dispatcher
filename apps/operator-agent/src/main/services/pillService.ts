@@ -57,11 +57,33 @@ export class PillService {
    * disco. Renderer NÃO vê este campo (recebe apenas `currentInfo`).
    */
   private fullPayload: SprintPayload | null = null;
+  /**
+   * Timer que dispara `dismiss()` quando `payload.deadline_at` é
+   * alcançado (Sessão 23 fix — pill persiste "até o final do tempo
+   * daquela meta"). Cancelado em `dismiss()`, `destroy()`, ou novo
+   * `show()` (que reseta com o deadline da nova sprint).
+   */
+  private deadlineTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * `() => Date` injetável — testes podem controlar "agora" para validar
+   * timer de deadline sem fake timers globais.
+   */
+  private readonly now: () => Date;
+
+  constructor(opts: { now?: () => Date } = {}) {
+    this.now = opts.now ?? ((): Date => new Date());
+  }
 
   /**
-   * Mostra o pill com a sprint recém-ackeada. Cria janela na primeira
-   * chamada; em chamadas subsequentes atualiza conteúdo via push
-   * `pill:update` e revela.
+   * Mostra o pill com a sprint recém-ackeada. Inicia timer baseado em
+   * `payload.deadline_at` — quando alcançado, pill é automaticamente
+   * dismissed. Cria janela na primeira chamada; em chamadas subsequentes
+   * atualiza conteúdo via push `pill:update` e revela.
+   *
+   * Se a sprint já está expirada no momento do show (deadline_at no
+   * passado), pill é dismissed imediatamente sem criar janela —
+   * cenário defensivo, não esperado em produção (handleAck só é
+   * chamado para sprints vigentes).
    */
   show(payload: SprintPayload): void {
     this.fullPayload = payload;
@@ -71,11 +93,35 @@ export class PillService {
       title: payload.title,
       meta: payload.meta,
     };
+    this.startDeadlineTimer(payload.deadline_at);
+    if (this.currentInfo === null) return; // dismissed pelo timer expirado
+    this.showWindow();
+  }
 
+  /**
+   * Apenas oculta a janela; preserva `currentInfo`, `fullPayload` e
+   * `deadlineTimer`. Uso pelo handler `pill:expand` — operador clicou
+   * no pill, overlay reabre, pill some visualmente mas seu state segue
+   * vivo para reaparecer quando o overlay reaberto fecha (Sessão 23
+   * fix: "badge deve ficar persistente até o final do tempo daquela meta").
+   */
+  hideWindow(): void {
+    if (this.window === null || this.window.isDestroyed()) return;
+    if (this.window.isVisible()) this.window.hide();
+  }
+
+  /**
+   * Re-exibe pill se há state preservado. Uso pelo handler
+   * `overlay:close-reopened` — após o operador fechar o overlay
+   * reaberto, pill volta com a mesma sprint até o deadline passar
+   * (ou nova sprint chegar). No-op se não há state (operador
+   * dismissed manualmente OU deadline expirou enquanto overlay
+   * estava aberto).
+   */
+  showWindow(): void {
+    if (this.currentInfo === null) return;
     if (this.window === null || this.window.isDestroyed()) {
       this.window = this.createWindow();
-      // Push é enviado pelo renderer via pull pattern (pill:request-current)
-      // após o mount — janela ainda não terminou de carregar.
     } else {
       this.window.webContents.send('pill:update', {
         info: this.currentInfo,
@@ -85,14 +131,25 @@ export class PillService {
   }
 
   /**
-   * Esconde o pill sem destruir a janela. Limpa estado interno.
-   * Idempotente — chamadas múltiplas são seguras.
+   * Dismissal completo — cancela timer, limpa state, oculta janela.
+   * Uso por: (a) timer de deadline disparar; (b) nova sprint chegar
+   * via polling (queueService.onNextSprint); (c) cleanup explícito.
+   *
+   * Alias `hide()` mantido para retrocompatibilidade com callers
+   * anteriores à Sessão 23 que esperavam semântica "dismiss".
    */
-  hide(): void {
+  dismiss(): void {
+    this.clearDeadlineTimer();
     this.currentInfo = null;
     this.fullPayload = null;
-    if (this.window === null || this.window.isDestroyed()) return;
-    if (this.window.isVisible()) this.window.hide();
+    if (this.window !== null && !this.window.isDestroyed() && this.window.isVisible()) {
+      this.window.hide();
+    }
+  }
+
+  /** @deprecated alias para `dismiss()` — preservado para retrocompat. */
+  hide(): void {
+    this.dismiss();
   }
 
   /** Snapshot do pill atual — consumido pelo pull pattern do renderer. */
@@ -124,12 +181,38 @@ export class PillService {
    * tray-resident; pill window vive enquanto agent vive).
    */
   destroy(): void {
+    this.clearDeadlineTimer();
     this.currentInfo = null;
     this.fullPayload = null;
     if (this.window !== null && !this.window.isDestroyed()) {
       this.window.destroy();
     }
     this.window = null;
+  }
+
+  /**
+   * Agenda dismiss automático para o instante de `deadline_at`. Se já
+   * expirou, dismissa imediatamente. Cancela timer anterior antes de
+   * agendar — chamadas sucessivas de `show()` resetam o relógio para
+   * o deadline da sprint mais recente.
+   */
+  private startDeadlineTimer(deadlineIso: string): void {
+    this.clearDeadlineTimer();
+    const msUntil = new Date(deadlineIso).getTime() - this.now().getTime();
+    if (msUntil <= 0) {
+      this.dismiss();
+      return;
+    }
+    this.deadlineTimer = setTimeout(() => {
+      this.dismiss();
+    }, msUntil);
+  }
+
+  private clearDeadlineTimer(): void {
+    if (this.deadlineTimer !== null) {
+      clearTimeout(this.deadlineTimer);
+      this.deadlineTimer = null;
+    }
   }
 
   private createWindow(): BrowserWindow {
