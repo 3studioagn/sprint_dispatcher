@@ -127,6 +127,11 @@
   --sprint-space-6: 24px;
   --sprint-space-7: 28px;
   --sprint-space-8: 32px;
+  /* Tiers estendidos (Sessão 42) — paddings generosos para chrome de
+   * overlay e seções com bastante respiração. Continuação da escala
+   * 4px monotônica. */
+  --sprint-space-9: 36px;
+  --sprint-space-10: 40px;
 
   /* ============================================================
    * TIPOGRAFIA — Inter com fallbacks de sistema

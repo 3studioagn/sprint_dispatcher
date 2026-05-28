@@ -113,10 +113,13 @@
   /* Sessão 31: padding generoso para criar respiração entre header
    * e conteúdo estruturado do host.
    * Sessão 35: space-6 → space-7 (uniforme).
-   * Sessão 41 — Renan: "aumente o padding das laterais... pra ficar
-   * retângulo". Vertical space-7 (28) → space-6 (24); lateral
-   * space-7 (28) → space-8 (32). Proporção horizontal acentuada. */
-  padding: var(--sprint-space-6) var(--sprint-space-8);
+   * Sessão 41: space-6 vertical / space-8 lateral (24/32) — retangular.
+   * Sessão 42 — Renan: "aumente o espaçamento interno pra
+   * consequentemente os elementos ficarem mais proximos um do outro".
+   * Vertical 24 → 28 (space-7); lateral 32 → 40 (space-10). Área útil
+   * reduzida + `justify-content: space-between` no metricRow/footerRow
+   * = grupos se aproximam horizontalmente. */
+  padding: var(--sprint-space-7) var(--sprint-space-10);
   font-size: var(--sprint-font-size-lg);
   line-height: var(--sprint-line-height-normal);
   color: var(--sprint-color-text);
