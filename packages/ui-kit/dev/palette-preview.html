@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <title>@sprint/ui-kit — Palette Preview (DARK)</title>
+    <link rel="stylesheet" href="../src/tokens/tokens.css" />
+    <style>
+      body {
+        font-family: var(--sprint-font-family-sans);
+        color: var(--sprint-color-text);
+        background: var(--sprint-color-background);
+        margin: 0;
+        padding: var(--sprint-space-6);
+        line-height: var(--sprint-line-height-normal);
+      }
+      h1,
+      h2 {
+        color: var(--sprint-color-text);
+        margin: var(--sprint-space-8) 0 var(--sprint-space-4);
+      }
+      h1 {
+        font-size: var(--sprint-font-size-2xl);
+        font-weight: var(--sprint-font-weight-bold);
+      }
+      h2 {
+        font-size: var(--sprint-font-size-xl);
+        font-weight: var(--sprint-font-weight-semibold);
+      }
+      p {
+        color: var(--sprint-color-text-muted);
+        margin: var(--sprint-space-2) 0;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: var(--sprint-space-3);
+      }
+      .swatch {
+        border-radius: var(--sprint-radius-md);
+        overflow: hidden;
+        box-shadow: var(--sprint-shadow-sm);
+        border: 1px solid var(--sprint-color-border);
+      }
+      .swatch__box {
+        height: 80px;
+      }
+      .swatch__meta {
+        padding: var(--sprint-space-2) var(--sprint-space-3);
+        font-size: var(--sprint-font-size-sm);
+        background: var(--sprint-color-surface-elevated);
+      }
+      .swatch__name {
+        font-weight: var(--sprint-font-weight-medium);
+        color: var(--sprint-color-text);
+      }
+      .swatch__hex {
+        color: var(--sprint-color-text-muted);
+        font-family: ui-monospace, monospace;
+      }
+      .stack > * + * {
+        margin-top: var(--sprint-space-2);
+      }
+      .type-sample {
+        padding: var(--sprint-space-3);
+        border: 1px solid var(--sprint-color-border);
+        border-radius: var(--sprint-radius-sm);
+      }
+      .shadow-sample {
+        padding: var(--sprint-space-5);
+        background: var(--sprint-color-surface-elevated);
+        border-radius: var(--sprint-radius-md);
+        text-align: center;
+        color: var(--sprint-color-text);
+      }
+      .space-bar {
+        background: var(--sprint-color-primary);
+        height: 16px;
+        border-radius: 2px;
+      }
+      .button-glow-sample {
+        background: var(--sprint-color-primary);
+        color: var(--sprint-color-primary-on);
+        padding: var(--sprint-space-3) var(--sprint-space-6);
+        border-radius: var(--sprint-radius-pill);
+        font-weight: var(--sprint-font-weight-semibold);
+        font-size: var(--sprint-font-size-lg);
+        box-shadow: var(--sprint-shadow-primary-glow);
+        border: none;
+        cursor: pointer;
+      }
+      .badge-sample {
+        display: inline-block;
+        background: var(--sprint-color-surface-elevated);
+        color: var(--sprint-color-text-muted);
+        padding: var(--sprint-space-1) var(--sprint-space-3);
+        border-radius: var(--sprint-radius-pill);
+        font-size: var(--sprint-font-size-sm);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>@sprint/ui-kit — Palette Preview (DARK)</h1>
+    <p>
+      Revisão visual dos design tokens extraídos da imagem 'Hora do Rush!'
+      anexada à sessão BL-C9-completo. Tema dark, accent único em laranja warm.
+    </p>
+
+    <h2>Cores semânticas</h2>
+    <div class="grid">
+      <div class="swatch">
+        <div class="swatch__box" style="background: var(--sprint-color-primary)"></div>
+        <div class="swatch__meta">
+          <div class="swatch__name">primary</div>
+          <div class="swatch__hex">#F5A557</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch__box" style="background: var(--sprint-color-primary-hover)"></div>
+        <div class="swatch__meta">
+          <div class="swatch__name">primary-hover</div>
+          <div class="swatch__hex">#E8943C</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch__box" style="background: var(--sprint-color-primary-active)"></div>
+        <div class="swatch__meta">
+          <div class="swatch__name">primary-active</div>
+          <div class="swatch__hex">#D27F26</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch__box" style="background: var(--sprint-color-success)"></div>
+        <div class="swatch__meta">
+          <div class="swatch__name">success</div>
+          <div class="swatch__hex">#22C55E</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch__box" style="background: var(--sprint-color-warning)"></div>
+        <div class="swatch__meta">
+          <div class="swatch__name">warning</div>
+          <div class="swatch__hex">#FBBF24</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch__box" style="background: var(--sprint-color-danger)"></div>
+        <div class="swatch__meta">
+          <div class="swatch__name">danger</div>
+          <div class="swatch__hex">#EF4444</div>
+        </div>
+      </div>
+    </div>
+
+    <h2>Aliases semânticos (DARK)</h2>
+    <div class="grid">
+      <div class="swatch">
+        <div class="swatch__box" style="background: var(--sprint-color-background)"></div>
+        <div class="swatch__meta">
+          <div class="swatch__name">background (card)</div>
+          <div class="swatch__hex">#1A1A1A</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch__box" style="background: var(--sprint-color-surface)"></div>
+        <div class="swatch__meta">
+          <div class="swatch__name">surface</div>
+          <div class="swatch__hex">#222222</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch__box" style="background: var(--sprint-color-surface-elevated)"></div>
+        <div class="swatch__meta">
+          <div class="swatch__name">surface-elevated</div>
+          <div class="swatch__hex">#2A2A2A</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch__box" style="background: var(--sprint-color-text)"></div>
+        <div class="swatch__meta">
+          <div class="swatch__name">text</div>
+          <div class="swatch__hex">#FFFFFF</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch__box" style="background: var(--sprint-color-text-muted)"></div>
+        <div class="swatch__meta">
+          <div class="swatch__name">text-muted</div>
+          <div class="swatch__hex">#A0A0A0</div>
+        </div>
+      </div>
+    </div>
+
+    <h2>Escala neutra 100 — 900</h2>
+    <div class="grid">
+      <div class="swatch"><div class="swatch__box" style="background: var(--sprint-color-neutral-100)"></div><div class="swatch__meta"><div class="swatch__name">neutral-100</div></div></div>
+      <div class="swatch"><div class="swatch__box" style="background: var(--sprint-color-neutral-200)"></div><div class="swatch__meta"><div class="swatch__name">neutral-200</div></div></div>
+      <div class="swatch"><div class="swatch__box" style="background: var(--sprint-color-neutral-300)"></div><div class="swatch__meta"><div class="swatch__name">neutral-300</div></div></div>
+      <div class="swatch"><div class="swatch__box" style="background: var(--sprint-color-neutral-400)"></div><div class="swatch__meta"><div class="swatch__name">neutral-400</div></div></div>
+      <div class="swatch"><div class="swatch__box" style="background: var(--sprint-color-neutral-500)"></div><div class="swatch__meta"><div class="swatch__name">neutral-500</div></div></div>
+      <div class="swatch"><div class="swatch__box" style="background: var(--sprint-color-neutral-600)"></div><div class="swatch__meta"><div class="swatch__name">neutral-600</div></div></div>
+      <div class="swatch"><div class="swatch__box" style="background: var(--sprint-color-neutral-700)"></div><div class="swatch__meta"><div class="swatch__name">neutral-700</div></div></div>
+      <div class="swatch"><div class="swatch__box" style="background: var(--sprint-color-neutral-800)"></div><div class="swatch__meta"><div class="swatch__name">neutral-800</div></div></div>
+      <div class="swatch"><div class="swatch__box" style="background: var(--sprint-color-neutral-900)"></div><div class="swatch__meta"><div class="swatch__name">neutral-900</div></div></div>
+    </div>
+
+    <h2>Tipografia (DARK)</h2>
+    <div class="stack">
+      <div class="type-sample" style="font-size: var(--sprint-font-size-4xl); font-weight: var(--sprint-font-weight-bold); line-height: var(--sprint-line-height-tight)">20</div>
+      <div class="type-sample" style="font-size: var(--sprint-font-size-3xl); font-weight: var(--sprint-font-weight-bold)">3xl bold — 18:00h</div>
+      <div class="type-sample" style="font-size: var(--sprint-font-size-2xl); font-weight: var(--sprint-font-weight-semibold)">2xl semibold — Hora do Rush!</div>
+      <div class="type-sample" style="font-size: var(--sprint-font-size-xl)">xl — Suas metas</div>
+      <div class="type-sample" style="font-size: var(--sprint-font-size-lg)">lg — Sua meta hoje é 8 artes</div>
+      <div class="type-sample" style="font-size: var(--sprint-font-size-base)">base — Corpo padrão de texto</div>
+      <div class="type-sample" style="font-size: var(--sprint-font-size-sm); color: var(--sprint-color-text-muted)">sm muted — auxiliar / metadata</div>
+      <div class="type-sample" style="font-size: var(--sprint-font-size-xs); color: var(--sprint-color-text-muted)">xs muted — caption</div>
+    </div>
+
+    <h2>Espaçamentos (4 .. 32 px)</h2>
+    <div class="stack">
+      <div class="space-bar" style="width: var(--sprint-space-1)"></div>
+      <div class="space-bar" style="width: var(--sprint-space-2)"></div>
+      <div class="space-bar" style="width: var(--sprint-space-3)"></div>
+      <div class="space-bar" style="width: var(--sprint-space-4)"></div>
+      <div class="space-bar" style="width: var(--sprint-space-5)"></div>
+      <div class="space-bar" style="width: var(--sprint-space-6)"></div>
+      <div class="space-bar" style="width: var(--sprint-space-7)"></div>
+      <div class="space-bar" style="width: var(--sprint-space-8)"></div>
+    </div>
+
+    <h2>Sombras + radii</h2>
+    <div class="grid">
+      <div class="shadow-sample" style="box-shadow: var(--sprint-shadow-sm); border-radius: var(--sprint-radius-sm)">shadow-sm · radius-sm</div>
+      <div class="shadow-sample" style="box-shadow: var(--sprint-shadow-md); border-radius: var(--sprint-radius-md)">shadow-md · radius-md</div>
+      <div class="shadow-sample" style="box-shadow: var(--sprint-shadow-lg); border-radius: var(--sprint-radius-lg)">shadow-lg · radius-lg</div>
+    </div>
+
+    <h2>Acentos expressivos (composição visual da imagem)</h2>
+    <div class="stack">
+      <p>Botão primário com glow (replica botão "Recebido" da imagem):</p>
+      <button class="button-glow-sample">Recebido</button>
+      <p style="margin-top: var(--sprint-space-6)">Badge pill (replica badge "27/05" da imagem):</p>
+      <span class="badge-sample">27/05</span>
+    </div>
+  </body>
+</html>
