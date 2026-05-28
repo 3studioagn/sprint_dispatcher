@@ -19,7 +19,14 @@
  *   --sprint-font-*            tipografia (família + 8 sizes + 4 weights + 3 line-heights)
  *   --sprint-shadow-*          sombras de elevação + glow expressivo
  *   --sprint-radius-*          border-radius (4 escalas: sm/md/lg/pill)
+ *
+ * Fonte: Inter via Google Fonts (4 weights: 400/500/600/700). Carregada
+ * em todo consumidor automaticamente ao importar tokens.css. Em produção
+ * offline (LAN da fábrica sem internet), considerar self-host com
+ * @font-face em sessão futura (W3).
  */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
   /* ============================================================

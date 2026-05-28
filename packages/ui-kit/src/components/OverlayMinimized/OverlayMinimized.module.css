@@ -1,45 +1,89 @@
 /**
- * <OverlayMinimized> — pill compacto que replica a imagem "minimizada"
+ * <OverlayMinimized> — styling (bar + badge extension)
  *
- * Visual: pill horizontal dark com ícone check pontilhado laranja,
- * label muted e valor branco bold em sequência inline. Substitui o
- * <Overlay> fullscreen após auto-close (orquestração no Agent em
- * BL-C3-017).
+ * Replica o design entregue por Renan na sessão BL-C9-completo
+ * (refinamento pós-screenshot inicial):
  *
- * **Positioning NÃO está aqui** — host (Agent) decide se renderiza
- * em BrowserWindow frameless topmost, em portal fixed, ou em outro
- * mecanismo. O pill renderiza só seu próprio shape; localização na
- * tela é responsabilidade do consumidor.
+ *   ┌─────────────────────────────────────────────┐
+ *   │  bar (full-width, dark, 8px)                │  ← anchor superior
+ *   └────────────┐  ┌───────────┐  ┌──────────────┘
+ *                │  │  badge    │  │
+ *                │  │ (extends  │  │
+ *                │  │  down)    │  │
+ *                └──┴───────────┴──┘
+ *
+ * Mesma cor entre bar e badge cria efeito visual de "extensão" da
+ * faixa — a badge parece uma aba/saliência pendurada.
+ *
+ * **Positioning NÃO está aqui** — host (Agent em BL-C3-017) decide
+ * como renderizar a bar (BrowserWindow frameless+topmost ancorado no
+ * topo, portal fixed top:0, etc.). O componente assume que será
+ * renderizado em um container de largura plena.
  *
  * Magnitudes via tokens --sprint-*.
  */
 
-.pill {
+.bar {
+  position: relative;
+  width: 100%;
+  height: var(--sprint-space-2); /* faixa fina 8px */
+  background: var(--sprint-color-background);
+}
+
+/* badge container — posicionado absolutamente sobre a bar, deixa a
+ * badge "transbordar" para baixo. Padding horizontal cria gutter
+ * mínimo às laterais da tela para variants left/right. */
+.badgePositioner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  padding: 0 var(--sprint-space-4);
+  pointer-events: none; /* só a badge recebe clicks */
+}
+
+.badgePositioner--center {
+  justify-content: center;
+}
+
+.badgePositioner--left {
+  justify-content: flex-start;
+}
+
+.badgePositioner--right {
+  justify-content: flex-end;
+}
+
+.badge {
   display: inline-flex;
   align-items: center;
   gap: var(--sprint-space-3);
-  background: var(--sprint-color-background);
+  background: var(--sprint-color-background); /* mesma cor da bar */
   color: var(--sprint-color-text);
-  padding: var(--sprint-space-3) var(--sprint-space-5);
-  border-radius: var(--sprint-radius-pill);
-  box-shadow: var(--sprint-shadow-md);
+  padding: var(--sprint-space-3) var(--sprint-space-6);
+  /* só cantos inferiores arredondados — o topo se mescla com a bar */
+  border-radius: 0 0 var(--sprint-radius-pill) var(--sprint-radius-pill);
   border: none;
-  font-family: inherit;
   cursor: pointer;
+  font-family: inherit;
+  pointer-events: auto;
+  /* sombra sutil só na parte inferior — destaca a "saliência" */
+  box-shadow: 0 6px 12px -2px rgba(0, 0, 0, 0.5);
   transition: background-color 120ms ease-in-out;
 }
 
-.pill:hover {
+.badge:hover {
   background: var(--sprint-color-surface);
 }
 
-.pill:focus-visible {
+.badge:focus-visible {
   outline: 2px solid var(--sprint-color-primary);
   outline-offset: 3px;
 }
 
 /* Variant urgent — placeholder visual (wave 4) */
-.pill--urgent {
+.badge--urgent {
   /* TODO: enfatizar urgência (pulse, borda laranja, etc.) */
 }
 

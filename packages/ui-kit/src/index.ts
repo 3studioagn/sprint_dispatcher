@@ -23,6 +23,7 @@ export type {
   OverlayProps,
   OverlayVariant,
   OverlayMinimizedProps,
+  OverlayMinimizedPosition,
   OverlayMinimizedVariant,
   TextBlockProps,
 } from './components';

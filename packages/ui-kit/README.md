@@ -37,8 +37,11 @@ pnpm --filter @sprint/ui-kit type-check  # tsc --noEmit
 - **Componentes:** `<Overlay>`, `<OverlayMinimized>`, `<TextBlock>`
 - **Theme:** `<ThemeProvider>`
 - **Tipos:** `OverlayProps`, `OverlayVariant`, `OverlayMinimizedProps`,
-  `OverlayMinimizedVariant`, `TextBlockProps`, `ThemeProviderProps`
+  `OverlayMinimizedPosition`, `OverlayMinimizedVariant`, `TextBlockProps`,
+  `ThemeProviderProps`
 - **CSS subpath:** `import '@sprint/ui-kit/tokens.css'`
+- **Fonte:** Inter (carregada automaticamente via `@import` Google Fonts no
+  `tokens.css`; requer internet em runtime — self-host fica para W3).
 
 ## Exemplo de uso
 
@@ -58,9 +61,13 @@ function App() {
   return (
     <ThemeProvider>
       {minimized ? (
+        // <OverlayMinimized> é uma faixa dark full-width com a badge
+        // "pendurada" para baixo. prop position controla onde a badge
+        // aparece dentro da faixa ('center' default | 'left' | 'right').
         <OverlayMinimized
           label="Suas metas"
           value={20}
+          position="center"
           onClick={() => setMinimized(false)}
         />
       ) : (

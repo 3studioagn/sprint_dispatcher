@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <title>@sprint/ui-kit — Visual Demo (todos os componentes)</title>
+    <link rel="stylesheet" href="../src/tokens/tokens.css" />
+    <style>
+      /* ============================================================
+       * Reset (replica src/theme/reset.css)
+       * ============================================================ */
+      *, *::before, *::after { box-sizing: border-box; }
+      html, body, h1, h2, h3, h4, h5, h6, p, figure, blockquote, dl, dd { margin: 0; }
+      body {
+        min-height: 100vh;
+        line-height: var(--sprint-line-height-normal);
+        font-family: var(--sprint-font-family-sans);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+      img, picture, video, canvas, svg { display: block; max-width: 100%; }
+      input, button, textarea, select { font: inherit; color: inherit; }
+      button { cursor: pointer; border: none; background: none; }
+      ul, ol { list-style: none; margin: 0; padding: 0; }
+
+      /* ============================================================
+       * ThemeProvider scope (replica ThemeProvider.module.css)
+       * ============================================================ */
+      .themeProvider {
+        font-family: var(--sprint-font-family-sans);
+        font-size: var(--sprint-font-size-base);
+        line-height: var(--sprint-line-height-normal);
+        color: var(--sprint-color-text);
+        background: var(--sprint-color-background);
+      }
+
+      /* ============================================================
+       * Layout da página de demo
+       * ============================================================ */
+      .demo-page {
+        padding: var(--sprint-space-8);
+        background: #e0e0e0; /* simulando desktop cinza claro como na imagem */
+        min-height: 100vh;
+      }
+      .demo-section {
+        margin-bottom: var(--sprint-space-8);
+        padding: var(--sprint-space-6);
+        background: white;
+        border-radius: var(--sprint-radius-md);
+        box-shadow: var(--sprint-shadow-md);
+      }
+      .demo-section h2 {
+        font-size: var(--sprint-font-size-xl);
+        font-weight: var(--sprint-font-weight-semibold);
+        color: #333;
+        margin-bottom: var(--sprint-space-4);
+        font-family: var(--sprint-font-family-sans);
+      }
+      .demo-section p.note {
+        color: #666;
+        font-size: var(--sprint-font-size-sm);
+        margin-bottom: var(--sprint-space-4);
+        font-family: var(--sprint-font-family-sans);
+      }
+
+      /* ============================================================
+       * <Overlay> — replica Overlay.module.css
+       * Visualizado como standalone na seção (sem fullscreen real)
+       * ============================================================ */
+      .overlay-preview-frame {
+        background: #e0e0e0;
+        padding: var(--sprint-space-8);
+        border-radius: var(--sprint-radius-md);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 600px;
+      }
+      .card {
+        background: var(--sprint-color-background);
+        border-radius: var(--sprint-radius-lg);
+        box-shadow: var(--sprint-shadow-lg);
+        padding: var(--sprint-space-8);
+        max-width: 720px;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: var(--sprint-space-6);
+      }
+      .header {
+        text-align: center;
+        padding-bottom: var(--sprint-space-5);
+        border-bottom: 1px solid var(--sprint-color-border);
+      }
+      .title {
+        font-size: var(--sprint-font-size-2xl);
+        font-weight: var(--sprint-font-weight-regular);
+        line-height: var(--sprint-line-height-tight);
+        color: var(--sprint-color-text);
+        margin: 0;
+      }
+      .body {
+        font-size: var(--sprint-font-size-lg);
+        line-height: var(--sprint-line-height-normal);
+        color: var(--sprint-color-text);
+      }
+      .acknowledgeButton {
+        width: 100%;
+        background: var(--sprint-color-primary);
+        color: var(--sprint-color-primary-on);
+        font-family: inherit;
+        font-size: var(--sprint-font-size-lg);
+        font-weight: var(--sprint-font-weight-semibold);
+        padding: var(--sprint-space-4) var(--sprint-space-6);
+        border-radius: var(--sprint-radius-pill);
+        box-shadow: var(--sprint-shadow-primary-glow);
+        transition: background-color 120ms ease-in-out, box-shadow 200ms ease-in-out;
+        border: none;
+        cursor: pointer;
+      }
+      .acknowledgeButton:hover { background: var(--sprint-color-primary-hover); }
+      .acknowledgeButton:active { background: var(--sprint-color-primary-active); }
+
+      /* ============================================================
+       * Conteúdo do body do Overlay — simula o que o Agent
+       * renderizará em BL-C3-015 (NÃO faz parte do C9)
+       * ============================================================ */
+      .body-content {
+        display: flex;
+        flex-direction: column;
+        gap: var(--sprint-space-5);
+      }
+      .metric-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: var(--sprint-space-6);
+      }
+      .metric {
+        display: flex;
+        align-items: baseline;
+        gap: var(--sprint-space-3);
+      }
+      .metric__value {
+        font-size: var(--sprint-font-size-4xl);
+        font-weight: var(--sprint-font-weight-bold);
+        line-height: var(--sprint-line-height-tight);
+        color: var(--sprint-color-text);
+      }
+      .metric__label {
+        font-size: var(--sprint-font-size-xl);
+        color: var(--sprint-color-text-muted);
+      }
+      .deadline {
+        text-align: right;
+      }
+      .deadline__label {
+        font-size: var(--sprint-font-size-base);
+        color: var(--sprint-color-text-muted);
+        margin-bottom: var(--sprint-space-1);
+      }
+      .deadline__value {
+        font-size: var(--sprint-font-size-3xl);
+        font-weight: var(--sprint-font-weight-bold);
+        color: var(--sprint-color-text);
+      }
+      .status-row {
+        display: flex;
+        align-items: center;
+        gap: var(--sprint-space-3);
+      }
+      .status-row__check {
+        color: var(--sprint-color-primary);
+        width: 28px;
+        height: 28px;
+        flex-shrink: 0;
+      }
+      .status-row__label {
+        color: var(--sprint-color-text-muted);
+        font-size: var(--sprint-font-size-lg);
+        flex: 1;
+      }
+      .status-row__badge {
+        background: var(--sprint-color-surface-elevated);
+        color: var(--sprint-color-text-muted);
+        padding: var(--sprint-space-2) var(--sprint-space-4);
+        border-radius: var(--sprint-radius-pill);
+        font-size: var(--sprint-font-size-base);
+      }
+
+      /* ============================================================
+       * <OverlayMinimized> — replica OverlayMinimized.module.css
+       * (redesign: bar full-width + badge "pendurada")
+       * ============================================================ */
+      .om-frame {
+        background: #e0e0e0;
+        border-radius: var(--sprint-radius-md);
+        overflow: hidden; /* corta a bar nos limites do frame */
+        margin-bottom: var(--sprint-space-5);
+        padding-bottom: var(--sprint-space-6); /* espaço para mostrar a badge transbordando */
+      }
+      .om-frame__label {
+        font-size: var(--sprint-font-size-sm);
+        color: #666;
+        padding: var(--sprint-space-3) var(--sprint-space-4);
+        font-family: var(--sprint-font-family-sans);
+        background: #f5f5f5;
+        border-bottom: 1px solid #ddd;
+      }
+      .om-bar {
+        position: relative;
+        width: 100%;
+        height: var(--sprint-space-2);
+        background: var(--sprint-color-background);
+      }
+      .om-positioner {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        display: flex;
+        padding: 0 var(--sprint-space-4);
+        pointer-events: none;
+      }
+      .om-positioner[data-position='center'] { justify-content: center; }
+      .om-positioner[data-position='left']   { justify-content: flex-start; }
+      .om-positioner[data-position='right']  { justify-content: flex-end; }
+      .om-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--sprint-space-3);
+        background: var(--sprint-color-background);
+        color: var(--sprint-color-text);
+        padding: var(--sprint-space-3) var(--sprint-space-6);
+        border-radius: 0 0 var(--sprint-radius-pill) var(--sprint-radius-pill);
+        border: none;
+        cursor: pointer;
+        font-family: inherit;
+        pointer-events: auto;
+        box-shadow: 0 6px 12px -2px rgba(0, 0, 0, 0.5);
+      }
+      .om-badge:hover { background: var(--sprint-color-surface); }
+      .om-badge__icon {
+        flex-shrink: 0;
+        color: var(--sprint-color-primary);
+        width: 20px;
+        height: 20px;
+      }
+      .om-badge__label {
+        font-size: var(--sprint-font-size-base);
+        color: var(--sprint-color-text-muted);
+        font-weight: var(--sprint-font-weight-regular);
+      }
+      .om-badge__value {
+        font-size: var(--sprint-font-size-xl);
+        color: var(--sprint-color-text);
+        font-weight: var(--sprint-font-weight-bold);
+        line-height: var(--sprint-line-height-tight);
+      }
+
+      /* ============================================================
+       * <TextBlock> — replica TextBlock.module.css
+       * ============================================================ */
+      .text-block-preview-frame {
+        background: var(--sprint-color-background);
+        padding: var(--sprint-space-6);
+        border-radius: var(--sprint-radius-md);
+      }
+      .textBlock {
+        font-family: var(--sprint-font-family-sans);
+        font-size: var(--sprint-font-size-base);
+        line-height: var(--sprint-line-height-normal);
+        color: var(--sprint-color-text);
+      }
+      .textBlock h1 {
+        font-size: var(--sprint-font-size-2xl);
+        font-weight: var(--sprint-font-weight-bold);
+        line-height: var(--sprint-line-height-tight);
+        margin-bottom: var(--sprint-space-3);
+      }
+      .textBlock p { margin-bottom: var(--sprint-space-3); }
+      .textBlock p:last-child { margin-bottom: 0; }
+      .textBlock b { font-weight: var(--sprint-font-weight-semibold); }
+      .textBlock i { font-style: italic; }
+    </style>
+  </head>
+  <body>
+    <div class="demo-page">
+      <h1 style="font-family: var(--sprint-font-family-sans); margin-bottom: var(--sprint-space-6); color: #333;">
+        @sprint/ui-kit — Visual Demo (todos os componentes do BL-C9)
+      </h1>
+
+      <!-- ====================================================== -->
+      <!-- 1. <Overlay> — replicando imagem 'Hora do Rush!' -->
+      <!-- ====================================================== -->
+      <section class="demo-section">
+        <h2>1. &lt;Overlay&gt; (BL-C9-003) — replicando imagem 'Hora do Rush!'</h2>
+        <p class="note">
+          O <strong>body é slot</strong> — o Agent (BL-C3-015) renderiza o conteúdo
+          estruturado (métrica gigante, deadline, status row, badge). C9 só entrega
+          o chrome (card + header + footer com botão). Esta demo simula como ficará
+          quando o Agent preencher o slot.
+        </p>
+        <div class="overlay-preview-frame themeProvider">
+          <div class="card">
+            <header class="header">
+              <h1 class="title">Hora do Rush!</h1>
+            </header>
+            <div class="body">
+              <!-- ▼ Conteúdo do slot — Agent renderiza isso em BL-C3-015 ▼ -->
+              <div class="body-content">
+                <div class="metric-row">
+                  <div class="metric">
+                    <span class="metric__value">20</span>
+                    <span class="metric__label">Artes</span>
+                  </div>
+                  <div class="deadline">
+                    <div class="deadline__label">Até</div>
+                    <div class="deadline__value">18:00h</div>
+                  </div>
+                </div>
+                <div class="status-row">
+                  <svg class="status-row__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10" stroke-width="2" stroke-dasharray="3 3" />
+                    <path d="M8 12.5 L11 15.5 L16.5 9.5" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                  <span class="status-row__label">Suas metas</span>
+                  <span class="status-row__badge">27/05</span>
+                </div>
+              </div>
+              <!-- ▲ Fim do slot Agent ▲ -->
+            </div>
+            <button type="button" class="acknowledgeButton">Recebido</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ====================================================== -->
+      <!-- 2. <OverlayMinimized> — bar full-width + badge pendurada -->
+      <!-- ====================================================== -->
+      <section class="demo-section">
+        <h2>2. &lt;OverlayMinimized&gt; (BL-C9-006, NOVO) — redesign bar + badge</h2>
+        <p class="note">
+          Faixa horizontal full-width dark com badge "pendurada" no
+          centro (mesma cor → parece extensão da faixa). Substitui o
+          <code>&lt;Overlay&gt;</code> após auto-close. Prop
+          <code>position</code> move a badge para esquerda, centro
+          ou direita. Positioning vertical da faixa (top:0, fixed,
+          BrowserWindow frameless) é responsabilidade do host (Agent
+          em BL-C3-017).
+        </p>
+
+        <div class="om-frame">
+          <div class="om-frame__label">position="center" (default)</div>
+          <div class="om-bar">
+            <div class="om-positioner" data-position="center">
+              <button type="button" class="om-badge" aria-label="Suas metas: 20">
+                <svg class="om-badge__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10" stroke-width="2" stroke-dasharray="3 3" />
+                  <path d="M8 12.5 L11 15.5 L16.5 9.5" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                <span class="om-badge__label">Suas metas</span>
+                <span class="om-badge__value">20</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="om-frame">
+          <div class="om-frame__label">position="left"</div>
+          <div class="om-bar">
+            <div class="om-positioner" data-position="left">
+              <button type="button" class="om-badge" aria-label="Suas metas: 20">
+                <svg class="om-badge__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10" stroke-width="2" stroke-dasharray="3 3" />
+                  <path d="M8 12.5 L11 15.5 L16.5 9.5" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                <span class="om-badge__label">Suas metas</span>
+                <span class="om-badge__value">20</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="om-frame">
+          <div class="om-frame__label">position="right"</div>
+          <div class="om-bar">
+            <div class="om-positioner" data-position="right">
+              <button type="button" class="om-badge" aria-label="Suas metas: 20">
+                <svg class="om-badge__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10" stroke-width="2" stroke-dasharray="3 3" />
+                  <path d="M8 12.5 L11 15.5 L16.5 9.5" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                <span class="om-badge__label">Suas metas</span>
+                <span class="om-badge__value">20</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ====================================================== -->
+      <!-- 3. <TextBlock> — sanitização defensiva + tipografia -->
+      <!-- ====================================================== -->
+      <section class="demo-section">
+        <h2>3. &lt;TextBlock&gt; (BL-C9-004) — HTML sanitizado com tipografia DS</h2>
+        <p class="note">
+          Recebe <code>body_html</code> e sanitiza via <code>sanitizeBodyHtml</code>
+          em todo render (defesa em profundidade). Tags whitelistadas
+          (<code>b, i, br, p, h1, span</code>) recebem styling do design system.
+          Renderizado dentro de um wrapper com background DARK para mostrar o uso real.
+        </p>
+        <div class="text-block-preview-frame themeProvider">
+          <div class="textBlock">
+            <h1>Título de exemplo</h1>
+            <p>
+              Sua meta hoje é <b>20 artes</b>. Use <i>foco</i> e
+              <b>velocidade</b> para bater o número.
+            </p>
+            <p>
+              Texto em parágrafo adicional com formatação <b>bold</b>,
+              <i>italic</i>, ou simples.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ====================================================== -->
+      <!-- 4. Recapitulação de tokens-chave -->
+      <!-- ====================================================== -->
+      <section class="demo-section">
+        <h2>4. Tokens-chave da identidade ARTFLEXÍVEIS (DARK)</h2>
+        <p class="note">
+          Extraídos da imagem 'Hora do Rush!' anexada à sessão. Para a paleta
+          completa, abra <code>palette-preview.html</code>.
+        </p>
+        <table style="font-family: var(--sprint-font-family-sans); border-collapse: collapse; width: 100%;">
+          <thead>
+            <tr style="background: #f5f5f5; text-align: left;">
+              <th style="padding: 8px;">Token</th>
+              <th style="padding: 8px;">Valor</th>
+              <th style="padding: 8px;">Onde aparece</th>
+            </tr>
+          </thead>
+          <tbody style="color: #333;">
+            <tr><td style="padding: 8px;"><code>--sprint-color-primary</code></td><td style="padding: 8px;"><span style="display:inline-block;width:14px;height:14px;background:#F5A557;vertical-align:middle;margin-right:6px;"></span>#F5A557</td><td style="padding: 8px;">Botão "Recebido" + check icon</td></tr>
+            <tr><td style="padding: 8px;"><code>--sprint-color-background</code></td><td style="padding: 8px;"><span style="display:inline-block;width:14px;height:14px;background:#1A1A1A;vertical-align:middle;margin-right:6px;"></span>#1A1A1A</td><td style="padding: 8px;">Fundo do card + fundo do pill</td></tr>
+            <tr><td style="padding: 8px;"><code>--sprint-color-text</code></td><td style="padding: 8px;"><span style="display:inline-block;width:14px;height:14px;background:#FFFFFF;border:1px solid #ccc;vertical-align:middle;margin-right:6px;"></span>#FFFFFF</td><td style="padding: 8px;">Título + valores destacados</td></tr>
+            <tr><td style="padding: 8px;"><code>--sprint-color-text-muted</code></td><td style="padding: 8px;"><span style="display:inline-block;width:14px;height:14px;background:#A0A0A0;vertical-align:middle;margin-right:6px;"></span>#A0A0A0</td><td style="padding: 8px;">Labels "Artes", "Até", "Suas metas"</td></tr>
+            <tr><td style="padding: 8px;"><code>--sprint-color-surface-elevated</code></td><td style="padding: 8px;"><span style="display:inline-block;width:14px;height:14px;background:#2A2A2A;vertical-align:middle;margin-right:6px;"></span>#2A2A2A</td><td style="padding: 8px;">Badge "27/05"</td></tr>
+            <tr><td style="padding: 8px;"><code>--sprint-shadow-primary-glow</code></td><td style="padding: 8px;">rgba(245,165,87,0.55) blur 40</td><td style="padding: 8px;">Glow ao redor do botão "Recebido"</td></tr>
+            <tr><td style="padding: 8px;"><code>--sprint-font-size-4xl</code></td><td style="padding: 8px;">7.5rem (120px)</td><td style="padding: 8px;">Métrica gigante "20"</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <p style="font-family: var(--sprint-font-family-sans); color: #666; font-size: var(--sprint-font-size-sm); text-align: center; margin-top: var(--sprint-space-8);">
+        Outras visualizações disponíveis: <a href="palette-preview.html">palette-preview.html</a>
+        (paleta DARK completa) ·
+        <a href="SCOPE_QUESTION.md">SCOPE_QUESTION.md</a> (audit trail BL-C9-006)
+      </p>
+    </div>
+  </body>
+</html>

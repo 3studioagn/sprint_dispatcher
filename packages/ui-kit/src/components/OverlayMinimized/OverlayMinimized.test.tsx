@@ -4,7 +4,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { OverlayMinimized } from './OverlayMinimized';
 
 describe('<OverlayMinimized>', () => {
-  it('renderiza label e value', () => {
+  it('renderiza label e value dentro da badge', () => {
     render(<OverlayMinimized label="Suas metas" value={20} onClick={vi.fn()} />);
 
     expect(screen.getByText('Suas metas')).toBeInTheDocument();
@@ -19,7 +19,7 @@ describe('<OverlayMinimized>', () => {
     expect(screen.getByText('20 artes')).toBeInTheDocument();
   });
 
-  it('dispara onClick quando clicado', () => {
+  it('dispara onClick quando a badge é clicada', () => {
     const onClick = vi.fn();
     render(<OverlayMinimized label="Suas metas" value={20} onClick={onClick} />);
 
@@ -39,15 +39,60 @@ describe('<OverlayMinimized>', () => {
 
     const svg = container.querySelector('svg');
     expect(svg).not.toBeNull();
-    // Ícone marcado como aria-hidden — não atrapalha o leitor de tela
-    // (informação já está no aria-label do botão).
+    // Ícone marcado como aria-hidden — info já está no aria-label do botão.
     expect(svg).toHaveAttribute('aria-hidden', 'true');
-    // Circle dashed (borda pontilhada) + path do check
+    // Circle dashed + path do check
     expect(svg?.querySelector('circle')).not.toBeNull();
     expect(svg?.querySelector('path')).not.toBeNull();
   });
 
-  it('variant="urgent" compõe className adicional (placeholder visual)', () => {
+  it('renderiza estrutura bar > positioner > badge', () => {
+    const { container } = render(<OverlayMinimized label="L" value={1} onClick={vi.fn()} />);
+
+    // Root é a bar (div), não a badge (button) — diferente do design
+    // antigo. Garante que o componente renderiza o wrapper full-width.
+    const root = container.firstElementChild;
+    expect(root?.tagName).toBe('DIV');
+    // Positioner é o filho direto da bar
+    const positioner = root?.firstElementChild;
+    expect(positioner?.tagName).toBe('DIV');
+    // Badge (button) está dentro do positioner
+    const badge = positioner?.firstElementChild;
+    expect(badge?.tagName).toBe('BUTTON');
+  });
+
+  describe('prop position', () => {
+    // data-position attribute em vez de checar className do CSS Module —
+    // names de CSS Modules em jsdom não são estáveis entre versões do
+    // bundler e atrapalham testes. data-position também serve como hook
+    // CSS público (consumidor pode customizar via [data-position="X"]).
+
+    it('default é "center"', () => {
+      const { container } = render(<OverlayMinimized label="L" value={1} onClick={vi.fn()} />);
+
+      const positioner = container.querySelector('[data-position]');
+      expect(positioner).not.toBeNull();
+      expect(positioner).toHaveAttribute('data-position', 'center');
+    });
+
+    it('position="left" aplica data-position correspondente', () => {
+      const { container } = render(
+        <OverlayMinimized label="L" value={1} onClick={vi.fn()} position="left" />,
+      );
+
+      expect(container.querySelector('[data-position="left"]')).not.toBeNull();
+    });
+
+    it('position="right" aplica data-position correspondente', () => {
+      const { container } = render(
+        <OverlayMinimized label="L" value={1} onClick={vi.fn()} position="right" />,
+      );
+
+      expect(container.querySelector('[data-position="right"]')).not.toBeNull();
+    });
+  });
+
+  it('variant="urgent" compõe className adicional na badge (placeholder visual)', () => {
     const { container } = render(
       <OverlayMinimized label="L" value={1} onClick={vi.fn()} variant="urgent" />,
     );
@@ -57,13 +102,13 @@ describe('<OverlayMinimized>', () => {
     expect(button!.className.split(' ').length).toBeGreaterThanOrEqual(2);
   });
 
-  it('NÃO impõe positioning (host decide localização na tela)', () => {
-    // Sanidade arquitetural: o componente não deve trazer position
-    // fixed/absolute/etc na className raiz. Test indireto via inline
-    // style — CSS Modules em jsdom não expõem regras, mas garantimos
-    // que não há style attribute imposto pelo componente.
-    render(<OverlayMinimized label="L" value={1} onClick={vi.fn()} />);
-    const button = screen.getByRole('button');
-    expect(button.getAttribute('style')).toBeNull();
+  it('NÃO impõe positioning CSS no host (sem style attribute)', () => {
+    // Sanidade arquitetural: nem a bar nem a badge devem trazer style
+    // inline. Positioning da bar (top:0, fixed, etc) é do host.
+    const { container } = render(<OverlayMinimized label="L" value={1} onClick={vi.fn()} />);
+    const bar = container.firstElementChild;
+    const button = container.querySelector('button');
+    expect(bar?.getAttribute('style')).toBeNull();
+    expect(button?.getAttribute('style')).toBeNull();
   });
 });
