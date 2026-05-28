@@ -66,6 +66,101 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 27 — 2026-05-28 — Refino fino da animação compact ↔ expanded do Pill
+
+**Wave atual:** W2 — em curso **Método:** extensão da Sessão 26 após Renan
+validar e reportar 1 issue final **Duração estimada:** ~30min (1 commit)
+**Itens:** [animação click compact ↔ expanded]
+
+### Objetivo da sessão
+
+1 issue (declarada como única bloqueante para aprovação):
+
+> "Vamos somente melhorar a animação de quando clicamos na badge, pois esta com
+> uma animação muito tosca, e ela cresce pro lado bem de leve quando clico nela.
+> Somente essa animação e estara aprovado."
+
+Mesmo após Sessão 26 (substituiu spring overshoot por ease-out expo + adicionou
+content fade-in), o feedback foi que (a) seguia "tosca" e (b) o crescimento
+horizontal estava "bem de leve".
+
+### O que foi feito
+
+Refino exclusivamente CSS no `<Pill>` do `@sprint/ui-kit`:
+
+- **Easing iOS canônica** — `cubic-bezier(0.32, 0.72, 0, 1)` (Tobias Ahlin iOS
+  reference) substitui `cubic-bezier(0.16, 1, 0.3, 1)` ease-out expo. Decelera
+  ainda mais suavemente; percepção "natural" sem nenhum jerk. Aplicada nas
+  transitions do `.pill` E na content emerge animation.
+
+- **Duração mais "considerada"** — container transition 360ms → 480ms; content
+  emerge 280ms → 360ms.
+
+- **Crescimento horizontal mais pronunciado** — `.pill--expanded` min-width 220
+  → 280px + padding horizontal `--sprint-space-5` (20px) → `--sprint-space-6`
+  (24px). Renan queria sentir o crescimento lateral mais visível.
+
+- **Stagger no content emerge** — `.expandedLayout` ganha
+  `animation-delay: 80ms`. Container abre primeiro, conteúdo emerge em seguida —
+  em vez de ambos saltarem juntos. `.compactLayout` segue sem delay (compress
+  feedback deve ser imediato).
+
+- **Feedback tátil no click** — `.pill:active { transform: scale(0.97) }` +
+  transition transform 140ms ease-out. Operador percebe haptic visual ao
+  pressionar; pill encolhe brevemente. Combina com a animação principal sem
+  interferir (transform separado de padding/min-width).
+
+- **`will-change: padding, min-width`** — promove layer GPU durante transição,
+  resultando em animação mais suave em dispositivos intermediários.
+
+- **Content emerge translateY** 4px → 6px (mais movimento de entrada).
+
+- `prefers-reduced-motion: reduce` cobre todas as novas props
+  (transition/will-change/`:active` scale).
+
+### Estado atual
+
+- 60 testes verdes no ui-kit (estável; mudanças são CSS de timing, sem testes
+  específicos).
+- Agent 297 testes verdes (estável).
+- Lint + type-check + build clean.
+- 1 changeset: `c9-pill-expand-refine-v2.md` (ui-kit minor).
+
+### Decisões tomadas
+
+- Curva iOS `cubic-bezier(0.32, 0.72, 0, 1)` como referência canônica para
+  animações da pill — substitui ease-out expo como padrão para futuras
+  transições no ui-kit.
+- Duração 480ms é o "sweet spot" para transição entre estados — abaixo disso é
+  brusco, acima vira lento. Reavaliar se feedback futuro reclamar de lentidão.
+- Stagger de 80ms é qualitativo, não testado em A/B; pode virar token
+  (`--sprint-stagger-content`) se padrão se repetir em outros componentes.
+- `will-change` é uma promessa para o compositor; não usar abusivamente — só em
+  elementos que de fato animam alta-frequência.
+
+### Bloqueios encontrados
+
+Nenhum.
+
+### Próximo passo
+
+Aguardar validação visual do Renan. Ele declarou "Somente essa animação e estara
+aprovado" — post-commit, branch fica pronta para PR/merge.
+
+### Observações para a próxima sessão
+
+- **Sequência de iterações 25 → 26 → 27** sobre a mesma animação documenta a
+  evolução do critério estético do Renan: spring overshoot → ease-out expo → iOS
+  canonical. Vale referenciar quando outros componentes precisarem de curva
+  similar.
+- **Não foi pedido reforma na entrance animation** (`.pillEntrance`) — segue com
+  `cubic-bezier(0.16, 1, 0.3, 1)`. Se feedback futuro reclamar de
+  inconsistência, unificar com iOS curve.
+- **Validar visualmente** no PC do Renan antes de declarar concluído — animação
+  é critério subjetivo e jsdom não exercita timing real.
+
+---
+
 ## Sessão 26 — 2026-05-28 — Overlay realmente transparente + drag horizontal + refino animação
 
 **Wave atual:** W2 — em curso **Método:** extensão da Sessão 25 após Renan

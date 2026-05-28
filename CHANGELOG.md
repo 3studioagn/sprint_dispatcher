@@ -9,6 +9,28 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Changed — Sessão 27 (2026-05-28) — Refino animação compact ↔ expanded
+
+- **Easing iOS canônica** no `<Pill>` — `cubic-bezier(0.32, 0.72, 0, 1)`
+  substitui `cubic-bezier(0.16, 1, 0.3, 1)` (ease-out expo). Decelera
+  ainda mais suavemente, percepção "natural" sem jerk.
+- **Duração mais "considerada"** — container transition 360ms → 480ms;
+  content emerge 280ms → 360ms.
+- **Crescimento horizontal mais pronunciado** — `.pill--expanded`
+  min-width 220 → 280px + padding horizontal `--sprint-space-5` →
+  `--sprint-space-6`. Crescimento lateral mais visível (Renan reportou
+  "cresce pro lado bem de leve").
+- **Stagger no content emerge** — `.expandedLayout` ganha
+  `animation-delay: 80ms`. Container abre primeiro, conteúdo emerge
+  em seguida, em vez de ambos saltarem juntos.
+- **Feedback tátil no click** — `.pill:active { transform: scale(0.97) }`
+  com transition transform 140ms ease-out. Operador percebe haptic
+  visual ao pressionar.
+- **`will-change: padding, min-width`** — promove layer GPU durante
+  transição, animação mais suave em dispositivos intermediários.
+- **Content emerge translateY** 4px → 6px (mais presença).
+- Todas as mudanças respeitam `prefers-reduced-motion: reduce`.
+
 ### Fixed — Sessão 26 (2026-05-28)
 
 - **Overlay ainda com fundo dark uniforme** — Sessão 25 colocou

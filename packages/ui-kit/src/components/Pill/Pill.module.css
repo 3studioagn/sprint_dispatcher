@@ -56,6 +56,10 @@
    * drag sem o browser interferir com gestos default (scroll, zoom,
    * etc.) — necessário para drag horizontal do pill (Sessão 26). */
   touch-action: none;
+  /* Hints para o compositor — pill anima padding/min-width durante o
+   * expand. `will-change` avisa o browser para promover a layer GPU,
+   * resultando em animação mais suave (Sessão 27 refine). */
+  will-change: padding, min-width;
 
   /* Topo reto + cantos inferiores arredondados — "saída do topo do monitor" */
   border-radius: 0 0 var(--sprint-radius-md) var(--sprint-radius-md);
@@ -63,14 +67,31 @@
   /* Sombra desce — reforça a sensação de "pendurada" */
   box-shadow: 0 6px 16px -2px rgba(0, 0, 0, 0.55);
 
-  /* Transições compact ↔ expanded com easing "ease-out expo" (Sessão 26
-   * refine — Renan reportou que cubic-bezier spring com overshoot 1.4
-   * dava sensação "tosca"/bouncy). Esta curva desacelera suavemente
-   * sem overshoot, gera percepção mais "considerada" e refinada.
-   * Duração 360ms reforça "crescimento orgânico" sem ser arrastado. */
+  /* Transições compact ↔ expanded (Sessão 27 refine — Renan reportou
+   * que mesmo após Sessão 26 a animação ainda estava "tosca" e
+   * "crescia pro lado bem de leve"). Mudanças:
+   *
+   * - Easing: cubic-bezier(0.32, 0.72, 0, 1) — curva iOS "ease-out"
+   *   canônica do Tobias Ahlin. Decelera ainda mais suavemente que o
+   *   ease-out expo anterior; percepção "natural" sem nenhum
+   *   overshoot ou jerk.
+   * - Duração: 480ms (era 360ms). Reforça o "crescimento considerado".
+   * - Min-width expandido: 280px (era 220px — ver `.pill--expanded`
+   *   abaixo) → crescimento horizontal mais pronunciado / menos sutil.
+   * - Inclui `transform` na lista para o `:active` scale (feedback
+   *   tátil) animar suavemente em vez de saltar. */
   transition:
-    padding 360ms cubic-bezier(0.16, 1, 0.3, 1),
-    min-width 360ms cubic-bezier(0.16, 1, 0.3, 1);
+    padding 480ms cubic-bezier(0.32, 0.72, 0, 1),
+    min-width 480ms cubic-bezier(0.32, 0.72, 0, 1),
+    transform 140ms ease-out;
+}
+
+/* Feedback tátil no click — pill encolhe sutilmente quando pressionada
+ * (Sessão 27 refine). Volta ao tamanho normal ao soltar. Combina com
+ * a animação de expand/collapse sem interferir (transform separado de
+ * padding/min-width). */
+.pill:active {
+  transform: scale(0.97);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -80,6 +101,13 @@
 
   .pill {
     transition: none;
+    will-change: auto;
+  }
+
+  /* :active scale também desligado em prefers-reduced-motion para
+   * consistência (Sessão 27). */
+  .pill:active {
+    transform: none;
   }
 }
 
@@ -110,11 +138,12 @@
   display: inline-flex;
   align-items: center;
   gap: var(--sprint-space-3);
-  /* Sessão 26: fade-in suave do conteúdo quando o modo troca — evita
-   * "pop" abrupto quando React desmonta CompactContent e monta
-   * ExpandedContent (ou vice-versa). Combina com a size transition
-   * do container para sensação contínua. */
-  animation: pill-content-fade-in 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  /* Sessão 27 refine: fade-in mais smooth do conteúdo. Duração 360ms
+   * (era 280ms) + easing iOS + translateY 6px (era 4px) para emergir
+   * com mais presença. Combina com a size transition 480ms do
+   * container — content aparece progressivamente enquanto o container
+   * cresce, eliminando a sensação de "pop" abrupto. */
+  animation: pill-content-emerge 360ms cubic-bezier(0.32, 0.72, 0, 1) both;
 }
 
 /* ============================================================
@@ -122,21 +151,31 @@
  * ============================================================ */
 
 .pill--expanded {
-  padding: var(--sprint-space-4) var(--sprint-space-5) var(--sprint-space-5);
-  min-width: 220px;
+  padding: var(--sprint-space-4) var(--sprint-space-6) var(--sprint-space-5);
+  /* min-width: 280px (Sessão 27 — era 220px). Renan reportou que o
+   * crescimento lateral estava "bem de leve"; aumentar o min-width
+   * torna a expansão horizontal mais perceptível visualmente sem
+   * afetar a densidade compacta. */
+  min-width: 280px;
 }
 
 .expandedLayout {
   display: flex;
   flex-direction: column;
   gap: var(--sprint-space-4);
-  animation: pill-content-fade-in 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  /* Sessão 27: pequeno delay (80ms) na emersão do conteúdo expanded —
+   * dá ao container tempo de iniciar o crescimento ANTES do conteúdo
+   * preencher. Resultado: "container abre, conteúdo emerge" em vez de
+   * "ambos pop juntos". O `both` mantém opacity:0 durante o delay para
+   * evitar flash. Compact não tem delay porque comprime e fica
+   * imediatamente visível. */
+  animation: pill-content-emerge 360ms cubic-bezier(0.32, 0.72, 0, 1) 80ms both;
 }
 
-@keyframes pill-content-fade-in {
+@keyframes pill-content-emerge {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
