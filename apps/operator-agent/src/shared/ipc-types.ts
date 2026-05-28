@@ -306,5 +306,20 @@ export interface Api {
      * sprint sem destruir/recriar a janela).
      */
     readonly onUpdate: (cb: (event: PillUpdateEvent) => void) => Unsubscribe;
+
+    /**
+     * Drag horizontal do pill window (Sessão 26). Operador segura
+     * pointer down no pill e arrasta para a esquerda/direita; a
+     * BrowserWindow do pill move via `setPosition` no main para
+     * acompanhar o cursor. Movimento clampado às bordas da tela
+     * primária — pill nunca sai da viewport.
+     *
+     * Renderer envia `screenX` absoluto (não `clientX` relativo à
+     * janela) — assim main não precisa compensar movimento próprio
+     * causando feedback loop.
+     */
+    readonly beginDrag: (screenX: number) => Promise<void>;
+    readonly dragTo: (screenX: number) => Promise<void>;
+    readonly endDrag: () => Promise<void>;
   };
 }

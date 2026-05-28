@@ -12,8 +12,8 @@
  * - Click NÃO chama pill.expand (que foi removido na Sessão 24)
  */
 
-import { fireEvent, render, screen, waitFor, act } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createEvent, fireEvent, render, screen, waitFor, act } from '@testing-library/react';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Unsubscribe, PillUpdateEvent } from '../shared/ipc-types';
 
@@ -30,6 +30,55 @@ function makePillInfo(meta = 4) {
     meta,
     deadline_at: '2026-05-26T21:00:00.000Z',
   };
+}
+
+// jsdom NÃO implementa setPointerCapture/releasePointerCapture — operações
+// que jogam exception ao serem chamadas. Stub vazio para PillApp poder
+// invocar normalmente em handlePointerDown/Up sem crash no teste.
+beforeAll(() => {
+  if (!Element.prototype.setPointerCapture) {
+    Element.prototype.setPointerCapture = vi.fn();
+  }
+  if (!Element.prototype.releasePointerCapture) {
+    Element.prototype.releasePointerCapture = vi.fn();
+  }
+});
+
+/**
+ * Dispara um PointerEvent com `screenX` aplicado via `defineProperty`.
+ * jsdom ignora `screenX` no init dict do PointerEvent constructor;
+ * precisamos forçar a propriedade no objeto event antes de
+ * `fireEvent`.
+ */
+function firePointerEvent(
+  type: 'pointerDown' | 'pointerMove' | 'pointerUp' | 'pointerCancel',
+  el: HTMLElement,
+  init: { pointerId: number; screenX: number },
+): void {
+  const event = createEvent[type](el, { pointerId: init.pointerId });
+  Object.defineProperty(event, 'screenX', { value: init.screenX, configurable: true });
+  fireEvent(el, event);
+}
+
+/**
+ * Simula um "click puro" (sem drag) via pointer events. Sessão 26
+ * substituiu `onClick` por pointer events em PillApp para distinguir
+ * click de drag — testes precisam disparar pointerdown + pointerup
+ * com mesmo screenX (zero movimento → classificado como click).
+ */
+function simulateClick(btn: HTMLElement, screenX = 100): void {
+  firePointerEvent('pointerDown', btn, { pointerId: 1, screenX });
+  firePointerEvent('pointerUp', btn, { pointerId: 1, screenX });
+}
+
+/**
+ * Simula um drag horizontal: pointerdown + pointerMove com delta
+ * suficiente para passar do threshold (5px) + pointerup.
+ */
+function simulateDrag(btn: HTMLElement, startX: number, endX: number): void {
+  firePointerEvent('pointerDown', btn, { pointerId: 1, screenX: startX });
+  firePointerEvent('pointerMove', btn, { pointerId: 1, screenX: endX });
+  firePointerEvent('pointerUp', btn, { pointerId: 1, screenX: endX });
 }
 
 describe('PillApp — render inicial', () => {
@@ -77,7 +126,7 @@ describe('PillApp — click toggla compact ↔ expanded (Sessão 24)', () => {
     expect(btn).toHaveAttribute('aria-expanded', 'false');
 
     act(() => {
-      fireEvent.click(btn);
+      simulateClick(btn);
     });
 
     expect(screen.getByRole('button')).toHaveAttribute('aria-expanded', 'true');
@@ -90,12 +139,12 @@ describe('PillApp — click toggla compact ↔ expanded (Sessão 24)', () => {
 
     const btn = await screen.findByRole('button');
     act(() => {
-      fireEvent.click(btn);
+      simulateClick(btn);
     });
     expect(screen.getByRole('button')).toHaveAttribute('aria-expanded', 'true');
 
     act(() => {
-      fireEvent.click(screen.getByRole('button'));
+      simulateClick(screen.getByRole('button'));
     });
     expect(screen.getByRole('button')).toHaveAttribute('aria-expanded', 'false');
   });
@@ -108,7 +157,7 @@ describe('PillApp — click toggla compact ↔ expanded (Sessão 24)', () => {
     const callsBeforeClick = vi.mocked(window.api.pill.requestCurrent).mock.calls.length;
 
     act(() => {
-      fireEvent.click(btn);
+      simulateClick(btn);
     });
 
     // requestCurrent NÃO foi chamado de novo no click; nenhum outro IPC do pill.
@@ -132,7 +181,7 @@ describe('PillApp — auto-collapse após 5s (Sessão 24)', () => {
 
     const btn = await screen.findByRole('button');
     act(() => {
-      fireEvent.click(btn);
+      simulateClick(btn);
     });
     expect(screen.getByRole('button')).toHaveAttribute('aria-expanded', 'true');
 
@@ -155,13 +204,13 @@ describe('PillApp — auto-collapse após 5s (Sessão 24)', () => {
 
     const btn = await screen.findByRole('button');
     act(() => {
-      fireEvent.click(btn); // expand → timer armado
+      simulateClick(btn); // expand → timer armado
     });
 
     // 2s depois, operador clica manualmente → cancela timer + volta compact
     act(() => {
       vi.advanceTimersByTime(2000);
-      fireEvent.click(screen.getByRole('button'));
+      simulateClick(screen.getByRole('button'));
     });
     expect(screen.getByRole('button')).toHaveAttribute('aria-expanded', 'false');
 
@@ -213,7 +262,7 @@ describe('PillApp — push onUpdate', () => {
     render(<PillApp />);
     const btn = await screen.findByRole('button');
     act(() => {
-      fireEvent.click(btn); // expand
+      simulateClick(btn); // expand
     });
     expect(screen.getByRole('button')).toHaveAttribute('aria-expanded', 'true');
 
@@ -224,6 +273,104 @@ describe('PillApp — push onUpdate', () => {
     });
 
     expect(screen.getByRole('button')).toHaveAttribute('aria-expanded', 'false');
+  });
+});
+
+describe('PillApp — drag horizontal (Sessão 26)', () => {
+  it('pointer down → IPC pill.beginDrag com e.screenX', async () => {
+    vi.mocked(window.api.pill.requestCurrent).mockResolvedValueOnce(makePillInfo(4));
+    render(<PillApp />);
+
+    const btn = await screen.findByRole('button');
+    firePointerEvent('pointerDown', btn, { pointerId: 1, screenX: 250 });
+
+    await waitFor(() => {
+      expect(window.api.pill.beginDrag).toHaveBeenCalledWith(250);
+    });
+  });
+
+  it('drag (move > 5px) → IPC pill.dragTo + endDrag, sem toggle expand', async () => {
+    vi.mocked(window.api.pill.requestCurrent).mockResolvedValueOnce(makePillInfo(4));
+    render(<PillApp />);
+
+    const btn = await screen.findByRole('button');
+    simulateDrag(btn, 100, 200); // 100px de movimento → drag
+
+    await waitFor(() => {
+      expect(window.api.pill.beginDrag).toHaveBeenCalledWith(100);
+      expect(window.api.pill.dragTo).toHaveBeenCalledWith(200);
+      expect(window.api.pill.endDrag).toHaveBeenCalled();
+    });
+
+    // Movimento real → NÃO foi click → expanded permanece false
+    expect(screen.getByRole('button')).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('click puro (sem move) → toggle expand + endDrag', async () => {
+    vi.mocked(window.api.pill.requestCurrent).mockResolvedValueOnce(makePillInfo(4));
+    render(<PillApp />);
+
+    const btn = await screen.findByRole('button');
+    simulateClick(btn);
+
+    await waitFor(() => {
+      expect(window.api.pill.endDrag).toHaveBeenCalled();
+    });
+    expect(window.api.pill.dragTo).not.toHaveBeenCalled();
+    // Click sem movimento → toggle expand
+    expect(screen.getByRole('button')).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('movimento abaixo do threshold (<5px) é tratado como click', async () => {
+    vi.mocked(window.api.pill.requestCurrent).mockResolvedValueOnce(makePillInfo(4));
+    render(<PillApp />);
+
+    const btn = await screen.findByRole('button');
+    // 3px de movimento — abaixo do DRAG_THRESHOLD_PX (5)
+    firePointerEvent('pointerDown', btn, { pointerId: 1, screenX: 100 });
+    firePointerEvent('pointerMove', btn, { pointerId: 1, screenX: 103 });
+    firePointerEvent('pointerUp', btn, { pointerId: 1, screenX: 103 });
+
+    await waitFor(() => {
+      expect(window.api.pill.endDrag).toHaveBeenCalled();
+    });
+    expect(window.api.pill.dragTo).not.toHaveBeenCalled();
+    expect(screen.getByRole('button')).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('pointer cancel → endDrag sem toggle expand', async () => {
+    vi.mocked(window.api.pill.requestCurrent).mockResolvedValueOnce(makePillInfo(4));
+    render(<PillApp />);
+
+    const btn = await screen.findByRole('button');
+    firePointerEvent('pointerDown', btn, { pointerId: 1, screenX: 100 });
+    firePointerEvent('pointerCancel', btn, { pointerId: 1, screenX: 100 });
+
+    await waitFor(() => {
+      expect(window.api.pill.endDrag).toHaveBeenCalled();
+    });
+    expect(screen.getByRole('button')).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('vários pointermove durante drag enviam dragTo em sequência', async () => {
+    vi.mocked(window.api.pill.requestCurrent).mockResolvedValueOnce(makePillInfo(4));
+    render(<PillApp />);
+
+    const btn = await screen.findByRole('button');
+    firePointerEvent('pointerDown', btn, { pointerId: 1, screenX: 100 });
+    firePointerEvent('pointerMove', btn, { pointerId: 1, screenX: 150 });
+    firePointerEvent('pointerMove', btn, { pointerId: 1, screenX: 200 });
+    firePointerEvent('pointerMove', btn, { pointerId: 1, screenX: 250 });
+    firePointerEvent('pointerUp', btn, { pointerId: 1, screenX: 250 });
+
+    await waitFor(() => {
+      expect(window.api.pill.endDrag).toHaveBeenCalled();
+    });
+    // 3 calls de dragTo (uma por pointermove após threshold)
+    expect(window.api.pill.dragTo).toHaveBeenCalledTimes(3);
+    expect(window.api.pill.dragTo).toHaveBeenNthCalledWith(1, 150);
+    expect(window.api.pill.dragTo).toHaveBeenNthCalledWith(2, 200);
+    expect(window.api.pill.dragTo).toHaveBeenNthCalledWith(3, 250);
   });
 });
 

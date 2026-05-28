@@ -66,6 +66,80 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 26 — 2026-05-28 — Overlay realmente transparente + drag horizontal + refino animação
+
+**Wave atual:** W2 — em curso **Método:** extensão da Sessão 25 após Renan
+validar e reportar 4 issues **Duração estimada:** ~1h (1 commit) **Itens:**
+[body bg overlay, drag horizontal, nowrap label, animação refinada]
+
+### Objetivo da sessão
+
+4 issues:
+
+1. "O fundo da overlay ainda está escuro."
+2. "Não estou conseguindo arrastar a badge para o lado, deveria funcionar como
+   drag-and-drop, mas somente horizontalmente."
+3. "'Suas metas' está quebrando linha."
+4. "Animação da badge está tosca, quero algo mais refinado."
+
+### O que foi feito
+
+- **Overlay bg dark fix** — root cause: body continuava dark mesmo com
+  ThemeProvider override (Sessão 25). Fix: main.tsx adiciona
+  `body.overlay-mode`; global.css combina com `body.pill-mode`.
+
+- **Drag horizontal** — pillService ganha
+  `beginDrag/dragTo/endDrag/ isDragging`. Usa `screen.X` absoluto (não
+  `client.X` → evita feedback loop). Clampa ao display primário. IPC novos.
+  ui-kit `<Pill>` aceita `onPointerDown/Move/Up/Cancel`. PillApp substitui
+  onClick por pointer events; threshold 5px distingue click de drag.
+  `setPointerCapture` garante eventos contínuos. `touch-action: none` no .pill.
+
+- **Label nowrap** — `.label` no `<Pill>` ganha `white-space: nowrap`.
+
+- **Animação refinada** — `cubic-bezier(0.34, 1.4, 0.64, 1)` (spring overshoot,
+  "tosca") → `cubic-bezier(0.16, 1, 0.3, 1)` (ease-out expo). Duração 320ms →
+  360ms. Content fade-in 280ms no compactLayout/expandedLayout. Respeita
+  prefers-reduced-motion.
+
+### Estado atual
+
+- 4 issues resolvidas.
+- 297 testes verdes no Agent (+14 drag).
+- 60 testes verdes no ui-kit (estável).
+- Lint + type-check + build clean.
+- 2 changesets: `c9-pill-pointer-events-refine.md` +
+  `c3-overlay-transparent-drag.md`.
+
+### Decisões tomadas
+
+- Drag via pointer events (não mouse) — padrão moderno, touch-aware, suporta
+  setPointerCapture.
+- `screen.X` absoluto, não `client.X` — evita feedback loop quando window move.
+- Threshold 5px para click vs drag.
+- `setPointerCapture` no pointerdown para eventos contínuos.
+- Click classificado no pointerup via flag `moved`.
+- Animação substituiu spring por ease-out expo (sem bouncing).
+
+### Bloqueios encontrados
+
+- jsdom não suporta `setPointerCapture`. Fix: stub em `beforeAll`.
+- jsdom ignora `screenX` no PointerEvent init. Fix: helper `firePointerEvent`
+  usa `createEvent` + `Object.defineProperty`.
+
+### Próximo passo
+
+Push + validação visual + PR.
+
+### Observações para a próxima sessão
+
+- **Drag persistence não implementado** — pill volta ao centro a cada novo
+  `show()`. W3 polish trará store + restore.
+- **Drag touch não testado em runtime** — pointer events são touch- aware mas só
+  validado com mouse.
+
+---
+
 ## Sessão 25 — 2026-05-28 — Canvas transparentes + animações fluidas
 
 **Wave atual:** W2 — em curso **Método:** extensão da Sessão 24 após Renan

@@ -1,41 +1,56 @@
 /**
  * PillApp — root do renderer da janela do pill (BL-C3-017, redesigned
- * Sessão 24).
+ * Sessões 24-26).
  *
  * Renderiza `<Pill>` do `@sprint/ui-kit` no modo compact por default;
  * click alterna para expanded. Em expanded, auto-colapsa após 5s sem
- * interação adicional (decisão Renan via AskUserQuestion na sessão).
+ * interação adicional (Sessão 24, decisão Renan).
  *
- * **Click no pill NÃO reabre overlay** (mudança Sessão 24). Overlay
- * fullscreen aparece apenas em dispatch novo via polling. Pill é
- * puramente informacional — visualiza a sprint ackeada até o deadline.
+ * **Click no pill NÃO reabre overlay** (Sessão 24). Overlay fullscreen
+ * aparece APENAS em dispatch novo via polling. Pill é puramente
+ * informacional — visualiza a sprint ackeada até o deadline.
+ *
+ * **Drag horizontal (Sessão 26):** operador pode arrastar o pill para
+ * a esquerda ou direita; a BrowserWindow do pill é reposicionada via
+ * IPC para acompanhar o cursor. Mecanismo:
+ *
+ * 1. `pointerdown` no pill → captura cursor, IPC `pill:begin-drag` com
+ *    `e.screenX` (coordenada absoluta da tela primária).
+ * 2. `pointermove` enquanto pressionado → calcula deslocamento em
+ *    pixels; se passou de limiar (5px), classifica gesto como drag e
+ *    envia IPC `pill:drag-to` com novo `screenX`. Main move o window.
+ * 3. `pointerup` → IPC `pill:end-drag`. Se NÃO houve movimento
+ *    significativo, classifica como click puro e alterna expanded.
+ *
+ * Coordenadas absolutas evitam feedback loop: quando o window se move,
+ * `clientX` mudaria mas `screenX` permanece o mesmo enquanto o cursor
+ * estiver imóvel. Apenas movimento real do cursor afeta o cálculo.
  *
  * **Roteamento:** `main.tsx` detecta query `?pill` em
  * `window.location.search` e monta `<PillApp>` em vez de `<App>`.
  *
  * **Estado:** pull inicial via `pill.requestCurrent()` no mount + push
- * `pill.onUpdate()` para atualizações (operador ack outra sprint ⇒ main
- * atualiza pill sem destruir janela). `isExpanded` local — não
- * sincronizado com main (UX puramente local).
+ * `pill.onUpdate()` para atualizações.
  *
  * **Auto-collapse:** `useEffect` agenda `setTimeout(5000)` quando
- * `isExpanded` vira true. Cleanup cancela timer em: (a) expanded volta
- * para false manualmente; (b) componente desmonta; (c) info muda
- * (nova sprint via push).
+ * `isExpanded` vira true. Cleanup cancela em (a) re-collapse manual,
+ * (b) componente desmonta, (c) info muda via push.
  */
 
-import { Pill, ThemeProvider } from '@sprint/ui-kit';
-import { useEffect, useState } from 'react';
+import { Pill } from '@sprint/ui-kit';
+import { ThemeProvider } from '@sprint/ui-kit';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 
 import type { PillCurrentInfo } from '../shared/ipc-types';
 
 /** Duração do auto-collapse após click expand (decisão Renan na Sessão 24). */
 const AUTO_COLLAPSE_MS = 5000;
+/** Movimento mínimo em pixels para classificar gesto como drag (Sessão 26). */
+const DRAG_THRESHOLD_PX = 5;
 
 /**
  * Formata `deadline_at` (ISO-8601) para o texto exibido no pill expandido
- * — "HH:MMh". Usa `toLocaleTimeString` com fuso horário do operador
- * (`hour12: false` para 24h, padrão BR).
+ * — "HH:MMh". Usa horário local do operador (24h, padrão BR).
  */
 function formatDeadline(iso: string): string {
   try {
@@ -68,6 +83,12 @@ function formatDate(iso: string): string {
 export default function PillApp(): JSX.Element {
   const [info, setInfo] = useState<PillCurrentInfo | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
+  /**
+   * Tracking de drag em curso. `useRef` (não `useState`) porque o valor
+   * é atualizado durante pointer move e NÃO precisa causar re-render —
+   * apenas o `pointerup` lê para classificar click vs drag.
+   */
+  const dragRef = useRef<{ startScreenX: number; moved: boolean } | null>(null);
 
   // Pull inicial + subscribe a push de updates.
   useEffect(() => {
@@ -108,11 +129,60 @@ export default function PillApp(): JSX.Element {
     };
   }, [isExpanded]);
 
-  function handleClick(): void {
-    // Toggle local — click compact → expanded (auto-colapsa em 5s).
-    // Click expanded → compact imediato (cancela auto-collapse via
-    // cleanup do useEffect).
-    setIsExpanded((prev) => !prev);
+  function handlePointerDown(e: ReactPointerEvent<HTMLButtonElement>): void {
+    // Captura pointer no botão para que pointermove/up continuem chegando
+    // mesmo se o cursor sair do botão durante o drag (necessário porque
+    // movimento horizontal grande pode levar o cursor para fora do
+    // bounding-box do pill).
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragRef.current = { startScreenX: e.screenX, moved: false };
+    void window.api.pill.beginDrag(e.screenX);
+  }
+
+  function handlePointerMove(e: ReactPointerEvent<HTMLButtonElement>): void {
+    const drag = dragRef.current;
+    if (drag === null) return;
+    // Classificou como drag uma vez? Mantém marcado (não pode "desfazer"
+    // mid-gesto). Senão checa threshold para promover de hover→drag.
+    if (!drag.moved) {
+      if (Math.abs(e.screenX - drag.startScreenX) > DRAG_THRESHOLD_PX) {
+        drag.moved = true;
+      }
+    }
+    if (drag.moved) {
+      void window.api.pill.dragTo(e.screenX);
+    }
+  }
+
+  function handlePointerUp(e: ReactPointerEvent<HTMLButtonElement>): void {
+    const drag = dragRef.current;
+    if (drag === null) return;
+    const wasClick = !drag.moved;
+    dragRef.current = null;
+    // Solta capture; defensivo: pointer pode já ter perdido capture
+    // (browser cancel, etc.) — try/catch evita exception em races.
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      // pointer já não está capturado — ignora
+    }
+    void window.api.pill.endDrag();
+    if (wasClick) {
+      setIsExpanded((prev) => !prev);
+    }
+  }
+
+  function handlePointerCancel(e: ReactPointerEvent<HTMLButtonElement>): void {
+    // Pointer cancel (browser interrompeu gesto: troca de janela, perda
+    // de foco, etc.) — encerra drag sem toggle de expand. Sem cleanup
+    // específico além do endDrag no main.
+    dragRef.current = null;
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      // ignora
+    }
+    void window.api.pill.endDrag();
   }
 
   // Pré-pull: render um wrapper vazio para evitar flash de conteúdo
@@ -120,9 +190,8 @@ export default function PillApp(): JSX.Element {
   // disponíveis caso o pull complete e renderize.
   //
   // `className="transparent-theme"` força o background do ThemeProvider
-  // a transparente (default do ui-kit é dark via .module.css) — sem
-  // isso, o canvas 340×160 do BrowserWindow aparece como retângulo
-  // preto em volta da pill (Sessão 25 fix). Override em global.css.
+  // a transparente — sem isso, o canvas 340×160 do BrowserWindow
+  // aparece como retângulo preto em volta da pill (Sessão 25 fix).
   if (info === null) {
     return (
       <ThemeProvider className="transparent-theme">
@@ -141,7 +210,10 @@ export default function PillApp(): JSX.Element {
           deadline={formatDeadline(info.deadline_at)}
           date={formatDate(info.deadline_at)}
           expanded={isExpanded}
-          onClick={handleClick}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
         />
       </div>
     </ThemeProvider>

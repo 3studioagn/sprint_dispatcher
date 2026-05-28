@@ -519,6 +519,42 @@ apps/operator-agent/src/
 >   (queue/overlay/archive), Overlay refatorado (loading/error/warning/ reopen).
 >   Coverage thresholds inalterados (W1.C8 baseline).
 
+> **Atualização W2 — Overlay realmente transparente + drag horizontal + refino
+> (Sessão 26):**
+>
+> Sessão 26 atende 4 issues reportadas após validar a Sessão 25:
+>
+> **(1) Overlay continuava com fundo dark** — Sessão 25 fix do ThemeProvider div
+> era necessário mas insuficiente; `body` ainda tinha
+> `background: var(--sprint-color-background)` (dark) bloqueando a transparência
+> da BrowserWindow. Fix: `main.tsx` adiciona `body.overlay-mode` (paralelo a
+> `body.pill-mode`); `global.css` regra combinada → transparent. Operador agora
+> vê APENAS o card central.
+>
+> **(2) Drag horizontal da pill** — Renan queria "drag-and-drop, mas somente
+> horizontal". Implementação:
+>
+> - `pillService` ganha `beginDrag(screenX)` / `dragTo(screenX)` / `endDrag()` /
+>   `isDragging()` — `screen.X` absoluto evita feedback loop. Clamp ao display
+>   primário.
+> - IPC `pill:begin-drag` / `pill:drag-to` / `pill:end-drag`.
+> - `<Pill>` ui-kit aceita `onPointerDown/Move/Up/Cancel` props.
+> - PillApp substitui `onClick` por pointer events. Threshold 5px distingue
+>   click (toggle expand) de drag (IPC, sem toggle). `setPointerCapture` no
+>   pointerdown garante eventos contínuos.
+> - `touch-action: none` no `.pill` evita interferência do browser.
+>
+> **(3) "Suas metas" quebrando linha** — `.label` no `<Pill>` ui-kit ganha
+> `white-space: nowrap`. Pill expande horizontalmente conforme necessário.
+>
+> **(4) Animação tosca/bouncy** — substitui `cubic-bezier(0.34, 1.4, 0.64, 1)`
+> (spring overshoot) por `cubic-bezier(0.16, 1, 0.3, 1)` (ease-out expo, sem
+> overshoot). Duração 320ms → 360ms. Adiciona content fade-in animation 280ms no
+> `.compactLayout`/`.expandedLayout` (translateY 4px → 0 + opacity). Respeita
+> `prefers-reduced-motion`.
+>
+> **Total testes:** Agent 283 → 297 (+14 drag); ui-kit 60 estável.
+
 > **Atualização W2 — Canvas transparentes + animações fluidas (Sessão 25):**
 >
 > Sessão 25 atende 3 issues visuais reportadas por Renan após validar a Sessão

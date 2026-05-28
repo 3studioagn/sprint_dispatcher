@@ -9,6 +9,55 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Fixed — Sessão 26 (2026-05-28)
+
+- **Overlay ainda com fundo dark uniforme** — Sessão 25 colocou
+  `transparent: true` na BrowserWindow + ThemeProvider override, mas
+  o `body` continuava `background: var(--sprint-color-background)`
+  (dark) bloqueando a transparência. Fix: `main.tsx` adiciona
+  `body.overlay-mode` quando não é pill window; `global.css` regra
+  combinada `body.overlay-mode` + `body.pill-mode` → transparent.
+  Operador vê APENAS o card central.
+- **"Suas metas" quebrando linha no compact** — `.label` do `<Pill>`
+  ganha `white-space: nowrap`. Pill expande horizontalmente conforme
+  necessário.
+- **Animação compact ↔ expanded tosca/bouncy** — substitui
+  `cubic-bezier(0.34, 1.4, 0.64, 1)` (spring overshoot) por
+  `cubic-bezier(0.16, 1, 0.3, 1)` (ease-out expo, sem overshoot).
+  Duração 320ms → 360ms. Adiciona content fade-in animation 280ms
+  no `.compactLayout`/`.expandedLayout` — conteúdo entra com slide
+  pequeno (translateY 4px → 0) em vez de "pop" abrupto. Respeita
+  `prefers-reduced-motion: reduce`.
+
+### Added — Sessão 26 (2026-05-28)
+
+- **Drag horizontal da pill** — operador pode arrastar pill para
+  esquerda/direita; BrowserWindow do pill se reposiciona via IPC
+  para acompanhar cursor (clampado às bordas do display primário,
+  sem feedback loop graças ao uso de `screen.X` absoluto). Mecanismo:
+  - `pillService` ganha `beginDrag(screenX)` / `dragTo(screenX)` /
+    `endDrag()` / `isDragging()`.
+  - IPC `pill:begin-drag`, `pill:drag-to`, `pill:end-drag`.
+  - `Api.pill.beginDrag/dragTo/endDrag` em ipc-types + preload.
+  - `<Pill>` aceita `onPointerDown`/`Move`/`Up`/`Cancel` props
+    (mudança no ui-kit).
+  - `PillApp` substitui `onClick` por pointer event handlers.
+    Threshold de 5px distingue click puro (sem movimento → toggle
+    expand) de drag real (movimento > threshold → IPC drag, sem
+    toggle). `setPointerCapture` garante eventos contínuos.
+  - `touch-action: none` no `.pill` (ui-kit) — browser não interfere
+    com gestos default durante drag.
+
+### Notes — Sessão 26
+
+- Total testes: ui-kit 60 estável; Agent 283 → 297 (+14 drag).
+- `setPointerCapture`/`releasePointerCapture` stubs em PillApp.test.tsx
+  beforeAll (jsdom não implementa nativamente). Helper
+  `firePointerEvent` usa `createEvent` + `Object.defineProperty(event,
+  'screenX', ...)` porque jsdom ignora `screenX` no init dict.
+- 2 changesets: `c9-pill-pointer-events-refine.md` (ui-kit minor) +
+  `c3-overlay-transparent-drag.md` (Agent minor).
+
 ### Fixed — Sessão 25 (2026-05-28)
 
 - **Pill canvas com retângulo dark em volta** — `ThemeProvider.module.css`

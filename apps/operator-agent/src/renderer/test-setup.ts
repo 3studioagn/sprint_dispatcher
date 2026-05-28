@@ -59,6 +59,9 @@ if (typeof window !== 'undefined') {
     pill: {
       requestCurrent: vi.fn(() => Promise.resolve(null)),
       onUpdate: vi.fn(() => NOOP_UNSUBSCRIBE),
+      beginDrag: vi.fn(() => Promise.resolve()),
+      dragTo: vi.fn(() => Promise.resolve()),
+      endDrag: vi.fn(() => Promise.resolve()),
     },
   };
   Object.defineProperty(window, 'api', {
@@ -79,6 +82,9 @@ beforeEach(() => {
   vi.mocked(window.api.overlay.closeReopened).mockReset().mockResolvedValue(undefined);
   vi.mocked(window.api.pill.requestCurrent).mockReset().mockResolvedValue(null);
   vi.mocked(window.api.pill.onUpdate).mockReset().mockReturnValue(NOOP_UNSUBSCRIBE);
+  vi.mocked(window.api.pill.beginDrag).mockReset().mockResolvedValue(undefined);
+  vi.mocked(window.api.pill.dragTo).mockReset().mockResolvedValue(undefined);
+  vi.mocked(window.api.pill.endDrag).mockReset().mockResolvedValue(undefined);
 });
 
 afterEach(() => {

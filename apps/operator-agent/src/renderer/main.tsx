@@ -23,10 +23,14 @@ if (!rootElement) {
 // Mesma surface IPC (preload é compartilhado), mas roots diferentes.
 const isPillWindow = new URLSearchParams(window.location.search).has('pill');
 
+// Sessão 26 fix: ambos windows precisam de body transparente para que
+// transparent BrowserWindows funcionem visualmente — sem isso, o body
+// dark (var(--sprint-color-background)) bloqueia toda a transparência.
+// pill-mode existe desde BL-C3-017; overlay-mode é novo.
 if (isPillWindow) {
-  // Pill ocupa só 100px no topo da tela. Marca body para CSS reset
-  // específico (background transparente para não poluir abaixo da bar).
   document.body.classList.add('pill-mode');
+} else {
+  document.body.classList.add('overlay-mode');
 }
 
 ReactDOM.createRoot(rootElement).render(

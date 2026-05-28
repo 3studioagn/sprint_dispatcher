@@ -97,6 +97,11 @@ const api: Api = {
       ipcRenderer.invoke('pill:request-current') as Promise<PillCurrentInfo | null>,
     onUpdate: (cb: (event: PillUpdateEvent) => void): Unsubscribe =>
       subscribePush<PillUpdateEvent>('pill:update', cb),
+    beginDrag: (screenX: number): Promise<void> =>
+      ipcRenderer.invoke('pill:begin-drag', screenX) as Promise<void>,
+    dragTo: (screenX: number): Promise<void> =>
+      ipcRenderer.invoke('pill:drag-to', screenX) as Promise<void>,
+    endDrag: (): Promise<void> => ipcRenderer.invoke('pill:end-drag') as Promise<void>,
   },
 };
 

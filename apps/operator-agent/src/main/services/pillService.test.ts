@@ -38,6 +38,9 @@ const { mockBrowserWindow, mockBrowserWindowInstances, mockScreen } = vi.hoisted
       destroy: vi.fn(() => {
         destroyed = true;
       }),
+      // Sessão 26: drag horizontal usa getPosition/setPosition
+      getPosition: vi.fn((): [number, number] => [790, 0]),
+      setPosition: vi.fn(),
       webContents: {
         send: vi.fn(),
       },
@@ -433,6 +436,130 @@ describe('PillService — dismiss API (Sessão 24)', () => {
     service.hide();
 
     expect(service.getCurrent()).toBeNull();
+  });
+});
+
+describe('PillService — drag horizontal (Sessão 26)', () => {
+  let service: PillService;
+
+  function makePayloadOK() {
+    return parseSprintPayload({
+      schema_version: '1.0',
+      sprint_id: SPRINT_ID_1,
+      criado_por: 'TestRenan',
+      criado_em: '2026-05-26T09:00:00.000Z',
+      user_id: 'joao',
+      title: 'Hora do Rush',
+      body_html: 'corpo',
+      meta: 4,
+      deadline_at: '2026-05-26T11:00:00.000Z',
+    });
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(FIXED_NOW);
+    mockBrowserWindow.mockClear();
+    mockBrowserWindowInstances.length = 0;
+    service = new PillService({ now: () => FIXED_NOW });
+  });
+
+  afterEach(() => {
+    service.destroy();
+    vi.useRealTimers();
+  });
+
+  it('beginDrag captura windowX atual + screenX inicial', () => {
+    service.show(makePayloadOK());
+    const w = lastWindow();
+    // Mock retorna [790, 0] como windowX
+    service.beginDrag(800);
+
+    expect(service.isDragging()).toBe(true);
+    // dragTo subsequente usa o state capturado
+    service.dragTo(850); // delta = +50; targetX = 790 + 50 = 840
+    expect(w.setPosition).toHaveBeenCalledWith(840, 0);
+  });
+
+  it('dragTo sem beginDrag prévio é no-op', () => {
+    service.show(makePayloadOK());
+    const w = lastWindow();
+    w.setPosition.mockClear();
+
+    service.dragTo(500);
+
+    expect(w.setPosition).not.toHaveBeenCalled();
+  });
+
+  it('dragTo clampa à borda esquerda (minX = display.bounds.x)', () => {
+    service.show(makePayloadOK());
+    const w = lastWindow();
+    service.beginDrag(800);
+
+    // Tenta mover MUITO à esquerda (delta -2000 → targetX = -1210)
+    service.dragTo(-1200);
+
+    // Display bounds.x = 0 → clampedX = 0
+    expect(w.setPosition).toHaveBeenCalledWith(0, 0);
+  });
+
+  it('dragTo clampa à borda direita (maxX = screen - pill width)', () => {
+    service.show(makePayloadOK());
+    const w = lastWindow();
+    service.beginDrag(800);
+
+    // Display 1920 wide; pill 340 wide → maxX = 1580. Tenta mover muito.
+    service.dragTo(5000); // delta = +4200; targetX = 4990 → clampa a 1580
+
+    expect(w.setPosition).toHaveBeenCalledWith(1580, 0);
+  });
+
+  it('endDrag limpa state — dragTo subsequente é no-op', () => {
+    service.show(makePayloadOK());
+    const w = lastWindow();
+    service.beginDrag(800);
+    service.endDrag();
+    expect(service.isDragging()).toBe(false);
+
+    w.setPosition.mockClear();
+    service.dragTo(900);
+    expect(w.setPosition).not.toHaveBeenCalled();
+  });
+
+  it('beginDrag sem janela criada é no-op', () => {
+    // service.show NÃO chamado → window null
+    service.beginDrag(100);
+
+    expect(service.isDragging()).toBe(false);
+  });
+
+  it('destroy limpa dragState (segurança)', () => {
+    service.show(makePayloadOK());
+    service.beginDrag(800);
+    expect(service.isDragging()).toBe(true);
+
+    service.destroy();
+
+    expect(service.isDragging()).toBe(false);
+  });
+
+  it('vários dragTo em sequência usam mesmo windowX inicial (sem feedback loop)', () => {
+    service.show(makePayloadOK());
+    const w = lastWindow();
+    // getPosition mockado retorna [790, 0] sempre — simula que o
+    // setPosition NÃO atualiza o valor que getPosition retornaria
+    // (em runtime real, getPosition refletiria, mas em teste é
+    // suficiente verificar que beginDrag captura UMA vez).
+    service.beginDrag(800);
+
+    service.dragTo(810); // delta +10 → 800
+    service.dragTo(820); // delta +20 → 810
+    service.dragTo(830); // delta +30 → 820
+
+    // Cada dragTo usa startWindowX=790 capturado em beginDrag
+    expect(w.setPosition).toHaveBeenNthCalledWith(1, 800, 0);
+    expect(w.setPosition).toHaveBeenNthCalledWith(2, 810, 0);
+    expect(w.setPosition).toHaveBeenNthCalledWith(3, 820, 0);
   });
 });
 

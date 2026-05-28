@@ -39,14 +39,21 @@ body {
 }
 
 /*
- * BL-C3-017 — janela do pill (?pill na query). Body + html + #root
- * precisam ser transparentes para o canvas 340×160 do BrowserWindow
- * mostrar APENAS a pill (sem retângulo dark em volta — fix Sessão 25).
- * main.tsx adiciona .pill-mode ao body quando window.location.search
- * contém ?pill.
+ * Body transparente para ambas as janelas (Sessão 26 fix):
+ *
+ * - `.pill-mode` (BL-C3-017): canvas 340×160 do BrowserWindow do pill;
+ *   sem este reset o body dark cobria tudo dando "retângulo preto".
+ * - `.overlay-mode` (Sessão 26): canvas fullscreen do overlay; sem
+ *   este reset o body dark bloqueia o `transparent: true` da
+ *   BrowserWindow, fazendo o operador ver fundo dark uniforme ao
+ *   invés de apenas o card central com apps visíveis ao redor.
+ *
+ * main.tsx adiciona a classe apropriada conforme a query `?pill`.
  */
 body.pill-mode,
-body.pill-mode #root {
+body.pill-mode #root,
+body.overlay-mode,
+body.overlay-mode #root {
   background: transparent;
 }
 

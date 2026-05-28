@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 
 import styles from './Pill.module.css';
 
@@ -63,8 +63,22 @@ export interface PillProps {
   /**
    * Click handler — invocado quando o operador clica em qualquer área do
    * pill. Host alterna `expanded` (ou ignora se desejar UX read-only).
+   * Se o host usa pointer events para drag, deve deixar `onClick`
+   * undefined e disparar o toggle manualmente em `onPointerUp` quando
+   * o gesto for classificado como click (sem movimento significativo).
    */
   onClick?: () => void;
+  /**
+   * Pointer event handlers para drag implementado pelo host (Sessão 26).
+   * Pill DOM (button) recebe os handlers; host usa `e.screenX` para
+   * cálculo de delta absoluto. Para distinguir click de drag, o host
+   * deve track movimento e decidir no `onPointerUp` se chama o
+   * toggle de expand ou se foi drag real.
+   */
+  onPointerDown?: (e: ReactPointerEvent<HTMLButtonElement>) => void;
+  onPointerMove?: (e: ReactPointerEvent<HTMLButtonElement>) => void;
+  onPointerUp?: (e: ReactPointerEvent<HTMLButtonElement>) => void;
+  onPointerCancel?: (e: ReactPointerEvent<HTMLButtonElement>) => void;
   /**
    * Posição horizontal da pill no container (Sessão 25). Aceita atalhos
    * (`'left' | 'center' | 'right'`) ou number 0..100 (percentual). O
@@ -118,6 +132,10 @@ export function Pill({
   date,
   expanded = false,
   onClick,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onPointerCancel,
   position = 'center',
   variant = 'default',
 }: PillProps) {
@@ -147,6 +165,10 @@ export function Pill({
           type="button"
           className={`${containerClass} ${stateClass}`}
           onClick={onClick}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerCancel}
           aria-label={ariaLabel}
           aria-expanded={expanded}
           data-mode={expanded ? 'expanded' : 'compact'}

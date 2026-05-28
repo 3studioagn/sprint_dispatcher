@@ -391,6 +391,20 @@ function registerIpcHandlers(): void {
   // pill:request-current — BL-C3-017 — janela do pill pulla info atual
   // no mount (race-free vs push de pill:update).
   ipcMain.handle('pill:request-current', () => pillService?.getCurrent() ?? null);
+
+  // pill:begin-drag / pill:drag-to / pill:end-drag — Sessão 26 —
+  // drag horizontal. Renderer envia `screenX` absoluto (e.screenX do
+  // PointerEvent) para evitar feedback loop quando o window se move.
+  // Main move BrowserWindow via setPosition; Y permanece fixo.
+  ipcMain.handle('pill:begin-drag', (_e, screenX: number): void => {
+    pillService?.beginDrag(screenX);
+  });
+  ipcMain.handle('pill:drag-to', (_e, screenX: number): void => {
+    pillService?.dragTo(screenX);
+  });
+  ipcMain.handle('pill:end-drag', (): void => {
+    pillService?.endDrag();
+  });
 }
 
 // =============================================================================

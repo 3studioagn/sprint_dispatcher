@@ -73,6 +73,13 @@ export class PillService {
    */
   private deadlineTimer: ReturnType<typeof setTimeout> | null = null;
   /**
+   * Estado da operação de drag horizontal em curso (Sessão 26). Capturado
+   * em `beginDrag` (operador iniciou click+arrastar); usado em `dragTo`
+   * para calcular `setPosition` da BrowserWindow sem feedback loop;
+   * limpo em `endDrag`. `null` quando o operador não está arrastando.
+   */
+  private dragState: { startScreenX: number; startWindowX: number } | null = null;
+  /**
    * `() => Date` injetável — testes podem controlar "agora" para validar
    * timer de deadline sem fake timers globais.
    */
@@ -157,10 +164,71 @@ export class PillService {
   destroy(): void {
     this.clearDeadlineTimer();
     this.currentInfo = null;
+    this.dragState = null;
     if (this.window !== null && !this.window.isDestroyed()) {
       this.window.destroy();
     }
     this.window = null;
+  }
+
+  /**
+   * Captura o estado inicial do drag horizontal (Sessão 26). Operador
+   * pressionou pointer down em cima do pill — armazenamos a posição
+   * de tela absoluta do cursor e a posição atual da BrowserWindow para
+   * usar como âncora durante `dragTo`. Idempotente: chamadas repetidas
+   * sobrescrevem o estado anterior (pointer pode disparar múltiplas
+   * vezes em race).
+   *
+   * Aceita `screenX` absoluto em pixels da tela primária — renderer
+   * envia `e.screenX` que não muda quando a window se move
+   * (diferente de `clientX` que é relativo à window).
+   */
+  beginDrag(screenX: number): void {
+    if (this.window === null || this.window.isDestroyed()) return;
+    const position = this.window.getPosition();
+    const windowX = position[0] ?? 0;
+    this.dragState = { startScreenX: screenX, startWindowX: windowX };
+  }
+
+  /**
+   * Move a BrowserWindow horizontalmente seguindo o cursor (Sessão 26).
+   * Calcula o deslocamento absoluto desde `beginDrag` e aplica via
+   * `setPosition` ao window. Y permanece fixo (drag horizontal apenas).
+   * Clampado às bordas da tela primária — pill nunca sai da viewport.
+   *
+   * No-op se `beginDrag` não foi chamado primeiro (sem state) ou se a
+   * window foi destruída no meio do drag.
+   */
+  dragTo(screenX: number): void {
+    if (this.window === null || this.window.isDestroyed()) return;
+    if (this.dragState === null) return;
+    const delta = screenX - this.dragState.startScreenX;
+    const targetX = this.dragState.startWindowX + delta;
+    const display = screen.getPrimaryDisplay();
+    const minX = display.bounds.x;
+    const maxX = display.bounds.x + display.bounds.width - PILL_WINDOW_WIDTH;
+    const clampedX = Math.max(minX, Math.min(maxX, targetX));
+    const currentY = this.window.getPosition()[1] ?? 0;
+    this.window.setPosition(clampedX, currentY);
+  }
+
+  /**
+   * Finaliza o drag horizontal (Sessão 26). Limpa state para que
+   * `dragTo` subsequente seja no-op. Idempotente: pointer up pode
+   * disparar múltiplas vezes ou nunca disparar (pointer capture
+   * perdido) — em ambos os casos chamar `endDrag` repetidamente é
+   * seguro.
+   */
+  endDrag(): void {
+    this.dragState = null;
+  }
+
+  /**
+   * Drag está atualmente em curso? Útil em testes integrados e para o
+   * caller diferenciar click vs drag.
+   */
+  isDragging(): boolean {
+    return this.dragState !== null;
   }
 
   /**
