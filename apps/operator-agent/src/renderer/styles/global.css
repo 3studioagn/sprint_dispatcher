@@ -40,12 +40,26 @@ body {
 
 /*
  * BL-C3-017 — janela do pill (?pill na query). Body background NÃO deve
- * cobrir o canvas inteiro do BrowserWindow do pill: o <OverlayMinimized>
- * desenha apenas a bar dark (32px) + badge pendurada. Área abaixo da bar
- * ficaria com fundo escuro permanente sem este reset, criando uma faixa
- * inerte de 68px no topo da tela. main.tsx adiciona .pill-mode ao body
- * quando window.location.search contém ?pill.
+ * cobrir o canvas inteiro do BrowserWindow do pill: a `<Pill>` desenha
+ * apenas a própria badge no topo-centro. Áreas vazias do canvas
+ * (340×160) ficariam dark sem reset, criando "moldura" indesejada
+ * visível ao operador. main.tsx adiciona .pill-mode ao body quando
+ * window.location.search contém ?pill.
  */
 body.pill-mode {
   background: transparent;
+}
+
+/*
+ * Centraliza a `<Pill>` horizontalmente no topo do canvas do
+ * BrowserWindow do pill (Sessão 24). Window é 340×160; pill compact
+ * ~220×52 e expanded ~280×140. Sempre alinhada ao topo do canvas
+ * (= topo do monitor) — efeito "pendurada do borda superior".
+ */
+.pill-positioner {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  width: 100%;
+  height: 100%;
 }

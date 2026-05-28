@@ -139,18 +139,23 @@ export type OverlayMinimizeEvent = Record<string, never>;
 
 /**
  * Subset da sprint exibida no pill — campos visíveis ao operador no
- * `<OverlayMinimized>` (label = title, value = meta) + identificadores
- * para distinguir a sprint. Renderer NÃO recebe o body_html nem deadline_at
- * — pill é só "última sprint confirmada", não interativo nesses campos.
+ * `<Pill>` do `@sprint/ui-kit`. Inclui identificadores (sprintId,
+ * userId) para distinguir a sprint + dados renderizados (title como
+ * label muted, meta como value destacado, deadline_at formatado para
+ * "Até: HH:MMh" no modo expanded).
  *
- * O main process preserva o payload completo internamente para reabrir
- * overlay fullscreen quando o operador clica no pill (via `pill:expand`).
+ * Sessão 24 (redesign Pill): adicionado `deadline_at` ao payload — o
+ * renderer agora precisa do timestamp para mostrar a deadline no modo
+ * expanded. Antes não era enviado porque pill era informacional só com
+ * label+value. Sem body_html (pill não exibe corpo da sprint).
  */
 export interface PillCurrentInfo {
   sprintId: string;
   userId: string;
   title: string;
   meta: number;
+  /** Timestamp ISO-8601 da deadline — renderer formata para HH:MMh. */
+  deadline_at: string;
 }
 
 /**
@@ -279,8 +284,12 @@ export interface Api {
 
   /**
    * API do pill (BL-C3-017) — usado pela janela do pill (`?pill` no
-   * URL). Renderer pulla info atual no mount + subscribe a updates;
-   * click no pill chama `expand` para reabrir overlay fullscreen.
+   * URL). Renderer pulla info atual no mount + subscribe a updates.
+   *
+   * Sessão 24: removido `expand` IPC. Click no pill é state local do
+   * renderer (`useState(isExpanded)` em PillApp) — não reabre overlay
+   * fullscreen. Auto-collapse após 5s gerenciado pelo renderer via
+   * setTimeout. Overlay aparece apenas em dispatch novo.
    */
   readonly pill: {
     /**
@@ -290,13 +299,6 @@ export interface Api {
      * janela).
      */
     readonly requestCurrent: () => Promise<PillCurrentInfo | null>;
-
-    /**
-     * Operador clicou no pill — main esconde o pill e reabre o overlay
-     * fullscreen com o payload completo da última sprint ackeada (modo
-     * BL-C3-009 reopen, sem novo ack). Idempotente em races.
-     */
-    readonly expand: () => Promise<void>;
 
     /**
      * Registra callback para atualizações de conteúdo do pill (operador

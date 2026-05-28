@@ -1,0 +1,170 @@
+/**
+ * <Pill> — styling standalone (sem bar full-width).
+ *
+ * Topo reto + cantos inferiores arredondados — encaixa visualmente sob o
+ * topo do monitor, simulando "pendurada" do borda. Sombra projeta para
+ * baixo destacando a saliência. Background dark canonical
+ * `--sprint-color-background`.
+ *
+ * Transição compact ↔ expanded animada via `padding` e `min-width` —
+ * 250ms ease-in-out cobre a percepção de "crescimento" sem distrair.
+ *
+ * Magnitudes EXCLUSIVAMENTE via tokens `--sprint-*` (zero hex/px
+ * hardcoded fora de tokens).
+ */
+
+.pill {
+  background: var(--sprint-color-background);
+  color: var(--sprint-color-text);
+  font-family: inherit;
+  border: none;
+  cursor: pointer;
+  overflow: hidden;
+  pointer-events: auto;
+
+  /* Topo reto + cantos inferiores arredondados — "saída do topo do monitor" */
+  border-radius: 0 0 var(--sprint-radius-md) var(--sprint-radius-md);
+
+  /* Sombra desce — reforça a sensação de "pendurada" */
+  box-shadow: 0 6px 16px -2px rgba(0, 0, 0, 0.55);
+
+  /* Transições suaves entre compact ↔ expanded */
+  transition:
+    padding 250ms ease-in-out,
+    min-width 250ms ease-in-out;
+}
+
+.pill:hover {
+  background: var(--sprint-color-surface);
+}
+
+.pill:focus-visible {
+  outline: 2px solid var(--sprint-color-primary);
+  outline-offset: 3px;
+}
+
+/* Reservado — variant urgent (W4 polish) */
+.pill--urgent {
+  /* TODO(W4): borda ou pulse laranja para urgência. */
+}
+
+/* ============================================================
+ * Modo COMPACT — linha única horizontal, densidade alta
+ * ============================================================ */
+
+.pill--compact {
+  padding: var(--sprint-space-3) var(--sprint-space-5);
+  min-width: 0;
+}
+
+.compactLayout {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sprint-space-3);
+}
+
+/* ============================================================
+ * Modo EXPANDED — grid 2×2, métrica grande + deadline + data
+ * ============================================================ */
+
+.pill--expanded {
+  padding: var(--sprint-space-4) var(--sprint-space-5) var(--sprint-space-5);
+  min-width: 220px;
+}
+
+.expandedLayout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sprint-space-4);
+}
+
+.metricRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--sprint-space-5);
+}
+
+.metricGroup {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.valueBig {
+  font-size: var(--sprint-font-size-3xl);
+  font-weight: var(--sprint-font-weight-bold);
+  line-height: var(--sprint-line-height-tight);
+  color: var(--sprint-color-text);
+  font-feature-settings: 'tnum';
+}
+
+.unit {
+  font-size: var(--sprint-font-size-sm);
+  color: var(--sprint-color-text-muted);
+  margin-top: var(--sprint-space-1);
+}
+
+.deadlineGroup {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.deadlineLabel {
+  font-size: var(--sprint-font-size-xs);
+  color: var(--sprint-color-text-muted);
+}
+
+.deadlineValue {
+  font-size: var(--sprint-font-size-lg);
+  font-weight: var(--sprint-font-weight-bold);
+  color: var(--sprint-color-text);
+  font-feature-settings: 'tnum';
+}
+
+.footerRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--sprint-space-3);
+}
+
+.labelGroup {
+  display: flex;
+  align-items: center;
+  gap: var(--sprint-space-2);
+}
+
+.dateBadge {
+  font-size: var(--sprint-font-size-xs);
+  color: var(--sprint-color-text-muted);
+  background: var(--sprint-color-surface);
+  padding: var(--sprint-space-1) var(--sprint-space-2);
+  border-radius: var(--sprint-radius-sm);
+  font-feature-settings: 'tnum';
+}
+
+/* ============================================================
+ * Conteúdo compartilhado entre compact e expanded
+ * ============================================================ */
+
+.label {
+  font-size: var(--sprint-font-size-sm);
+  color: var(--sprint-color-text-muted);
+  font-weight: var(--sprint-font-weight-regular);
+}
+
+.value {
+  font-size: var(--sprint-font-size-xl);
+  font-weight: var(--sprint-font-weight-bold);
+  color: var(--sprint-color-text);
+  font-feature-settings: 'tnum';
+}
+
+.icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--sprint-color-primary);
+}

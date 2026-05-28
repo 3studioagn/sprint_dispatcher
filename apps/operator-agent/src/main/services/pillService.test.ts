@@ -54,7 +54,8 @@ const { mockBrowserWindow, mockBrowserWindowInstances, mockScreen } = vi.hoisted
 
   const screen = {
     getPrimaryDisplay: vi.fn(() => ({
-      workAreaSize: { width: 1920, height: 1080 },
+      bounds: { x: 0, y: 0, width: 1920, height: 1080 },
+      workAreaSize: { width: 1920, height: 1040 },
     })),
   };
 
@@ -120,10 +121,6 @@ describe('PillService — estado inicial', () => {
     expect(service.getCurrent()).toBeNull();
   });
 
-  it('getFullPayload retorna null antes de show', () => {
-    expect(service.getFullPayload()).toBeNull();
-  });
-
   it('isShown retorna false antes de show', () => {
     expect(service.isShown()).toBe(false);
   });
@@ -147,14 +144,15 @@ describe('PillService — show (primeira chamada)', () => {
     service.destroy();
   });
 
-  it('primeira show cria BrowserWindow com largura da tela primária', () => {
+  it('primeira show cria BrowserWindow 340×160 centralizada no topo (Sessão 24)', () => {
     service.show(makePayload());
     expect(mockBrowserWindow).toHaveBeenCalledTimes(1);
+    // Screen = 1920 wide; pill = 340 wide → x = (1920 - 340) / 2 = 790
     expect(mockBrowserWindow).toHaveBeenCalledWith(
       expect.objectContaining({
-        width: 1920,
-        height: 100,
-        x: 0,
+        width: 340,
+        height: 160,
+        x: 790,
         y: 0,
       }),
     );
@@ -191,13 +189,14 @@ describe('PillService — show (primeira chamada)', () => {
       userId: 'joao',
       title: 'Hora do Rush',
       meta: 4,
+      deadline_at: '2026-05-26T21:00:00.000Z',
     });
   });
 
-  it('preserva fullPayload internamente para expand', () => {
-    const payload = makePayload();
-    service.show(payload);
-    expect(service.getFullPayload()).toBe(payload);
+  it('currentInfo inclui deadline_at do payload (Sessão 24)', () => {
+    service.show(makePayload());
+    const info = service.getCurrent();
+    expect(info?.deadline_at).toBe('2026-05-26T21:00:00.000Z');
   });
 });
 
@@ -263,15 +262,13 @@ describe('PillService — hide', () => {
     service.destroy();
   });
 
-  it('hide limpa currentInfo + fullPayload + chama window.hide', () => {
+  it('hide (alias dismiss) limpa currentInfo + chama window.hide', () => {
     service.show(makePayload());
     expect(service.getCurrent()).not.toBeNull();
-    expect(service.getFullPayload()).not.toBeNull();
 
     service.hide();
 
     expect(service.getCurrent()).toBeNull();
-    expect(service.getFullPayload()).toBeNull();
     expect(lastWindow().hide).toHaveBeenCalledTimes(1);
   });
 
@@ -334,7 +331,6 @@ describe('PillService — deadline timer (Sessão 23)', () => {
     // FIXED_NOW = 2026-05-26T10:00; deadline = 2026-05-26T09:00 (1h passado)
     service.show(makePayloadWithDeadline('2026-05-26T09:00:00.000Z'));
     expect(service.getCurrent()).toBeNull();
-    expect(service.getFullPayload()).toBeNull();
     expect(mockBrowserWindow).not.toHaveBeenCalled();
   });
 
@@ -350,7 +346,6 @@ describe('PillService — deadline timer (Sessão 23)', () => {
     // Avança 1ms → timer dispara → dismiss
     vi.advanceTimersByTime(1);
     expect(service.getCurrent()).toBeNull();
-    expect(service.getFullPayload()).toBeNull();
     expect(lastWindow().hide).toHaveBeenCalled();
   });
 
@@ -389,7 +384,7 @@ describe('PillService — deadline timer (Sessão 23)', () => {
   });
 });
 
-describe('PillService — hideWindow / showWindow split (Sessão 23)', () => {
+describe('PillService — dismiss API (Sessão 24)', () => {
   let service: PillService;
 
   function makePayloadOK() {
@@ -419,58 +414,13 @@ describe('PillService — hideWindow / showWindow split (Sessão 23)', () => {
     vi.useRealTimers();
   });
 
-  it('hideWindow oculta janela mas preserva currentInfo + fullPayload', () => {
+  it('dismiss limpa currentInfo + cancela timer + oculta janela', () => {
     service.show(makePayloadOK());
     expect(service.getCurrent()).not.toBeNull();
-
-    service.hideWindow();
-
-    expect(lastWindow().hide).toHaveBeenCalled();
-    expect(service.getCurrent()).not.toBeNull(); // ← state preservado
-    expect(service.getFullPayload()).not.toBeNull();
-  });
-
-  it('showWindow re-exibe janela com state preservado (pós hideWindow)', () => {
-    service.show(makePayloadOK());
-    service.hideWindow();
-    const w = lastWindow();
-    w.show.mockClear();
-    w.webContents.send.mockClear();
-
-    service.showWindow();
-
-    expect(w.show).toHaveBeenCalledTimes(1);
-    // Push pill:update enviado para atualizar conteúdo. Inspeção direta
-    // evita unsafe-assignment do nested objectContaining.
-    expect(w.webContents.send).toHaveBeenCalledTimes(1);
-    const [channel, payload] = w.webContents.send.mock.calls[0] as [
-      string,
-      { info: { sprintId: string } },
-    ];
-    expect(channel).toBe('pill:update');
-    expect(payload.info.sprintId).toBe(SPRINT_ID_1);
-  });
-
-  it('showWindow sem state (após dismiss) é no-op', () => {
-    service.show(makePayloadOK());
-    service.dismiss();
-
-    service.showWindow();
-
-    // Janela foi criada apenas no show inicial; showWindow após dismiss
-    // não cria nova nem chama show (state vazio).
-    expect(mockBrowserWindow).toHaveBeenCalledTimes(1);
-    // Janela existente está hidden após dismiss — showWindow não a revela.
-    expect(lastWindow().isVisible()).toBe(false);
-  });
-
-  it('dismiss limpa state + cancela timer + oculta janela', () => {
-    service.show(makePayloadOK());
 
     service.dismiss();
 
     expect(service.getCurrent()).toBeNull();
-    expect(service.getFullPayload()).toBeNull();
     expect(lastWindow().hide).toHaveBeenCalled();
 
     // Timer cancelado — não dispara dismiss extra
@@ -478,12 +428,11 @@ describe('PillService — hideWindow / showWindow split (Sessão 23)', () => {
     expect(service.getCurrent()).toBeNull();
   });
 
-  it('hide() ainda funciona como alias para dismiss (retrocompat)', () => {
+  it('hide() funciona como alias para dismiss (retrocompat)', () => {
     service.show(makePayloadOK());
     service.hide();
 
     expect(service.getCurrent()).toBeNull();
-    expect(service.getFullPayload()).toBeNull();
   });
 });
 
@@ -503,7 +452,6 @@ describe('PillService — destroy', () => {
 
     expect(w.destroy).toHaveBeenCalledTimes(1);
     expect(service.getCurrent()).toBeNull();
-    expect(service.getFullPayload()).toBeNull();
   });
 
   it('próximo show após destroy cria nova janela', () => {

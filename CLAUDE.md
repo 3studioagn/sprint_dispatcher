@@ -519,6 +519,44 @@ apps/operator-agent/src/
 >   (queue/overlay/archive), Overlay refatorado (loading/error/warning/ reopen).
 >   Coverage thresholds inalterados (W1.C8 baseline).
 
+> **Atualização W2 — Redesign pill standalone (Sessão 24):**
+>
+> Sessão 24 redesigna o pill conforme feedback visual e comportamental do Renan
+> após validação manual. Substitui `<OverlayMinimized>` (com bar full-width) por
+> novo `<Pill>` standalone no `@sprint/ui-kit` — só a badge pendurada do topo,
+> sem bar atrás. BrowserWindow encolhe de full-screen-width × 100px → 340×160
+> transparent top-center. Apps abaixo permanecem visíveis/clicáveis fora da
+> pill.
+>
+> **Comportamento:**
+>
+> - **Click no pill NÃO reabre overlay** — alterna entre compact (linha única) e
+>   expanded (grid 2×2 com métrica + "Até: HH:MMh" + label + data badge)
+>   puramente local no renderer.
+> - **Auto-collapse após 5s** sem novo click — `useEffect` agenda `setTimeout`
+>   quando expanded vira true; cleanup cancela em re-click, unmount, ou push de
+>   nova sprint.
+> - **Overlay fullscreen aparece APENAS em dispatch novo** — elimina o bug "não
+>   consigo fechar a overlay novamente" reportado.
+>
+> **API IPC removida** (breaking interno): `Api.pill.expand`,
+> `ipcMain.handle('pill:expand', ...)`,
+> `pillService.hideWindow/showWindow/ getFullPayload` (split temporário da
+> Sessão 23 não precisa mais existir).
+>
+> **PillService API simplificada:** `show(payload)` / `dismiss()` / `hide()`
+> (alias) / `getCurrent()` / `isShown()` / `destroy()`. Window 340×160
+> transparent top-center via `screen.getPrimaryDisplay().bounds`. Deadline timer
+> mantido. `PillCurrentInfo` ganha `deadline_at` para o renderer formatar
+> "HH:MMh" + "DD/MM" badge.
+>
+> **Wires limpos em main/index.ts:** `overlay:close-reopened` não chama mais
+> `pillService.showWindow()`; `handleReopenLast` não chama mais
+> `pillService.hideWindow()` (pill permanece atrás do overlay; mesmo z-level
+> screen-saver, pill ocupa só topo 160px).
+>
+> **Total testes:** Agent 283 estável; ui-kit 53 (+14 do `<Pill>`).
+
 > **Atualização W2 — BL-C3-017 + fix CSS (Sessão 22):**
 >
 > Continuação da Sessão 21, incorporando: (a) fix do CSS bundle do

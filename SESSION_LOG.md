@@ -66,6 +66,92 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 24 — 2026-05-28 — Redesign pill standalone (sem bar, expand inline)
+
+**Wave atual:** W2 — em curso **Método:** extensão das Sessões 21/22/23 após
+Renan validar visualmente e reportar UX issues **Duração estimada:** ~3h (2
+commits) **Itens trabalhados:** [redesign pill, novo `<Pill>` no ui-kit,
+simplificação pillService + IPC]
+
+### Objetivo da sessão
+
+- Bug: "ao clicar na badge, abre overlay com 'Confirmando...' e não consigo sair
+  dessa tela. Não tem botão de fechar."
+- Mudança de design: "click na badge expande in-place (em vez de mostrar overlay
+  novamente). Overlay aparece somente quando enviar a meta."
+- Mudança visual: "ela não vai ter mais aquela faixa preta atrás dela, vai ser
+  somente a badge saindo do canto de cima do monitor."
+
+Decisões Renan via AskUserQuestion: (1) expanded auto-colapsa após 5s; (2)
+conteúdo: meta + unidade + deadline + label + data badge.
+
+### O que foi feito
+
+- **Novo componente `<Pill>` no @sprint/ui-kit** — standalone, sem bar
+  full-width. Props: `label`/`value`/`unit?`/`deadline?`/`date?`/
+  `expanded?`/`onClick?`/`variant?`. CSS transition 250ms. Cantos inferiores
+  arredondados, topo reto. +14 testes (53 no ui-kit).
+
+- **pillService refactor:** Window 340×160 transparent top-center via
+  `screen.getPrimaryDisplay().bounds` + cálculo de x. Removidos
+  `hideWindow`/`showWindow`/`getFullPayload`. API: `show`/`dismiss`/ `hide`
+  (alias)/`getCurrent`/`isShown`/`destroy`. Deadline timer mantido.
+  `PillCurrentInfo` ganha `deadline_at`.
+
+- **IPC `pill:expand` removido** (handler + Api + preload + test-setup).
+  `overlay:close-reopened` não chama mais `showWindow`; `handleReopenLast` não
+  chama mais `hideWindow`.
+
+- **PillApp refactor:** `<Pill>` do ui-kit + `useState(isExpanded)`. Click
+  toggla; `useEffect` agenda `setTimeout(5000)` em expanded; cleanup cancela em
+  re-click/unmount/push nova sprint. Helpers `formatDeadline` (HH:MMh) +
+  `formatDate` (DD/MM). `.pill-positioner` no global.css.
+
+### Estado atual
+
+- Bug "não consigo fechar" resolvido por design — pill não abre overlay.
+- 283 testes verdes no Agent (estável). 53 no ui-kit (+14 do `<Pill>`).
+- Lint + type-check + build clean.
+- 2 changesets: `c9-pill-component.md` + `c3-pill-redesign.md`.
+
+### Decisões tomadas
+
+- Novo `<Pill>` ao lado de `<OverlayMinimized>` (não substituição).
+- Auto-collapse 5s via `setTimeout` no useEffect.
+- IPC `pill:expand` removido — click é state local; reduz superfície da API e
+  elimina classe de bugs de race pull/push.
+- Window 340×160 transparent vs full-screen-width × 100 anterior.
+- Helpers de formatação no PillApp (não no ui-kit) — Pill recebe string já
+  formatada.
+- `vi.useFakeTimers({ shouldAdvanceTime: true })` em PillApp.test.tsx para
+  permitir microtasks do `requestCurrent` enquanto controla `setTimeout` do
+  auto-collapse.
+
+### Bloqueios encontrados
+
+1. `exactOptionalPropertyTypes` rejeita spread de props opcionais undefined.
+   Fix: spread conditional `...(unit !== undefined ? { unit } : {})`.
+2. Mock do screen no pillService.test.ts precisava `bounds`. Atualizado.
+3. PillApp tests timeout com fake timers + async `requestCurrent`. Fix:
+   `shouldAdvanceTime: true`.
+
+### Próximo passo
+
+Push da branch + validação visual + abertura de PR. Validar especialmente: pill
+sem bar dark atrás, click expande, auto-collapse 5s, overlay só em dispatch.
+
+**Próxima sessão sugerida:** C2 (Leader) na W2 + BL-C4-004 (writeCancel) — fecha
+cancelamento ponta-a-ponta.
+
+### Observações para a próxima sessão
+
+- **`<OverlayMinimized>` é legacy** — pode ser removido em W4.
+- **PillCurrentInfo mudou** — campo `deadline_at` agora required.
+- **Click-through no canvas do pill window não implementado** — áreas vazias
+  340×160 não são click-through. W3 polish.
+
+---
+
 ## Sessão 22 — 2026-05-28 — Fix CSS ui-kit + BL-C3-017 pill orchestration
 
 **Wave atual:** W2 (Refinement + Design System) — em curso **Método:** extensão

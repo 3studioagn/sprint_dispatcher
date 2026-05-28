@@ -163,10 +163,9 @@ async function handleReopenLast(): Promise<void> {
       return;
     }
     overlayService.reopenFromHistory(last.payload);
-    // BL-C3-017 + Sessão 23: pill (se exibido) oculta janela mas
-    // preserva state — volta a aparecer quando overlay reaberto fecha
-    // (até o deadline do pill expirar).
-    pillService?.hideWindow();
+    // BL-C3-017 + Sessão 24: pill permanece visível atrás do overlay
+    // fullscreen reaberto (mesmo z-level screen-saver, pill window
+    // ocupa só topo da tela). Quando overlay fecha, pill já está ali.
   } catch (err) {
     console.error('[reopen-last] falha ao carregar último arquivado', err);
     trayService.displayInfoBalloon(
@@ -380,30 +379,18 @@ function registerIpcHandlers(): void {
   );
 
   // overlay:close-reopened — BL-C3-009 — operador clica "Fechar" em
-  // overlay reaberto via tray ou pill. Sem ack adicional; apenas
-  // hide(). Sessão 23: se pill state ainda está vivo (deadline não
-  // expirou), pill volta — UX de "badge persistente até final da meta".
+  // overlay reaberto via tray. Sem ack adicional; apenas hide().
+  // Sessão 24: pill não tem mais relação com este handler (click no
+  // pill é state local do renderer, não chama IPC). Pill permanece
+  // visível atrás do overlay durante reopen via tray; quando overlay
+  // fecha, pill já está ali (não precisa re-show).
   ipcMain.handle('overlay:close-reopened', (): void => {
     overlayService?.closeReopened();
-    pillService?.showWindow();
   });
 
   // pill:request-current — BL-C3-017 — janela do pill pulla info atual
   // no mount (race-free vs push de pill:update).
   ipcMain.handle('pill:request-current', () => pillService?.getCurrent() ?? null);
-
-  // pill:expand — BL-C3-017 — operador clica no pill → oculta janela
-  // do pill (preserva state) + reabre overlay fullscreen com payload
-  // preservado (modo reopen, sem novo ack — BL-C3-009 pattern).
-  // Sessão 23: hideWindow em vez de hide/dismiss para o pill voltar
-  // após o operador fechar o overlay reaberto.
-  ipcMain.handle('pill:expand', (): void => {
-    if (pillService === null || overlayService === null) return;
-    const payload = pillService.getFullPayload();
-    if (payload === null) return;
-    overlayService.reopenFromHistory(payload);
-    pillService.hideWindow();
-  });
 }
 
 // =============================================================================

@@ -18,13 +18,15 @@
  * — registrados como ADR-022 e ADR-023 quando forem criados.
  */
 
-export { Overlay, OverlayMinimized, TextBlock } from './components';
+export { Overlay, OverlayMinimized, Pill, TextBlock } from './components';
 export type {
   OverlayProps,
   OverlayVariant,
   OverlayMinimizedProps,
   OverlayMinimizedPosition,
   OverlayMinimizedVariant,
+  PillProps,
+  PillVariant,
   TextBlockProps,
 } from './components';
 

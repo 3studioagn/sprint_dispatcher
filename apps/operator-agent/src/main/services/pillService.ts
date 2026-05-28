@@ -1,25 +1,33 @@
 /**
- * PillService — gestão do BrowserWindow do pill (badge minimizado) que
- * aparece após "Recebi" (BL-C3-017).
+ * PillService — gestão do BrowserWindow do pill (badge informativa
+ * standalone) que aparece após "Recebi" (BL-C3-017, redesigned Sessão 24).
  *
  * **Quando aparece:** apenas após ack final via `handleAck` quando a
  * fila esvazia. Se há próxima sprint, ela vai direto para overlay
  * fullscreen (sem pill no meio — fluxo continuous). Auto-close por
  * timeout (sem ack) continua hide() invisível → tray, NÃO usa pill.
  *
- * **Quando some:** clique no pill (expand → reabre overlay fullscreen
- * em modo BL-C3-009 reopen) OU nova sprint chega via polling (pill é
- * eclipsada pelo overlay normal).
+ * **Quando some:**
+ * - Timer de `deadline_at` da sprint expira (Sessão 23 — pill
+ *   persiste até o final da meta).
+ * - Nova sprint chega via polling → `dismiss()` no wire
+ *   `queueLocal.onNextSprint` do main/index.ts.
  *
- * **Window:** BrowserWindow dedicada (frameless + topmost +
- * skipTaskbar), 100px de altura ancorada em top:0 com largura da
- * tela primária. Opaca dark — body padronizado em
- * `var(--sprint-color-background)` (BL-C3-016). Não-focusable
- * (não rouba foco do app que o operador está usando).
+ * **NÃO some por click** (Sessão 24): clique no pill alterna entre
+ * modo compact e expanded INTERNAMENTE no renderer (`<Pill>` do
+ * `@sprint/ui-kit` aceita prop `expanded`). Não reabre overlay
+ * fullscreen — overlay aparece apenas em dispatch novo.
  *
- * **State:** `currentInfo` (subset compatível com renderer) +
- * `fullPayload` (preservado para expand reabrir overlay com payload
- * completo). hide() limpa ambos; show(payload) atualiza ambos.
+ * **Window:** BrowserWindow dedicada (frameless + transparent +
+ * topmost screen-saver + skipTaskbar + focusable false). Tamanho
+ * fixo cobrindo área compact + expanded (340×160), ancorada no
+ * topo-center da tela primária. Body do renderer transparente fora
+ * da pill — apps abaixo permanecem clicáveis nas áreas vazias do
+ * window.
+ *
+ * **State:** `currentInfo` (subset compatível com renderer — sprintId,
+ * userId, title, meta, deadline_at). Sem fullPayload (não precisa mais
+ * — pill não reabre overlay).
  *
  * **Renderer separado:** mesma `index.html`, query `?pill` distingue
  * — `main.tsx` roteia para `<PillApp>` em vez de `<App>`. Mesmo
@@ -41,27 +49,27 @@ const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
 const IS_DEV = Boolean(DEV_SERVER_URL);
 
 /**
- * Altura do BrowserWindow do pill. Bar do `<OverlayMinimized>` é 32px
- * (`--sprint-space-8`); badge extende abaixo (padding ~24px + shadow
- * ~6px) — 100px dá folga para a sombra do badge não ser cortada.
+ * Dimensões do BrowserWindow do pill (Sessão 24).
+ *
+ * - Width: largura visual da pill (~280px no expanded) + margem para
+ *   sombra ~30px de cada lado → 340px.
+ * - Height: cobre compact (~52px) + transição CSS para expanded (~140px)
+ *   + sombra inferior (~16px) → 160px.
+ *
+ * Window é fixo neste tamanho; CSS controla o que aparece (compact vs
+ * expanded). Áreas vazias do window são transparent (body.pill-mode
+ * em global.css).
  */
-const PILL_HEIGHT = 100;
+const PILL_WINDOW_WIDTH = 340;
+const PILL_WINDOW_HEIGHT = 160;
 
 export class PillService {
   private window: BrowserWindow | null = null;
   private currentInfo: PillCurrentInfo | null = null;
   /**
-   * Payload completo da última sprint acked — preservado internamente
-   * para que o handler `pill:expand` consiga chamar
-   * `overlayService.reopenFromHistory(payload)` sem precisar buscar do
-   * disco. Renderer NÃO vê este campo (recebe apenas `currentInfo`).
-   */
-  private fullPayload: SprintPayload | null = null;
-  /**
    * Timer que dispara `dismiss()` quando `payload.deadline_at` é
-   * alcançado (Sessão 23 fix — pill persiste "até o final do tempo
-   * daquela meta"). Cancelado em `dismiss()`, `destroy()`, ou novo
-   * `show()` (que reseta com o deadline da nova sprint).
+   * alcançado (Sessão 23 — pill persiste até o final da meta).
+   * Cancelado em `dismiss()`, `destroy()`, ou novo `show()`.
    */
   private deadlineTimer: ReturnType<typeof setTimeout> | null = null;
   /**
@@ -86,42 +94,19 @@ export class PillService {
    * chamado para sprints vigentes).
    */
   show(payload: SprintPayload): void {
-    this.fullPayload = payload;
     this.currentInfo = {
       sprintId: payload.sprint_id,
       userId: payload.user_id,
       title: payload.title,
       meta: payload.meta,
+      deadline_at: payload.deadline_at,
     };
     this.startDeadlineTimer(payload.deadline_at);
     if (this.currentInfo === null) return; // dismissed pelo timer expirado
-    this.showWindow();
-  }
 
-  /**
-   * Apenas oculta a janela; preserva `currentInfo`, `fullPayload` e
-   * `deadlineTimer`. Uso pelo handler `pill:expand` — operador clicou
-   * no pill, overlay reabre, pill some visualmente mas seu state segue
-   * vivo para reaparecer quando o overlay reaberto fecha (Sessão 23
-   * fix: "badge deve ficar persistente até o final do tempo daquela meta").
-   */
-  hideWindow(): void {
-    if (this.window === null || this.window.isDestroyed()) return;
-    if (this.window.isVisible()) this.window.hide();
-  }
-
-  /**
-   * Re-exibe pill se há state preservado. Uso pelo handler
-   * `overlay:close-reopened` — após o operador fechar o overlay
-   * reaberto, pill volta com a mesma sprint até o deadline passar
-   * (ou nova sprint chegar). No-op se não há state (operador
-   * dismissed manualmente OU deadline expirou enquanto overlay
-   * estava aberto).
-   */
-  showWindow(): void {
-    if (this.currentInfo === null) return;
     if (this.window === null || this.window.isDestroyed()) {
       this.window = this.createWindow();
+      // Renderer pulla currentInfo via `pill:request-current` no mount.
     } else {
       this.window.webContents.send('pill:update', {
         info: this.currentInfo,
@@ -135,13 +120,11 @@ export class PillService {
    * Uso por: (a) timer de deadline disparar; (b) nova sprint chegar
    * via polling (queueService.onNextSprint); (c) cleanup explícito.
    *
-   * Alias `hide()` mantido para retrocompatibilidade com callers
-   * anteriores à Sessão 23 que esperavam semântica "dismiss".
+   * Alias `hide()` mantido para retrocompatibilidade.
    */
   dismiss(): void {
     this.clearDeadlineTimer();
     this.currentInfo = null;
-    this.fullPayload = null;
     if (this.window !== null && !this.window.isDestroyed() && this.window.isVisible()) {
       this.window.hide();
     }
@@ -155,15 +138,6 @@ export class PillService {
   /** Snapshot do pill atual — consumido pelo pull pattern do renderer. */
   getCurrent(): PillCurrentInfo | null {
     return this.currentInfo;
-  }
-
-  /**
-   * Payload completo da sprint exibida no pill — usado internamente
-   * pelo handler `pill:expand` para reabrir overlay fullscreen sem
-   * leitura adicional do disco.
-   */
-  getFullPayload(): SprintPayload | null {
-    return this.fullPayload;
   }
 
   /** Pill está atualmente visível ao operador? */
@@ -183,7 +157,6 @@ export class PillService {
   destroy(): void {
     this.clearDeadlineTimer();
     this.currentInfo = null;
-    this.fullPayload = null;
     if (this.window !== null && !this.window.isDestroyed()) {
       this.window.destroy();
     }
@@ -217,18 +190,20 @@ export class PillService {
 
   private createWindow(): BrowserWindow {
     const display = screen.getPrimaryDisplay();
-    const { width: screenWidth } = display.workAreaSize;
+    const { width: screenWidth, x: displayX, y: displayY } = display.bounds;
+    // Centralizado horizontalmente no topo da tela primária.
+    const x = displayX + Math.floor((screenWidth - PILL_WINDOW_WIDTH) / 2);
+    const y = displayY;
 
     const win = new BrowserWindow({
-      width: screenWidth,
-      height: PILL_HEIGHT,
-      x: 0,
-      y: 0,
+      x,
+      y,
+      width: PILL_WINDOW_WIDTH,
+      height: PILL_WINDOW_HEIGHT,
       frame: false,
-      // transparent: true → área abaixo da bar (32px) e ao redor da
-      // badge (no canvas de 100px) fica transparente em vez de mostrar
-      // background opaco da janela. Renderer aplica `body.pill-mode {
-      // background: transparent }` para combinar.
+      // transparent: true → áreas do canvas fora da pill ficam transparentes
+      // permitindo o operador ver/clicar nas apps abaixo. Renderer aplica
+      // `body.pill-mode { background: transparent }` para casar.
       transparent: true,
       alwaysOnTop: true,
       skipTaskbar: true,
@@ -237,8 +212,8 @@ export class PillService {
       minimizable: false,
       maximizable: false,
       // focusable: false → pill NÃO rouba foco do app que o operador
-      // está usando ao clicar nele (operador clica, ack expande overlay,
-      // mas seu IDE/Illustrator continua com foco visual normal).
+      // está usando ao clicar nele (operador clica, pill expande mas
+      // seu IDE/Illustrator continua com foco visual normal).
       focusable: false,
       show: false,
       title: 'Sprint Dispatcher · Pill',

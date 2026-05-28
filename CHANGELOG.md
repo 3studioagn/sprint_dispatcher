@@ -9,6 +9,42 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Changed — Sessão 24 (2026-05-28) — Redesign pill standalone
+
+- **Novo componente `<Pill>` no `@sprint/ui-kit`** — standalone (sem
+  bar full-width), cantos inferiores arredondados / topo reto. Props
+  `label`/`value`/`unit?`/`deadline?`/`date?`/`expanded?`/`onClick?`.
+  CSS transition 250ms entre compact ↔ expanded. `<OverlayMinimized>`
+  mantido exported para retrocompat (não usado em produção).
+- **Pill window do Operator Agent** encolhe de full-screen-width × 100
+  → 340×160 transparent top-center. Áreas vazias do canvas são
+  transparentes; apps abaixo permanecem visíveis/clicáveis.
+- **Click no pill NÃO reabre overlay** — alterna entre compact e
+  expanded puramente local no renderer. Overlay fullscreen aparece
+  APENAS em dispatch novo via polling. Elimina bug "não consigo
+  fechar a overlay novamente" reportado.
+- **Auto-collapse após 5s** sem novo click — `useEffect` agenda
+  `setTimeout` quando expanded vira true; cleanup cancela em re-click,
+  unmount, ou push de nova sprint.
+
+### Removed — Sessão 24 (2026-05-28)
+
+- **`Api.pill.expand`** IPC + handler `ipcMain.handle('pill:expand')`.
+- **`pillService.hideWindow()` / `showWindow()` / `getFullPayload()`**
+  (split temporário da Sessão 23 não precisa mais existir).
+- Wires associados em `main/index.ts` — `overlay:close-reopened` não
+  chama mais `pillService.showWindow()`; `handleReopenLast` não chama
+  mais `pillService.hideWindow()`.
+
+### Notes — Sessão 24
+
+- `PillCurrentInfo` ganha campo `deadline_at` (ISO-8601) — renderer
+  formata para "HH:MMh" no expanded.
+- pillService API simplificada para 6 métodos: `show`/`dismiss`/`hide`
+  (alias)/`getCurrent`/`isShown`/`destroy`.
+- Total testes: ui-kit 39 → 53 (+14 do `<Pill>`); Agent 283 estável
+  (-3 deletados de hideWindow/showWindow +3 novos cobrindo redesign).
+
 ### Fixed — Sessão 22 (2026-05-28)
 
 - **CSS bundle do `@sprint/ui-kit` não era carregado pelo Agent em

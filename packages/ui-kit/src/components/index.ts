@@ -8,5 +8,8 @@ export type {
   OverlayMinimizedVariant,
 } from './OverlayMinimized';
 
+export { Pill } from './Pill';
+export type { PillProps, PillVariant } from './Pill';
+
 export { TextBlock } from './TextBlock';
 export type { TextBlockProps } from './TextBlock';

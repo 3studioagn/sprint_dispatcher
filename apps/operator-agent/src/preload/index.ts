@@ -95,7 +95,6 @@ const api: Api = {
   pill: {
     requestCurrent: (): Promise<PillCurrentInfo | null> =>
       ipcRenderer.invoke('pill:request-current') as Promise<PillCurrentInfo | null>,
-    expand: (): Promise<void> => ipcRenderer.invoke('pill:expand') as Promise<void>,
     onUpdate: (cb: (event: PillUpdateEvent) => void): Unsubscribe =>
       subscribePush<PillUpdateEvent>('pill:update', cb),
   },
