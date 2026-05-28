@@ -9,26 +9,43 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Changed — Sessão 28 (2026-05-28) — Curva luxe na animação compact ↔ expanded
+
+- **Easing extra-suave** no `<Pill>` — `cubic-bezier(0.19, 1, 0.22, 1)`
+  substitui `cubic-bezier(0.32, 0.72, 0, 1)` (iOS canonical). Curva
+  "luxe": control point 1 puxa verticalmente ao topo (0.19→1.0),
+  criando plateau de deceleração estendido. Mais pronunciada
+  visualmente; Renan pediu "algo mais smooth e mais bezier".
+- **Duração estendida** — container transition 480ms → 620ms; content
+  emerge 360ms → 460ms.
+- **Stagger maior no content emerge** — `.expandedLayout`
+  `animation-delay` 80ms → 140ms. Mais respiração entre crescimento
+  do container e emersão do conteúdo.
+- **Keyframe translateY** 6px → 8px (mais presença na emersão).
+- Aplicada uniformemente no `.pill` container, `.compactLayout` e
+  `.expandedLayout`. `prefers-reduced-motion: reduce` cobre tudo.
+
 ### Changed — Sessão 27 (2026-05-28) — Refino animação compact ↔ expanded
 
 - **Easing iOS canônica** no `<Pill>` — `cubic-bezier(0.32, 0.72, 0, 1)`
   substitui `cubic-bezier(0.16, 1, 0.3, 1)` (ease-out expo). Decelera
-  ainda mais suavemente, percepção "natural" sem jerk.
+  ainda mais suavemente, percepção "natural" sem jerk. _(Superseded
+  pela Sessão 28; histórico preservado.)_
 - **Duração mais "considerada"** — container transition 360ms → 480ms;
-  content emerge 280ms → 360ms.
+  content emerge 280ms → 360ms. _(Superseded pela Sessão 28.)_
 - **Crescimento horizontal mais pronunciado** — `.pill--expanded`
   min-width 220 → 280px + padding horizontal `--sprint-space-5` →
   `--sprint-space-6`. Crescimento lateral mais visível (Renan reportou
   "cresce pro lado bem de leve").
 - **Stagger no content emerge** — `.expandedLayout` ganha
-  `animation-delay: 80ms`. Container abre primeiro, conteúdo emerge
-  em seguida, em vez de ambos saltarem juntos.
+  `animation-delay: 80ms`. _(Superseded por 140ms na Sessão 28.)_
 - **Feedback tátil no click** — `.pill:active { transform: scale(0.97) }`
   com transition transform 140ms ease-out. Operador percebe haptic
   visual ao pressionar.
 - **`will-change: padding, min-width`** — promove layer GPU durante
   transição, animação mais suave em dispositivos intermediários.
-- **Content emerge translateY** 4px → 6px (mais presença).
+- **Content emerge translateY** 4px → 6px. _(Superseded por 8px na
+  Sessão 28.)_
 - Todas as mudanças respeitam `prefers-reduced-motion: reduce`.
 
 ### Fixed — Sessão 26 (2026-05-28)

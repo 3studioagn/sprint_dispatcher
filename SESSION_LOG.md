@@ -66,6 +66,80 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 28 — 2026-05-28 — Curva luxe na animação compact ↔ expanded do Pill
+
+**Wave atual:** W2 — em curso **Método:** extensão da Sessão 27 após Renan
+reportar que iOS canonical seguia pouco fluida **Duração estimada:** ~15min (1
+commit) **Itens:** [animação click compact ↔ expanded — iteração 4 sobre a mesma
+timing]
+
+### Objetivo da sessão
+
+> "Queria algo mais smooth e mais bezier."
+
+Sessão 27 trocou ease-out expo por iOS canonical (`0.32, 0.72, 0, 1`) + durações
+480/360ms + min-width 280px. Renan validou que crescimento horizontal ficou bom,
+mas curva ainda parecia "pouco bezier". Pediu curva mais pronunciada e mais
+smooth.
+
+### O que foi feito
+
+Refino exclusivamente CSS no `<Pill>` do `@sprint/ui-kit`:
+
+- **Curva "luxe"** — `cubic-bezier(0.19, 1, 0.22, 1)` substitui
+  `cubic-bezier(0.32, 0.72, 0, 1)`. Control point 1 puxa verticalmente ao topo
+  (0.19→1.0), criando aceleração inicial sutil + plateau de deceleração
+  estendido. Mais pronunciada visualmente; sensação de "settle" gradual.
+- **Duração estendida** — container 480ms → 620ms; content emerge 360ms → 460ms.
+- **Stagger maior** — `.expandedLayout` `animation-delay` 80ms → 140ms. Mais
+  respiração entre container e conteúdo.
+- **Keyframe translateY** 6px → 8px.
+- Curva aplicada uniformemente no `.pill` container e no content emerge
+  (`.compactLayout`/`.expandedLayout`).
+- `prefers-reduced-motion: reduce` cobre todas as novas props.
+
+### Estado atual
+
+- 60 testes verdes no ui-kit (estável; CSS de timing não tem testes).
+- Agent inalterado nesta sessão.
+- 1 changeset: `c9-pill-expand-refine-v3.md` (rename do v2, conteúdo reescrito;
+  v2 ainda não foi consumido em release).
+
+### Decisões tomadas
+
+- `cubic-bezier(0.19, 1, 0.22, 1)` como curva padrão para transições do Pill —
+  supersede iOS canonical (Sessão 27) e ease-out expo (Sessão 26) como
+  referência interna para "smooth + bezier".
+- Manter `.pillEntrance` (entrance animation) com curva antiga
+  (`cubic-bezier(0.16, 1, 0.3, 1)`) — não foi alvo do feedback; só transição de
+  estado compact ↔ expanded foi.
+- 620ms é o teto pragmático antes de a animação parecer lenta — se feedback
+  futuro pedir ainda mais smooth, primeiro ajustar curva e só depois duração.
+- Stagger 140ms é proporcional ao container 620ms (~23% da duração), ratio
+  similar à Sessão 27 (80/480 ≈ 17%) — alinhamento visual mantido.
+
+### Bloqueios encontrados
+
+Nenhum.
+
+### Próximo passo
+
+Aguardar validação visual do Renan. Mesma promessa da Sessão 27 — "Somente essa
+animação e estará aprovado". Se aprovado, branch fica pronta para PR/merge.
+
+### Observações para a próxima sessão
+
+- **Iteração 25 → 26 → 27 → 28 sobre a mesma timing** documenta a calibração do
+  critério estético do Renan: spring overshoot → ease-out expo → iOS canonical →
+  curva luxe. Vale referenciar para tom de outros componentes (overlay card,
+  button pulse, etc.).
+- **Changeset v3 substitui v2** (mesmo arquivo renomeado, conteúdo reescrito)
+  porque v2 ainda não havia sido releasado. Histórico via `git log --follow`.
+- **Não foi pedido refactor no `.pillEntrance`** — entrance segue com ease-out
+  expo. Se feedback futuro pedir consistência, unificar com a curva luxe.
+
+---
+
 ## Sessão 27 — 2026-05-28 — Refino fino da animação compact ↔ expanded do Pill
 
 **Wave atual:** W2 — em curso **Método:** extensão da Sessão 26 após Renan

@@ -67,22 +67,23 @@
   /* Sombra desce — reforça a sensação de "pendurada" */
   box-shadow: 0 6px 16px -2px rgba(0, 0, 0, 0.55);
 
-  /* Transições compact ↔ expanded (Sessão 27 refine — Renan reportou
-   * que mesmo após Sessão 26 a animação ainda estava "tosca" e
-   * "crescia pro lado bem de leve"). Mudanças:
+  /* Transições compact ↔ expanded (Sessão 28 — Renan pediu "algo mais
+   * smooth e mais bezier" após Sessão 27 ainda parecer pouco fluida).
+   * Mudanças:
    *
-   * - Easing: cubic-bezier(0.32, 0.72, 0, 1) — curva iOS "ease-out"
-   *   canônica do Tobias Ahlin. Decelera ainda mais suavemente que o
-   *   ease-out expo anterior; percepção "natural" sem nenhum
-   *   overshoot ou jerk.
-   * - Duração: 480ms (era 360ms). Reforça o "crescimento considerado".
-   * - Min-width expandido: 280px (era 220px — ver `.pill--expanded`
-   *   abaixo) → crescimento horizontal mais pronunciado / menos sutil.
+   * - Easing: cubic-bezier(0.19, 1, 0.22, 1) — curva "luxe" com
+   *   deceleração extra-longa. Mais pronunciada visualmente que a
+   *   iOS canonical (0.32, 0.72, 0, 1): control point 1 puxa
+   *   verticalmente para o topo (0.19→1.0), criando aceleração inicial
+   *   sutil + plateau de deceleração estendido. Sensação de "settle"
+   *   gradual, ar de mecanismo refinado.
+   * - Duração: 620ms (era 480ms). Ar "considerado" reforçado;
+   *   crescimento horizontal sentido com presença.
    * - Inclui `transform` na lista para o `:active` scale (feedback
-   *   tátil) animar suavemente em vez de saltar. */
+   *   tátil) animar suavemente. */
   transition:
-    padding 480ms cubic-bezier(0.32, 0.72, 0, 1),
-    min-width 480ms cubic-bezier(0.32, 0.72, 0, 1),
+    padding 620ms cubic-bezier(0.19, 1, 0.22, 1),
+    min-width 620ms cubic-bezier(0.19, 1, 0.22, 1),
     transform 140ms ease-out;
 }
 
@@ -138,12 +139,10 @@
   display: inline-flex;
   align-items: center;
   gap: var(--sprint-space-3);
-  /* Sessão 27 refine: fade-in mais smooth do conteúdo. Duração 360ms
-   * (era 280ms) + easing iOS + translateY 6px (era 4px) para emergir
-   * com mais presença. Combina com a size transition 480ms do
-   * container — content aparece progressivamente enquanto o container
-   * cresce, eliminando a sensação de "pop" abrupto. */
-  animation: pill-content-emerge 360ms cubic-bezier(0.32, 0.72, 0, 1) both;
+  /* Sessão 28: curva luxe (0.19, 1, 0.22, 1) + duração 460ms (era 360ms)
+   * + translateY 8px no keyframe (era 6px). Conteúdo emerge mais
+   * fluido enquanto o container 620ms cresce ao redor. */
+  animation: pill-content-emerge 460ms cubic-bezier(0.19, 1, 0.22, 1) both;
 }
 
 /* ============================================================
@@ -163,19 +162,18 @@
   display: flex;
   flex-direction: column;
   gap: var(--sprint-space-4);
-  /* Sessão 27: pequeno delay (80ms) na emersão do conteúdo expanded —
-   * dá ao container tempo de iniciar o crescimento ANTES do conteúdo
-   * preencher. Resultado: "container abre, conteúdo emerge" em vez de
-   * "ambos pop juntos". O `both` mantém opacity:0 durante o delay para
-   * evitar flash. Compact não tem delay porque comprime e fica
-   * imediatamente visível. */
-  animation: pill-content-emerge 360ms cubic-bezier(0.32, 0.72, 0, 1) 80ms both;
+  /* Sessão 28: stagger aumentado para 140ms (era 80ms) — com container
+   * 620ms, dá mais "respiração" entre o início do crescimento e a
+   * emersão do conteúdo. Duração 460ms + curva luxe casam com
+   * .compactLayout. `both` mantém opacity:0 durante o delay (evita
+   * flash). */
+  animation: pill-content-emerge 460ms cubic-bezier(0.19, 1, 0.22, 1) 140ms both;
 }
 
 @keyframes pill-content-emerge {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
