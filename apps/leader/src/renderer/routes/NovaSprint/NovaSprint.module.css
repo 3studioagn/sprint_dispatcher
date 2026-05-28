@@ -60,8 +60,10 @@
 
 .dispatchButton:disabled {
   /* Preserva forma de pill clara mesmo desabilitado — antes opacity:0.4
-     fazia parecer "rounded square" em fundo escuro. */
-  background: rgba(235, 199, 106, 0.35);
+     fazia parecer "rounded square" em fundo escuro.
+     Cor: laranja warm `--color-accent` (#f5a557) com alpha 0.35 —
+     espelha a paleta unificada do ui-kit (Sessão 35). */
+  background: rgba(245, 165, 87, 0.35);
   color: rgba(10, 10, 10, 0.55);
   cursor: not-allowed;
 }
