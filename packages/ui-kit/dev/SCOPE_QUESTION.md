@@ -196,7 +196,27 @@ como gate W1→W2 aprovado.
 
 ## Status
 
-🟡 **Sessão BLOQUEADA** aguardando decisão sobre escopo da versão minimizada.
+✅ **RESOLVIDO** (Renan decidiu via AskUserQuestion durante a mesma sessão).
 
-Após sua resposta, retomo direto da Fase 1 (BL-C9-001 scaffold) e prossigo até o
-gate final.
+### Decisões finais aplicadas
+
+| Pergunta                                                     | Decisão                                                                                                               |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| Versão minimizada exige expansão de escopo. Como prosseguir? | **Adicionar 6º componente agora** — `<OverlayMinimized>` criado como BL-C9-006 nesta mesma sessão                     |
+| Nome do componente                                           | **`<OverlayMinimized>`** (conecta semanticamente com `<Overlay>`)                                                     |
+| Props                                                        | `label`, `value`, `onClick`, `variant?` — sem prop `icon` (SVG check pontilhado fixo)                                 |
+| Positioning                                                  | **Host decide** (Agent em BL-C3-017 via `BrowserWindow` frameless+topmost ou portal). Componente renderiza só o pill. |
+| `tsconfig.base.json` path alias                              | **Seguir padrão atual** — NÃO editar. Paths vão em `apps/operator-agent/tsconfig.json` em BL-C3-015.                  |
+| Numeração de ADRs                                            | **Corrigir para ADR-022/023** (próximos números livres; ADR-003/004 já estão ocupados por SMB e Polling).             |
+
+### Entregas resultantes
+
+- `packages/ui-kit/src/components/OverlayMinimized/` — implementação completa
+  (.tsx, .module.css, index.ts, .test.tsx)
+- 6 changesets em `.changeset/c9-001..006-*.md`
+- Sem edição em `tsconfig.base.json`
+- Refs corretas a ADR-022/023 (futuros) no `src/index.ts`, `DECISIONS.md`,
+  `README.md`
+
+Este documento permanece no repo como **audit trail** da decisão arquitetural
+(por que BL-C9-006 existe se não estava no backlog v1.1 original).

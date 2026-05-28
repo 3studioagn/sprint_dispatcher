@@ -2242,3 +2242,101 @@ entre adapters só apareceriam em produção.
 - `packages/contracts/src/__helpers__/{arbitraries,xssVectors}.ts`
 - `packages/fs-adapter/src/{__helpers__/{arbitraries,tmpFixtures},integration/{parity,roundtrip}}.ts`
 - [fast-check docs](https://fast-check.dev)
+
+---
+
+## Nota técnica — C9 (BL-C9-001 a 006)
+
+Decisões internas tomadas no scaffold e conteúdo do package `@sprint/ui-kit`,
+**não promovidas a ADR** porque estão dentro do escopo de implementação do
+componente. ADRs formais do C9 chegam em BL-C7-008 (**ADR-022: adoção do C9**) e
+BL-C7-009 (**ADR-023: não adoção de Storybook na v1.0**) — sessões futuras.
+
+> **Atenção à numeração:** o prompt master original referenciava "ADR-003 /
+> ADR-004" para o C9, mas esses números já estão ocupados (ADR-003 = SMB;
+> ADR-004 = Polling). Os ADRs reais serão **ADR-022 e ADR-023** (próximos livres
+> após ADR-021).
+
+### Decisões
+
+1. **Vite library mode com `vite-plugin-dts` (rollupTypes: true)** ao invés de
+   tsc puro. Razão: integra CSS Modules naturalmente e gera ESM tree-shakeable
+   num único pipeline. Diverge do padrão source-first dos outros packages
+   (contracts/fs-adapter/logger), mas justificada — ui-kit é o primeiro com
+   React + CSS Modules e tsc puro não lida bem com ambos.
+
+2. **`tokens.css` exportado via subpath + copiado por
+   `vite-plugin-static-copy`** em vez de bundlado. Razão: importado via
+   `import '@sprint/ui-kit/tokens.css'` em apps; precisa existir como recurso
+   CSS independente em `dist/`.
+
+3. **Tokens single-tier semânticos** + escala neutra contínua (100-900).
+   Two-tier (primitivos + semânticos) deferido — overkill para o MVP.
+
+4. **Tema DARK** extraído da imagem 'Hora do Rush!' anexada à sessão. Identidade
+   ARTFLEXÍVEIS canônica a partir desta wave: card `#1A1A1A`, text `#FFFFFF`,
+   primary `#F5A557` (warm orange). Test anti-regressão para light theme em
+   `tokens.test.ts`.
+
+5. **CSS reset em arquivo separado** (`theme/reset.css`), importado pelo
+   `<ThemeProvider>`. Permite consumo isolado se necessário. Reset NÃO toca
+   font/color/background — esses ficam no `.module.css` do ThemeProvider para
+   serem rastreáveis via tokens.
+
+6. **`<ThemeProvider>` sem Context API** — design tokens propagam por cascata
+   CSS, idempotentes em aninhamento.
+
+7. **Variant `'urgent'` em `<Overlay>` e `<OverlayMinimized>` reservado** — prop
+   existe, hook CSS pronto, regra vazia com TODO. Hardening visual deferido para
+   wave 4.
+
+8. **`<TextBlock>` sanitiza em todo render** (defesa em profundidade, ADR-014) —
+   sem memoização. Otimização tardia (BL-C8-008 ou wave 4).
+
+9. **`acknowledgeLabel` default `'Recebido'`** em `<Overlay>` — matching design
+   da imagem. Override via prop se necessário.
+
+10. **`<OverlayMinimized>` (BL-C9-006, NOVO)** — componente adicional aprovado
+    pelo Renan via SCOPE_QUESTION.md durante a sessão. Não estava no backlog
+    v1.1 porque CLAUDE.md §1 prometia "minimiza para ícone na bandeja", mas a
+    segunda imagem anexada mostrou pill on-screen. Props: `label`, `value`,
+    `onClick`, `variant?`. **Sem prop `icon`** (SVG check pontilhado fixo —
+    identidade canônica). **Sem positioning CSS** (host decide via
+    `BrowserWindow` frameless+topmost ou portal — coordenação em BL-C3-017).
+
+11. **`@sprint/contracts` adicionado como dep workspace do ui-kit** — primeira
+    ligação inter-package partindo de C9. Usado apenas pelo `<TextBlock>` para
+    `sanitizeBodyHtml`. Externalizado em `vite.config.ts` (não vai pro bundle).
+
+12. **Path alias `@sprint/ui-kit` NÃO foi adicionado a `tsconfig.base.json`** —
+    decisão do Renan via AskUserQuestion. `tsconfig.base.json` não tem seção
+    `paths` (padrão atual do monorepo: paths são responsabilidade do
+    consumidor). Alias entra em `apps/operator-agent/tsconfig.json` durante
+    BL-C3-015.
+
+13. **`tsconfig.node.json`** para `vite.config.ts` e `vitest.config.ts` (padrão
+    leader, G-010). Sem isso, ESLint `projectService: true` rejeita os arquivos.
+
+14. **`src/test-setup.ts` dentro de `src/`** (não na raiz) — match
+    `include: ["src/**/*.ts"]` do tsconfig sem exception.
+
+15. **`fireEvent` em vez de `userEvent` para tests de click** — userEvent v14
+    conflita com `vi.useFakeTimers` (timeout). `fakeTimers` escopado por teste
+    com `try/finally`, não global em `beforeEach`.
+
+16. **`commitlint.config.cjs`** ampliado para aceitar scope `C9`. Sem isso,
+    todos os commits desta sessão seriam rejeitados.
+
+17. **Coverage thresholds OFF nesta sessão.** Apenas 31 smoke tests para validar
+    "package vivo + XSS bloqueado". Meta de 85%+ entregue em BL-C8-008 (sessão
+    dedicada). `TODO(BL-C8-008)` no `vitest.config.ts`.
+
+### Referências
+
+- Sessão de implementação: BL-C9-completo (Wave 2, Sessão 20)
+- `packages/ui-kit/dev/SCOPE_QUESTION.md` — audit trail da decisão BL-C9-006
+- CLAUDE.md §4 "Estrutura interna de `@sprint/ui-kit` (W2.C9)" — convenções
+  detalhadas
+- ADR-014 (sanitização) — base para defesa em profundidade do `<TextBlock>`
+- G-010 (CLAUDE.md §12) — padrão `tsconfig.node.json` para configs Vite
+- Backlog v1.1 §6/C9

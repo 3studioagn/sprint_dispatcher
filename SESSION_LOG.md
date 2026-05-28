@@ -66,6 +66,151 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 20 — 2026-05-28 — C9 Design System / UI Kit inteiro (BL-C9-001 a 006)
+
+**Wave atual:** W2 (Refinement + Design System) — em curso **Método:** sessão
+única atômica entregando o componente C9 inteiro **Duração estimada:** ~4h (7
+commits) **Itens trabalhados:** [BL-C9-001, BL-C9-002, BL-C9-003, BL-C9-004,
+BL-C9-005, **BL-C9-006 (novo)**]
+
+### Objetivo da sessão
+
+Entregar o componente C9 inteiro (`@sprint/ui-kit`) em uma única sessão,
+seguindo o prompt master detalhado fornecido pelo Renan + as duas imagens de
+design anexadas ('Hora do Rush!' overlay completo + versão minimizada).
+
+### O que foi feito
+
+- **Protocolo de início + análise das imagens.** Detectado que a versão
+  minimizada (imagem 2) NÃO é tray icon (cenário a) mas componente React
+  on-screen (cenário b) — bloqueio formal levantado em
+  `packages/ui-kit/dev/SCOPE_QUESTION.md` com proposta + AskUserQuestion.
+- **Decisões do Renan (via AskUserQuestion):**
+  - Adicionar 6º componente agora (`<OverlayMinimized>` como BL-C9-006)
+  - Seguir padrão atual de paths (NÃO editar `tsconfig.base.json`)
+  - Corrigir refs para ADR-022/023 (não ADR-003/004 que já estão ocupados)
+  - Confirmou props `<OverlayMinimized>`: label/value/onClick/variant
+  - Sem prop icon (SVG check pontilhado fixo)
+  - Sem positioning CSS (host decide)
+- **Fase 1 (commit `e2656b1` — BL-C9-001 scaffold)** — estrutura
+  `packages/ui-kit/src/{components,theme,tokens}`, package.json ESM, Vite
+  library mode + vite-plugin-dts + vite-plugin-static-copy, Vitest jsdom,
+  `tsconfig.node.json` (G-010), `commitlint.config.cjs` ampliado para C9.
+- **Fase 2 (commit `d7f978b` — BL-C9-002 tokens)** — `tokens.css` DARK theme
+  extraído da imagem: primary `#F5A557`, background `#1A1A1A`, text `#FFFFFF`, 8
+  sizes (xs..4xl com tier 4xl=120px para meta gigante), glow expressivo, pill
+  radius. HTML preview standalone em `dev/palette-preview.html`. 5 tests.
+- **Fase 3 (commit `ea4ebb1` — BL-C9-005 ThemeProvider)** — reset.css mínimo +
+  ThemeProvider wrapper React (sem Context API; cascata CSS). 4 tests.
+  `src/css.d.ts` com declarações para CSS Modules e side-effect imports.
+- **Fase 4 (commit `4ac950a` — BL-C9-003 Overlay)** — chrome (header + body
+  slot + botão "Recebido" com glow), props (title, body, onAcknowledge,
+  acknowledgeLabel default 'Recebido', autoCloseSeconds default 5, variant),
+  a11y (alertdialog + aria-modal + aria-labelledby). 8 tests.
+- **Fase 5 (commit `3347c40` — BL-C9-004 TextBlock)** — sanitização defensiva
+  via `sanitizeBodyHtml` em todo render. `@sprint/contracts` adicionado como
+  workspace dep. Tipografia das tags whitelistadas via seletores aninhados. 6
+  tests cobrindo render normal + XSS (script, on\*, style:url, iframe) +
+  idempotência.
+- **Fase 6 (commit `f385ba2` — BL-C9-006 OverlayMinimized NOVO)** — pill
+  compacto dark com SVG check pontilhado inline. Props: label, value, onClick,
+  variant. Sem icon prop (canônico). Sem positioning (host decide). 7 tests.
+- **Fase 7 (commit final consolidação)** — barrels (`src/index.ts`,
+  `src/components/index.ts`, `src/theme/index.ts`), 6 changesets em
+  `.changeset/c9-001..006-*.md`, README final do package, SCOPE_QUESTION.md
+  marcado RESOLVED, CLAUDE.md atualizado (§4 nova subseção + §5 + §6),
+  DECISIONS.md nova nota técnica.
+
+### Estado atual
+
+- **6 BLs concluídos:** BL-C9-001 a 006 (todos ✅ via commits separados na
+  branch `feature/BL-C9-completo`).
+- **31 smoke tests verdes** (5 tokens + 1 smoke + 4 ThemeProvider + 8 Overlay
+  - 6 TextBlock + 7 OverlayMinimized).
+- **`dist/`** contém: `index.js` (3.40 KB), `index.js.map`, `index.d.ts`,
+  `tokens.css`.
+- **Exports públicos:** `Overlay`, `OverlayMinimized`, `TextBlock`,
+  `ThemeProvider` + 5 tipos. Subpath `@sprint/ui-kit/tokens.css`.
+- **6 changesets** registrados para `@sprint/ui-kit` (minor).
+- **Coverage threshold OFF** — meta de 85% endereçada em BL-C8-008.
+
+### Decisões tomadas
+
+- **Cenário b confirmado** para imagem minimizada — pill on-screen, não tray
+  icon. Bloqueio + AskUserQuestion + decisão do Renan registrados em
+  `dev/SCOPE_QUESTION.md` (audit trail).
+- **Vite library mode** (não source-first como contracts/fs-adapter/logger) —
+  primeiro package com React + CSS Modules.
+- **Tema DARK** extraído da imagem, identidade visual ARTFLEXÍVEIS canônica.
+- **`<Overlay>` body é slot** — chrome genérico; Agent renderiza conteúdo
+  estruturado em BL-C3-015.
+- **`<OverlayMinimized>` SEM positioning** — host (Agent em BL-C3-017) decide
+  via `BrowserWindow` frameless+topmost ou portal.
+- **`acknowledgeLabel` default `'Recebido'`** matching design.
+- **`commitlint.config.cjs`** ampliado para aceitar scope `C9`.
+- **Path alias NÃO em `tsconfig.base.json`** — paths são do consumidor.
+- **ADRs corrigidos** para ADR-022 (adoção) e ADR-023 (não-Storybook). Os ADRs
+  do prompt (ADR-003/004) já estavam ocupados.
+- **fireEvent em vez de userEvent para clicks** — conflito conhecido com
+  fakeTimers; fakeTimers escopado por teste com try/finally.
+
+### Bloqueios encontrados
+
+5 fricções, todas resolvidas inline:
+
+1. **Pre-commit ESLint falhou** na primeira tentativa — `vitest.setup.ts` na
+   raiz do package não estava em nenhum tsconfig (projectService rejeita). Fix:
+   mover para `src/test-setup.ts` + criar `tsconfig.node.json` para vite/vitest
+   configs.
+2. **commit-msg falhou** — scope `C9` não estava no `commitlint.config.cjs`
+   scope-enum (só C0-C8 + repo). Fix: adicionar `C9` ao array + commit bootstrap
+   incluindo a mudança.
+3. **type-check falhou** após criar ThemeProvider.tsx — CSS imports sem
+   declarações (TS2882/TS2307). Fix: criar `src/css.d.ts` com
+   `declare module '*.module.css'` e `declare module '*.css'`.
+4. **Teste do Overlay timeout** — userEvent.click + vi.useFakeTimers
+   incompatíveis. Fix: substituir por fireEvent.click; fakeTimers escopado por
+   teste em try/finally em vez de global beforeEach.
+5. **Pre-commit ESLint falhou (TextBlock test)** — `delete (window as any)`
+   trigger `no-unsafe-member-access`. Fix: tipo estreito
+   `as unknown as { __xss?: boolean }` antes do delete.
+
+### Próximo passo
+
+Gate final consolidado (Fase 8) — bateria completa do monorepo (install
+--frozen-lockfile, lint, type-check, build, test). Push para `develop`. Renan
+revisa e abre PR.
+
+**Próxima sessão sugerida:** **BL-C3-015 — Refatorar overlay do Operator Agent
+para consumir `@sprint/ui-kit`**. Caminho crítico W2. Pré-requisito único (este
+C9) fechado. Em paralelo, podem rodar:
+
+- BL-C7-008 (ADR-022: adoção do C9)
+- BL-C7-009 (ADR-023: não adoção de Storybook v1.0)
+- BL-C8-008 (testes unitários ≥ 85% do C9)
+
+### Observações para a próxima sessão
+
+- **BL-C9-006 é NOVO** — não está no backlog v1.1 original. SCOPE_QUESTION.md
+  documenta a decisão arquitetural. Caso o backlog seja regenerado, incluir
+  BL-C9-006 explicitamente.
+- **ADR-022/023 ainda NÃO existem** — referenciados em CLAUDE.md, DECISIONS.md,
+  README do package e `src/index.ts` como "futuros" (BL-C7-008/009).
+- **Tema DARK é a identidade ARTFLEXÍVEIS canônica desta wave em diante.** Light
+  theme não é planejado; ajustes futuros vêm como overrides contextuais, não
+  como tema oposto.
+- **Ícone do `<OverlayMinimized>` é SVG inline FIXO.** Se design futuro exigir
+  variação, adicionar prop `icon?: ReactNode` é backwards-compatible.
+- **`<Overlay>` body é slot ReactNode** — o conteúdo estruturado da imagem
+  (métrica gigante "20", "Até 18:00h", badge "27/05") é responsabilidade do
+  Agent em BL-C3-015. C9 só entrega chrome.
+- **Coverage threshold OFF** — 31 smoke tests apenas. BL-C8-008 vai endereçar.
+- **`tsconfig.base.json` NÃO editado** — Renan decidiu manter padrão atual.
+  Próximas sessões que consumirem `@sprint/ui-kit` devem adicionar paths em seus
+  próprios tsconfig.json.
+
+---
+
 ## Sessão 19 — 2026-05-27 — Correções pós-auditoria W1 (Caminho 2)
 
 **Wave atual:** W1 → ✅ **PRONTO PARA W2** **Método:** gate-by-gate corretivo,

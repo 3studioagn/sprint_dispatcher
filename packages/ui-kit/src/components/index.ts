@@ -1,3 +1,8 @@
-// Barrel reservado. Conteúdo chega na Fase 7 (consolidação) — exporta
-// Overlay, OverlayMinimized e TextBlock após Fases 4, 5 e 6 fecharem.
-export {};
+export { Overlay } from './Overlay';
+export type { OverlayProps, OverlayVariant } from './Overlay';
+
+export { OverlayMinimized } from './OverlayMinimized';
+export type { OverlayMinimizedProps, OverlayMinimizedVariant } from './OverlayMinimized';
+
+export { TextBlock } from './TextBlock';
+export type { TextBlockProps } from './TextBlock';

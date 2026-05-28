@@ -552,6 +552,109 @@ try/catch isolado por operador, `loadLeaderConfig` 5 ConfigError,
 Pendências adicionais (W3+): BL-C6-003 (file transport com `pino-roll` e rotação
 diária em `<userData>/logs/`), BL-C6-004 (Sentry / serviço externo — W4+).
 
+### Estrutura interna de `@sprint/ui-kit` (W2.C9 — sessão BL-C9-completo)
+
+Quarto package compartilhado. **Diverge do padrão source-first** dos outros
+(contracts/fs-adapter/logger) — é o primeiro com React + CSS Modules, então
+adota Vite library mode + `vite-plugin-dts` (rollupTypes) para isolar processing
+de CSS e gerar `.d.ts` agrupado. Entregue inteiro em uma sessão (6 BLs).
+
+```
+packages/ui-kit/
+├── dev/
+│   ├── SCOPE_QUESTION.md             # audit trail BL-C9-006 (criado p/ Renan)
+│   └── palette-preview.html          # preview standalone DARK theme
+├── src/
+│   ├── components/
+│   │   ├── Overlay/                  # BL-C9-003 — chrome do overlay fullscreen
+│   │   ├── OverlayMinimized/         # BL-C9-006 — pill compacto pós minimize
+│   │   ├── TextBlock/                # BL-C9-004 — HTML sanitizado com tipografia
+│   │   └── index.ts                  # barrel
+│   ├── theme/
+│   │   ├── ThemeProvider/            # BL-C9-005 — wrapper + tokens.css + reset
+│   │   ├── reset.css                 # CSS reset mínimo (sem font/color)
+│   │   └── index.ts                  # barrel
+│   ├── tokens/
+│   │   ├── tokens.css                # BL-C9-002 — DARK theme (--sprint-* prefix)
+│   │   └── tokens.test.ts            # structure + anti-regression DARK
+│   ├── css.d.ts                      # tipos para CSS Modules + side-effect CSS
+│   ├── test-setup.ts                 # @testing-library/jest-dom/vitest
+│   ├── index.ts                      # barrel raiz (Overlay + OverlayMinimized
+│   │                                 #   + TextBlock + ThemeProvider + tipos)
+│   └── index.test.ts                 # smoke (UI_KIT_PACKAGE_VERSION)
+├── package.json                      # ESM + exports tree-shakeable + ./tokens.css
+├── tsconfig.json                     # rootDir ./src + references tsconfig.node
+├── tsconfig.node.json                # vite.config.ts + vitest.config.ts (G-010)
+├── vite.config.ts                    # library mode + dts + static-copy tokens.css
+├── vitest.config.ts                  # jsdom + plugin-react (coverage off, W3)
+└── README.md
+```
+
+**Convenções específicas do ui-kit (W2.C9):**
+
+- **Vite library mode (não source-first)** — diverge do padrão de
+  contracts/fs-adapter/logger porque CSS Modules + tree-shaking de barrel não
+  são triviais com tsc puro. Build produz
+  `dist/{index.js, index.d.ts, tokens.css}`. Consumers (Agent em BL-C3-015)
+  referenciarão via `dist/` em produção; em dev/test podem usar source via path
+  alias em seu próprio tsconfig (não em `tsconfig.base.json` — decisão Renan).
+- **`react` e `react-dom` como peerDependencies** (`^18.3.0`) — versão fica com
+  os apps. Em devDependencies as mesmas versões para Vite/Vitest standalone.
+- **`@sprint/contracts` como `dependency` workspace** (`workspace:*`) — primeira
+  ligação inter-package partindo de C9. Usado apenas pelo `<TextBlock>` para
+  `sanitizeBodyHtml`. Externalizado em `rollupOptions.external` no vite.config
+  (não vai pro bundle).
+- **Tokens com prefixo `--sprint-` obrigatório** (RNF-23) — `tokens.test.ts`
+  valida no CI. Zero hex hardcoded em `.module.css` de componentes.
+- **Tema DARK** extraído da imagem 'Hora do Rush!' anexada à sessão: background
+  `#1A1A1A` (card), text `#FFFFFF`, primary `#F5A557` (warm orange). Test
+  anti-regressão para light theme em `tokens.test.ts`.
+- **`<ThemeProvider>` sem Context API** — design tokens propagam por cascata
+  CSS. Múltiplas instâncias aninhadas são idempotentes (tokens resolvem na
+  cadeia de herança natural).
+- **CSS reset em arquivo separado** (`theme/reset.css`) importado pelo
+  ThemeProvider — separa responsabilidades (reset zera ambiente, tokens povoam).
+  Reset NÃO toca font/color/background (esses ficam no `.module.css` do
+  ThemeProvider para serem rastreáveis via tokens).
+- **`<TextBlock>` sanitiza em todo render** (defesa em profundidade, CLAUDE.md
+  §7.9) — sem memoização. Otimização tardia (BL-C8-008 ou wave 4).
+- **`<Overlay>` body é slot (`ReactNode | string`)** — chrome genérico; host
+  (Agent em BL-C3-015) renderiza conteúdo estruturado (métrica gigante,
+  deadline, status row, etc.) como children. `acknowledgeLabel` default
+  `'Recebido'` matching design da imagem.
+- **`<OverlayMinimized>` (BL-C9-006, NOVO)** — componente adicional aprovado
+  pelo Renan via SCOPE_QUESTION.md após análise da segunda imagem anexada
+  mostrar pill on-screen (não tray icon como CLAUDE.md §1 sugeria). Props
+  `label`, `value`, `onClick`, `variant?`. **Sem prop `icon`** (SVG check
+  pontilhado fixo) e **sem positioning CSS** (host decide). Coordenação Overlay
+  ↔ OverlayMinimized fica no Agent em BL-C3-017.
+- **fireEvent em vez de userEvent para tests de click** — userEvent v14 conflita
+  com `vi.useFakeTimers` (delays internos pendurados aguardando relógio real).
+  `fakeTimers` escopado por teste com try/finally, NÃO global em beforeEach
+  (evita contaminação cruzada).
+- **`tsconfig.node.json`** para `vite.config.ts` e `vitest.config.ts` (padrão
+  leader, G-010). Sem isso, ESLint `projectService: true` rejeita os arquivos
+  com "not found by the project service".
+- **`src/test-setup.ts` dentro de `src/`** (não na raiz) — match
+  `include: ["src/**/*.ts"]` do tsconfig.json sem precisar de exception.
+- **Coverage thresholds OFF** nesta sessão — apenas 31 smoke tests. Meta de 85%+
+  entregue em BL-C8-008 (sessão dedicada).
+- **`commitlint.config.cjs`** ampliado para aceitar scope `C9` (sem isso, todos
+  os commits desta sessão seriam rejeitados).
+
+**Pendências conhecidas (waves futuras):**
+
+- **BL-C3-015 (W2)** — Operator Agent refatora overlay para consumir
+  `@sprint/ui-kit`. Adiciona path alias `@sprint/ui-kit` em
+  `apps/operator-agent/tsconfig.json`. Substitui markup atual por
+  `<ThemeProvider>` + `<Overlay>` + `<TextBlock>`.
+- **BL-C3-017 (W2)** — orquestração `<Overlay>` ↔ `<OverlayMinimized>` no Agent
+  (state machine + window management — BrowserWindow frameless+topmost para o
+  pill).
+- **BL-C7-008 (W3)** — ADR-022: adoção do C9.
+- **BL-C7-009 (W3)** — ADR-023: não adoção de Storybook na v1.0.
+- **BL-C8-008 (W3)** — testes unitários ≥ 85% no ui-kit.
+
 ---
 
 ## 5. Componentes
@@ -567,6 +670,7 @@ diária em `<userData>/logs/`), BL-C6-004 (Sentry / serviço externo — W4+).
 | C6  | Observability & Logging     | Library       | `@sprint/logger`          |
 | C7  | Documentation               | Docs          | `/docs` (futuro), READMEs |
 | C8  | Quality Assurance           | Cross-cutting | Testes + relatórios       |
+| C9  | Design System / UI Kit      | Library       | `@sprint/ui-kit`          |
 
 Detalhes de cada componente e itens do backlog estão no documento externo de
 Backlog (perguntar a Renan se necessário).
@@ -579,7 +683,7 @@ Backlog (perguntar a Renan se necessário).
 | ---- | ------------------------ | ------------ | ------------ |
 | W0   | Foundation               | 1 semana     | ✅ concluída |
 | W1   | MVP Core                 | 2 semanas    | ✅ concluída |
-| W2   | Refinement               | 1 semana     | ⏸️ próxima   |
+| W2   | Refinement + Design Sys  | 1 semana     | 🔄 em curso  |
 | W3   | Production Readiness     | 1 semana     | ⏸️           |
 | W4   | Hardening & Future-proof | 1 semana     | ⏸️           |
 
