@@ -1,0 +1,95 @@
+/**
+ * <Overlay> — styling
+ *
+ * Replica a estrutura visual do design 'Hora do Rush!' anexado na
+ * sessão. Card dark centralizado, header com título, body slot
+ * preenchido pelo host (Agent em BL-C3-015), footer com botão de
+ * acknowledge laranja com glow expressivo.
+ *
+ * Magnitudes EXCLUSIVAMENTE via tokens --sprint-* (zero hex hardcoded).
+ *
+ * Layout:
+ * - .overlay: wrapper fullscreen com backdrop discreto
+ * - .card: container centralizado, dark background, border-radius lg
+ * - .header: título centralizado + divider sutil abaixo
+ * - .body: slot para conteúdo estruturado do consumidor
+ * - .acknowledgeButton: laranja com glow, full-width
+ */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sprint-color-backdrop);
+  padding: var(--sprint-space-6);
+  z-index: 9999;
+}
+
+/* Placeholder para hardening visual futuro — variant 'urgent' não tem
+ * tratamento exclusivo no MVP (reservado para wave 4). */
+.overlay--urgent {
+  /* TODO: estilo mais agressivo quando o variant for ativado em
+   * sessão futura (ex: borda animada, pulse, cor mais saturada). */
+}
+
+.card {
+  background: var(--sprint-color-background);
+  border-radius: var(--sprint-radius-lg);
+  box-shadow: var(--sprint-shadow-lg);
+  padding: var(--sprint-space-8);
+  max-width: 720px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sprint-space-6);
+}
+
+.header {
+  text-align: center;
+  padding-bottom: var(--sprint-space-5);
+  border-bottom: 1px solid var(--sprint-color-border);
+}
+
+.title {
+  font-size: var(--sprint-font-size-2xl);
+  font-weight: var(--sprint-font-weight-regular);
+  line-height: var(--sprint-line-height-tight);
+  color: var(--sprint-color-text);
+  margin: 0;
+}
+
+.body {
+  font-size: var(--sprint-font-size-lg);
+  line-height: var(--sprint-line-height-normal);
+  color: var(--sprint-color-text);
+}
+
+.acknowledgeButton {
+  width: 100%;
+  background: var(--sprint-color-primary);
+  color: var(--sprint-color-primary-on);
+  font-family: inherit;
+  font-size: var(--sprint-font-size-lg);
+  font-weight: var(--sprint-font-weight-semibold);
+  padding: var(--sprint-space-4) var(--sprint-space-6);
+  border-radius: var(--sprint-radius-pill);
+  box-shadow: var(--sprint-shadow-primary-glow);
+  transition:
+    background-color 120ms ease-in-out,
+    box-shadow 200ms ease-in-out;
+}
+
+.acknowledgeButton:hover {
+  background: var(--sprint-color-primary-hover);
+}
+
+.acknowledgeButton:active {
+  background: var(--sprint-color-primary-active);
+}
+
+.acknowledgeButton:focus-visible {
+  outline: 2px solid var(--sprint-color-primary);
+  outline-offset: 4px;
+}
