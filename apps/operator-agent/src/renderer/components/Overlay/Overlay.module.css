@@ -72,19 +72,18 @@
 }
 
 .deadlineGroup {
-  /* Sessão 35 — Renan: "alinhe o 'Até' à esquerda do {horario}".
-   * column → row + baseline. "Até" vira inline antes do "18:00h",
-   * matching imagem de referência. */
+  /* Sessão 36 — Renan: "olhe como ele deveria ser e deixe IDENTICO"
+   * apontando para a imagem-alvo onde "Até" e "18:00h" são EMPILHADOS
+   * (column), alinhados pela direita. Reverte a interpretação
+   * literal de "esquerda" feita na Sessão 35 (row baseline). */
   display: flex;
-  flex-direction: row;
-  align-items: baseline;
-  gap: var(--sprint-space-2);
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--sprint-space-1);
 }
 
 .deadlineLabel {
-  /* Sessão 35: lg (18px) → sm (14px). Renan: "deixe ele menorzinho".
-   * "Até" como prefixo discreto, sem competir visualmente com o
-   * "18:00h" 3xl bold. */
+  /* Sessão 35 mantida: sm (14px). Renan: "deixe ele menorzinho". */
   font-size: var(--sprint-font-size-sm);
   color: var(--sprint-color-text-muted);
 }
