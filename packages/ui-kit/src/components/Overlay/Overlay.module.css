@@ -106,8 +106,10 @@
 .body {
   /* Sessão 31: padding generoso para criar respiração entre header
    * e conteúdo estruturado do host (Agent renderiza metricRow +
-   * footerRow no body slot). */
-  padding: var(--sprint-space-6);
+   * footerRow no body slot).
+   * Sessão 35: space-6 → space-7 — Renan reportou itens muito
+   * próximos das laterais; pequeno bump dá mais respiração lateral. */
+  padding: var(--sprint-space-7);
   font-size: var(--sprint-font-size-lg);
   line-height: var(--sprint-line-height-normal);
   color: var(--sprint-color-text);
