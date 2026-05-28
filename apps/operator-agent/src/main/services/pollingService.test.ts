@@ -161,12 +161,22 @@ describe('PollingService — ciclos positivos', () => {
   });
 });
 
-describe('PollingService — deadline passado', () => {
+describe('PollingService — deadline passado (BL-C3-012)', () => {
   let kit: TestKit;
+  let archiveSpy: ReturnType<typeof vi.spyOn<HistoryService, 'archive'>>;
 
   beforeEach(() => {
     kit = makeKit({ now: new Date('2026-05-26T22:00:00.000Z') });
     vi.useFakeTimers();
+    // archive() escreveria em disk via fs/promises (HistoryService usa
+    // fs nativo, não o adapter). Mock evita poluir /test/userData e
+    // simula o efeito do cache update. Cobertura real de archive() está
+    // em historyService.test.ts.
+    archiveSpy = vi.spyOn(kit.historyService, 'archive');
+    archiveSpy.mockImplementation((_payload, filename, _rawContent) => {
+      kit.historyService.markProcessed(filename);
+      return Promise.resolve();
+    });
   });
 
   afterEach(() => {
@@ -174,7 +184,7 @@ describe('PollingService — deadline passado', () => {
     vi.useRealTimers();
   });
 
-  it('descarta sprint com deadline_at no passado + chama deletePending + markProcessed', async () => {
+  it('descarta sprint com deadline_at no passado + chama deletePending + archive', async () => {
     const payload = makePayload({ deadlineIso: '2026-05-26T21:00:00.000Z' }); // 1h passado
     await kit.pendingStore.writePendingSprint(payload);
     const filename = buildPendingFilename(VALID_SPRINT_ID_1, USER_ID);
@@ -190,6 +200,54 @@ describe('PollingService — deadline passado', () => {
       expect.stringContaining('deadline passado'),
       expect.objectContaining({ filename }),
     );
+  });
+
+  it('move arquivo para histórico local via archive (BL-C3-012 AC)', async () => {
+    const payload = makePayload({ deadlineIso: '2026-05-26T21:00:00.000Z' });
+    await kit.pendingStore.writePendingSprint(payload);
+    const filename = buildPendingFilename(VALID_SPRINT_ID_1, USER_ID);
+
+    await kit.pollingService.pollOnce();
+
+    // archive deve ser chamado com payload + filename + rawContent pretty-printed
+    expect(archiveSpy).toHaveBeenCalledTimes(1);
+    expect(archiveSpy).toHaveBeenCalledWith(
+      payload,
+      filename,
+      expect.stringContaining(`"sprint_id": "${VALID_SPRINT_ID_1}"`),
+    );
+  });
+
+  it('falha em archive NÃO derruba o ciclo: fallback markProcessed + log error', async () => {
+    const payload = makePayload({ deadlineIso: '2026-05-26T21:00:00.000Z' });
+    await kit.pendingStore.writePendingSprint(payload);
+    const filename = buildPendingFilename(VALID_SPRINT_ID_1, USER_ID);
+    archiveSpy.mockRejectedValueOnce(new Error('disco cheio'));
+
+    await expect(kit.pollingService.pollOnce()).resolves.toBeUndefined();
+
+    // Fallback: cache ainda foi populado via markProcessed
+    expect(kit.historyService.isAlreadyArchived(filename)).toBe(true);
+    expect(kit.log.error).toHaveBeenCalledWith(
+      expect.stringContaining('arquivar sprint expirada'),
+      expect.any(Object),
+    );
+  });
+
+  it('NÃO grava ack de visualização para sprint expirada (BL-C3-012 AC)', async () => {
+    // Sprint expirada nunca é enfileirada → onNextSprint nunca dispara →
+    // ackService.writeDisplayed (wired via main/index.ts) nunca é chamado.
+    // Aqui validamos a precondição: queue não recebe a sprint.
+    const payload = makePayload({ deadlineIso: '2026-05-26T21:00:00.000Z' });
+    await kit.pendingStore.writePendingSprint(payload);
+
+    const onNext = vi.fn();
+    kit.queueService.onNextSprint(onNext);
+
+    await kit.pollingService.pollOnce();
+
+    expect(onNext).not.toHaveBeenCalled();
+    expect(kit.queueService.length()).toBe(0);
   });
 
   it('falha em deletePending NÃO derruba o ciclo (apenas loga error)', async () => {

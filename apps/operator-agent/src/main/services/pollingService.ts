@@ -186,14 +186,28 @@ export class PollingService {
       return;
     }
 
-    // RN-11 — deadline passado: NÃO exibe overlay, mas arquiva
-    // localmente (marca processed) + deleta do shared para não acumular.
+    const rawContent = JSON.stringify(payload, null, 2);
+
+    // RN-03 / RF-18 (BL-C3-012) — sprint com deadline passado: NÃO exibe
+    // overlay, NÃO gera ack de visualização. Move para histórico local
+    // (auditoria — operador pode inspecionar via tray "Histórico local")
+    // e deleta do shared para não acumular. Fallback: se archive falhar
+    // (disco cheio, permissão), pelo menos garante dedup em memória via
+    // markProcessed para evitar re-processamento no próximo ciclo.
     if (this.isDeadlinePast(payload.deadline_at)) {
-      log.warn('sprint com deadline passado — descartando', {
+      log.warn('sprint com deadline passado — arquivando sem exibir', {
         filename,
         deadline: payload.deadline_at,
       });
-      this.deps.historyService.markProcessed(filename);
+      try {
+        await this.deps.historyService.archive(payload, filename, rawContent);
+      } catch (err) {
+        log.error('falha ao arquivar sprint expirada — fallback markProcessed', {
+          filename,
+          err: err instanceof Error ? err.message : String(err),
+        });
+        this.deps.historyService.markProcessed(filename);
+      }
       try {
         await this.deps.pendingStore.deletePending(filename);
       } catch (err) {
@@ -208,7 +222,6 @@ export class PollingService {
     // Sprint válida — enfileira para exibição. dedup interno do
     // queueService cobre o caso "sprint já enfileirada em ciclo anterior
     // ainda não foi dequeued". Aqui não precisamos checar manualmente.
-    const rawContent = JSON.stringify(payload, null, 2);
     this.deps.queueService.enqueue({ payload, filename, rawContent });
   }
 
