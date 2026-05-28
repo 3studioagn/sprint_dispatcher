@@ -84,15 +84,20 @@
   /* Sessão 32: bg `surface-subtle` (#111) substitui `surface-elevated`
    * (#2A) — Renan: "o fundo onde está escrito 'É hora de correr' deve
    * ser um pouco mais escuro, apenas um tom acima do preto mesmo".
-   * Token novo introduzido em tokens.css na mesma sessão. */
+   * Token novo introduzido em tokens.css na mesma sessão.
+   * Sessão 34: padding vertical space-5 → space-4 — header bar mais
+   * fina, matching proporção do design alvo. */
   background: var(--sprint-color-surface-subtle);
   text-align: center;
-  padding: var(--sprint-space-5) var(--sprint-space-6);
+  padding: var(--sprint-space-4) var(--sprint-space-6);
 }
 
 .title {
   font-size: var(--sprint-font-size-2xl);
-  font-weight: var(--sprint-font-weight-regular);
+  /* Sessão 34: weight regular → medium. Design alvo mostra título com
+   * presença visual mais firme; medium (500) dá esse "peso" sem ficar
+   * pesado como bold. */
+  font-weight: var(--sprint-font-weight-medium);
   line-height: var(--sprint-line-height-tight);
   color: var(--sprint-color-text);
   margin: 0;
@@ -117,7 +122,9 @@
   color: var(--sprint-color-primary-on);
   font-family: inherit;
   font-size: var(--sprint-font-size-lg);
-  font-weight: var(--sprint-font-weight-semibold);
+  /* Sessão 34: weight semibold → bold. Match peso do texto "Recebido"
+   * no design alvo (apresentação firme do call-to-action principal). */
+  font-weight: var(--sprint-font-weight-bold);
   padding: var(--sprint-space-4) var(--sprint-space-6);
   border-radius: var(--sprint-radius-pill);
   border: none;

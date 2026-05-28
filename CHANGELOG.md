@@ -9,6 +9,28 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Changed — Sessão 34 (2026-05-28) — Polish final do overlay matching design-alvo
+
+Renan: "Apenas ajuste os detalhes... border radius, peso de fonte,
+espaçamento e tudo mais. Deixe exatamente igual para eu não precisar
+mexer e está aprovado." Ajustes finos:
+
+**ui-kit `<Overlay>`:**
+
+- `.title` font-weight `regular` → `medium` (500). Presença visual
+  mais firme matching design.
+- `.header` padding vertical `space-5` → `space-4`. Header bar mais
+  fina.
+- `.acknowledgeButton` font-weight `semibold` → `bold` (700). Peso
+  firme do CTA "Recebido".
+
+**Agent body slot:**
+
+- `.metricGroup` gap `space-3` → `space-4`. Mais respiração entre
+  "20" e "Artes".
+- `.dateBadge` compacto: font `base` → `sm`; padding `space-2/space-4`
+  → `space-1/space-3`. Badge "27/05" matching tamanho do design.
+
 ### Changed — Sessão 32 (2026-05-28) — Overlay mais estreito + header bar "subtle"
 
 Renan validou Sessão 31 e reportou 2 ajustes finos no Overlay:

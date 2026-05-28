@@ -66,6 +66,87 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 34 — 2026-05-28 — Polish final do overlay matching design-alvo
+
+**Wave atual:** W2 — em curso **Método:** ajustes finos solicitados pelo Renan
+com promessa "está aprovado" pós-fix **Duração estimada:** ~20min (1 commit)
+**Itens:** [title weight + header padding + button weight + metricGroup gap +
+dateBadge sizing]
+
+### Objetivo da sessão
+
+> "Apenas ajuste os detalhes pra mim pra ficar igual à imagem que estou te
+> enviando, você vai olhar os detalhes, o border-radius, peso de fonte,
+> espaçamento e tudo mais. Deixe exatamente igual para eu não precisar mexer e
+> está aprovado."
+
+### O que foi feito
+
+Análise pixel-comparativa contra a imagem-alvo + ajustes em 2 camadas:
+
+**`@sprint/ui-kit` · `<Overlay>`:**
+
+- `.title` font-weight `regular` (400) → `medium` (500). Presença visual mais
+  firme do título "Hora do Rush!".
+- `.header` padding vertical `space-5` (20px) → `space-4` (16px). Header bar
+  mais fina, matching proporção do design.
+- `.acknowledgeButton` font-weight `semibold` → `bold` (700). Peso firme do CTA
+  "Recebido" — também evita o token `semibold` alterado externamente para 300
+  (light).
+- Border-radius do `.card` mantido em `--sprint-radius-lg` (24px) — comparação
+  com imagem indica que está adequado.
+
+**`sprint-operator-agent` · body slot:**
+
+- `.metricGroup` gap `space-3` (12px) → `space-4` (16px). Mais respiração entre
+  "20" gigante e "Artes" baseline.
+- `.dateBadge` mais compacto: font `base` (16px) → `sm` (14px); padding
+  `space-2/space-4` (8/16) → `space-1/space-3` (4/12). Badge "27/05" mais
+  "achatado" matching design.
+
+### Estado atual
+
+- 60 testes verdes no ui-kit (estável).
+- 298 testes verdes no Agent (estável).
+- Build ui-kit OK; `dist/assets/style.css` atualizado.
+- 1 changeset: `c9-c3-overlay-final-polish.md`.
+
+### Decisões tomadas
+
+- **`title` weight `medium` (500)**, não `semibold` — token semibold foi
+  alterado externamente para 300 (light); medium dá visual firme sem cair na
+  trap.
+- **`acknowledgeButton` weight `bold` (700)** pelo mesmo motivo + alinhamento
+  com peso do CTA do design.
+- **`.dateBadge` font-size `sm`** em vez de `xs` — `xs` (12px) ficaria ilegível
+  a distância (operador da fábrica vê de 1-2m).
+- **Border-radius do card mantido** em `lg` (24px) — comparação visual com
+  imagem-alvo indica que está em uma faixa adequada; aumentar para 28-32px seria
+  mudança subjetiva.
+
+### Bloqueios encontrados
+
+Nenhum.
+
+### Próximo passo
+
+Renan validar visualmente em runtime Electron (após restart do `pnpm dev` para
+pegar o `dist/` rebuildado). Se aprovado conforme a promessa "está aprovado",
+branch finaliza ciclo visual W2 e fica pronta para PR/merge.
+
+### Observações para a próxima sessão
+
+- **Token `--sprint-font-weight-semibold: 300`** foi alterado externamente
+  (provavelmente experimento). Considerar reverter para `600` em sessão futura —
+  qualquer consumer que usar esse token agora vai renderizar light em vez de
+  semibold (regressão silenciosa).
+- **Sessões 24-34 fecham ciclo "visual fidelity" do BL-C9 e BL-C3-015** com 11
+  iterações entre Pill e Overlay. Vale consolidar o aprendizado em
+  `dev/SCOPE_REVISITED.md` quando entrar W3 — pattern recorrente: validar
+  dimensões/tipografia contra imagem-alvo ANTES de iterar em curvas/easing.
+
+---
+
 ## Sessão 33 — 2026-05-28 — Fix dev resolve do `@sprint/ui-kit/styles.css`
 
 **Wave atual:** W2 — em curso **Método:** atendimento a runtime error reportado
