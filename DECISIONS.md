@@ -2463,3 +2463,116 @@ primeiro, refactor visual (renderer) por último. Ordem:
   camada
 - Backlog v1.1 §6/C3 (itens 009-016)
 - ADR-019 — arquitetura W1.C3 (base sobre a qual W2 refatora)
+
+---
+
+## Nota técnica — Sessão 43 (2026-05-28) — Leader W2 + writeCancel (ciclo de cancelamento ponta-a-ponta)
+
+**Wave:** W2 — em curso **Componentes:** C2 (Leader) + C4 (fs-adapter)
+**Itens:** [BL-C4-004, BL-C2-006, BL-C2-008, BL-C2-009] **Status:** ✅ mergeado
+em `develop` após PR.
+
+Esta sessão entrega 4 BLs em commits atômicos separados (1 BL por commit),
+fechando o ciclo de cancelamento ponta-a-ponta. O Agent (BL-C3-011, mergeado em
+W2 anterior) já detectava `cancel-*.json` e fechava o overlay sem ack — faltava
+o lado escritor. Esta sessão entrega o escritor, o tipo `SprintCancel` (Anexo E)
+já existia em `@sprint/contracts`.
+
+### Decisões arquiteturais materializadas
+
+1. **`writeCancel` espelha `writePending`** — escrita atômica via
+   `IFilesystemAdapter.writeFileAtomic` (`.tmp` + rename interno). Re-validação
+   Zod em runtime (`parseSprintCancel`) por defesa em profundidade contra cast
+   bypass. JSON pretty-printed (2-space) para inspeção manual da TI da fábrica
+   via `notepad`/`type` — consistente com `writePending` e `writeAck`.
+
+2. **`PendingStore` opcional no construtor da `CancelStore`** —
+   `new CancelStore(adapter, sharedPath, pendingStore?)`. Quando injetado
+   (composition root do main do Leader), `writeCancel` lista pendings da sprint
+   e os deleta. Quando ausente (testes de escrita isolada), `removedOriginals` é
+   sempre `[]`. Decisão alinhada com o feedback "qual acha mais viável" —
+   pattern padrão do projeto (sem opts mutáveis; comportamento idempotente).
+   Permite construção limpa em testes.
+
+3. **Schema escrito pelo Leader = schema lido pelo Agent (Anexo E)** —
+   `sprint_id_ref` é o campo de match, NÃO `sprint_id`. Confirmado pelo código
+   do `pollingService.processCancel` no Agent (BL-C3-011). Sem divergência de
+   integração. `cancelado_por` vem do `LeaderConfig.criado_por` (mesmo campo que
+   vai no `criado_por` do `SprintPayload`). `cancelado_em` é ISO 8601 com
+   offset.
+
+4. **Race-safe remoção de originais** — entre o `listPending({ sprintId })` e o
+   `deletePending(filename)`, o Agent pode processar e remover o arquivo.
+   `FileNotFoundError` é capturado e silenciado (`continue` no loop); outros
+   `FilesystemError` propagam. Cenário comum em alta concorrência.
+
+5. **Customização de título/corpo no momento do dispatch (BL-C2-006)** — o
+   `{meta}` é substituído por operador no `DispatchService.substituteMeta`, não
+   no preview ou no Agent. O Agent permanece "burro": recebe HTML final já com a
+   meta literal. `sanitizeBodyHtml` é aplicado depois da substituição,
+   idempotente (CLAUDE.md §7.9, ADR-014).
+
+6. **Defaults centralizados em helpers exportados (BL-C2-006)** —
+   `resolveTitle`/`resolveBodyTemplate` no `DispatchService` aplicam `.trim()`
+   antes de comparar com vazio. Líder que apaga input ou deixa só whitespace cai
+   pro default. Helpers exportados para teste isolado.
+
+7. **Tela de acks com 3 estados derivados (BL-C2-008)** — Anexo D:
+   `displayed_at` presente = "visto"; `acknowledged_at` presente = "confirmado";
+   sem ack = "nao_visto". `AckTrackingService.list` agrega `AckStore` +
+   `OperatorsService`, retornando `AckStateView[]` com `user_nome_exibicao`
+   resolvido + timestamps + hostname. `DirectoryNotFoundError` em `acks/` é
+   benigno (pasta ainda não criada pelo primeiro ack).
+
+8. **Polling 3s com cleanup em flag (BL-C2-008)** — `useEffect` em
+   `Acompanhamento.tsx` declara `signal = { cancelled: false }` no escopo do
+   effect, passa para o `fetchAcks`, e no cleanup faz
+   `signal.cancelled = true` + `clearInterval`. Pattern reutilizável para
+   qualquer componente com polling concorrente a IPC async.
+
+9. **`useTrackedSprintStore` em sessão (BL-C2-008 + BL-C2-009)** — persiste a
+   sprint disparada com `sprint_id`, `targets` (id + meta), `title`,
+   `deadline_hhmm`, `dispatched_at`. Setada pelo
+   `NovaSprint.handleDispatchClick` quando `result.summary.success > 0` (targets
+   que falharam ficam fora — não há nada para acompanhar). Persistência em disco
+   fica para W3+ (histórico via fs-adapter).
+
+10. **Botão Cancelar Sprint na tela de Acompanhamento (BL-C2-009)** — decisão de
+    UX confirmada com o Renan via AskUserQuestion. O líder vê o estado dos acks
+    e decide se cancela. Modal com `aria-modal="true"` e `aria-labelledby` por
+    acessibilidade. Click no backdrop fecha; `submitting` desabilita botões;
+    sucesso chama `markCancelled()` na store.
+
+11. **Polling para automaticamente em `cancelled` (BL-C2-009)** — em vez de
+    parar o `setInterval` explicitamente no `markCancelled`, o `useEffect` da
+    Acompanhamento observa `current.cancelled` e retorna `undefined` no caso
+    cancelado. A mutação do store dispara re-execução do effect, cleanup do
+    interval anterior, e novo effect com `return undefined`. Sem timers
+    fantasmas.
+
+12. **Validação de sprint_id via parseSprintCancel (BL-C2-009)** —
+    `CancelService.cancel` NÃO usa `sprintIdSchema.parse` direto (que lançaria
+    `ZodError`). Em vez disso, passa `request.sprint_id` direto para
+    `parseSprintCancel`, que internamente faz safeParse e converte para
+    `ContractValidationError` com contexto do campo. Mesma semântica do
+    `DispatchService.dispatch`.
+
+### Métricas
+
+- Testes: fs-adapter 286 → 308 (+22). Leader 210 → 332 (+122). Total monorepo
+  +144. Agent intocado (240 estável).
+- Lint, type-check, build do Leader: zero warnings.
+- Build do fs-adapter: zero warnings.
+- Commits: 4 BL + 1 docs = 5 separados, sem squash, escopo BL-XXX no scope do
+  conventional commit.
+
+### Referências
+
+- Sessão de implementação: feature/BL-C2-w2-leader-cancelamento (Sessão 43)
+- SESSION_LOG.md Sessão 43 — narrativa completa por commit
+- Backlog v1.1 §6/C2 (006, 008, 009) e §6/C4 (004)
+- ADR-013 — port-and-adapter do fs-adapter (base do CancelStore)
+- ADR-014 — sanitização de body_html (preservada no pipeline customizado)
+- ADR-015 — composer do Leader W1 (refinado por BL-C2-006)
+- ADR-017 — main process do Leader W1 (estendido por C2-006/008/009)
+- Pendências W2: BL-C7-008/009 (ADRs), BL-C8-008 (testes ≥85% C9)

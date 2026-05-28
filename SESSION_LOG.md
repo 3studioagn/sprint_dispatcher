@@ -66,6 +66,165 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 43 — 2026-05-28 — Leader W2 + writeCancel (ciclo de cancelamento ponta-a-ponta)
+
+**Wave atual:** W2 — em curso **Duração estimada:** ~3h **Itens:** [BL-C4-004,
+BL-C2-006, BL-C2-008, BL-C2-009] **Branch:**
+`feature/BL-C2-w2-leader-cancelamento`
+
+### Objetivo da sessão
+
+Refinamento completo do C2 (Leader) na Wave 2 — acks, customização e
+cancelamento — junto com a fundação BL-C4-004 (`writeCancel` no fs-adapter que o
+cancelamento do Leader requer). Marco principal: ciclo de cancelamento
+funcionando ponta-a-ponta (Leader escreve `cancel-*.json` → Agent já mergeado em
+BL-C3-011 detecta e fecha overlay).
+
+### O que foi feito (5 commits)
+
+**Commit 1 (`6ebf653`) —
+`feat(C4): implementar writeCancel no fs-adapter + mock [BL-C4-004]`:**
+
+- Substitui stub `NotImplementedError` da `CancelStore` por implementação
+  completa. Escrita atômica de `cancel-<sprintId>.json` em `pending/` espelhando
+  o padrão de `PendingStore.writePendingSprint`.
+- `WriteCancelResult` ganha `removedOriginals: readonly string[]`.
+- `PendingStore` opcional no construtor — quando injetado, `writeCancel` lista
+  pendings da sprint e os deleta (race-safe: `FileNotFoundError` é silenciado
+  quando o Agent processou primeiro).
+- Re-validação Zod via `parseSprintCancel` (defesa em profundidade).
+- `parity.test.ts` ganha bloco `CancelStore` real, removendo o stub do bloco de
+  NotImplementedError (só `ArchiveStore` resta lá).
+- 19 testes novos em `cancel-store.test.ts` + 2 em paridade. fs-adapter: 286 →
+  308 verdes.
+
+**Commit 2 (`1cea774`) —
+`feat(C2): customização de título e corpo do aviso com preview [BL-C2-006]`:**
+
+- `useSprintComposerStore`: `setTitle`/`setBody` actions; selectors propagam
+  title/body; `composerFormSchema` valida title (1..80) e body (max 500, vazio =
+  use default).
+- `DispatchSprintRequest` ganha `title?`/`body_template?` opcionais.
+- `DispatchService`: novos helpers exportados `resolveTitle` e
+  `resolveBodyTemplate` (trim + fallback default). `dispatch` usa o customizado
+  quando presente; `substituteMeta` + `sanitizeBodyHtml` preservam pipeline
+  final.
+- `<MessageCustomizer />`: input título + textarea body + preview com `{meta}`
+  substituído pela primeira meta selecionada (ou 0 + hint). Sanitização
+  defensiva no preview via `sanitizeBodyHtml` de `@sprint/contracts`.
+- 38 testes novos. Leader: 210 → 248 verdes.
+
+**Commit 3 (`02c3d3c`) —
+`feat(C2): tela de acompanhamento de acks com polling [BL-C2-008]`:**
+
+- `AckTrackingService.list(sprintId, targets)` no main process — agrega
+  `AckStore` + `OperatorsService`, devolve `AckStateView[]`. Estados derivados
+  do Anexo D (sem ack=nao_visto; `displayed_at`=visto;
+  `acknowledged_at`=confirmado). `DirectoryNotFoundError` de `acks/` é benigno
+  (todos targets ficam nao_visto até primeiro ack).
+- IPC `listAcks` com envelope `IpcResult<ListAcksResponse>`; CONFIG_REQUIRED
+  quando deps null.
+- `AckStore` + `AckTrackingService` instanciados em `rebuildDeps`.
+- `useTrackedSprintStore` (Zustand): persiste sprint disparada na sessão
+  `{sprint_id, dispatched_at, targets, title, deadline_hhmm}`. Setada por
+  `NovaSprint.handleDispatchClick` quando `result.summary.success > 0` (targets
+  com falha ficam fora).
+- `Acompanhamento.tsx` deixa de ser placeholder: empty state se nenhuma sprint;
+  senão polling 3s via `setInterval` + cleanup no unmount via cancelled flag +
+  `clearInterval`. Renderiza summary + lista de targets com indicador colorido
+  (cinza/laranja/verde) + timestamp.
+- 27 testes novos. Leader: 248 → 276 verdes.
+
+**Commit 4 (`304b985`) —
+`feat(C2): cancelamento de sprint com confirmação e writeCancel [BL-C2-009]`:**
+
+- `CancelService.cancel(request)` monta `SprintCancel` (Anexo E:
+  `sprint_id_ref`, `cancelado_por` do config, `cancelado_em` ISO, `motivo`
+  opcional trimmed). Valida via `parseSprintCancel` (sprint_id inválido →
+  `ContractValidationError`).
+- IPC `cancelSprint` com envelope `IpcResult<CancelSprintResponse>`.
+- `CancelStore` instanciado em `rebuildDeps` recebendo `pendingStore` para
+  remoção idempotente.
+- `useTrackedSprintStore` estendido: `cancelled: boolean`, `markCancelled()`,
+  selector `selectIsSprintActive`.
+- `<CancelSprintButton />`: botão destrutivo + modal de confirmação com textarea
+  motivo opcional, "Voltar" e "Confirmar cancelamento". Click no backdrop fecha;
+  submitting desabilita botões; sucesso chama `markCancelled()`; erro mostra
+  mensagem inline `role="alert"`.
+- `Acompanhamento` integra: botão visível enquanto `selectIsSprintActive`, some
+  quando `cancelled`; `useEffect` interrompe polling em `current.cancelled`;
+  nota "Rodada cancelada" inferior.
+- 27 testes novos. Leader: 276 → 332 verdes.
+
+**Commit 5 — docs + changesets** (próximo).
+
+### Estado atual
+
+- ✅ BL-C4-004 (writeCancel real, ciclo ponta-a-ponta destravado).
+- ✅ BL-C2-006 (customização título/corpo + preview sanitizado).
+- ✅ BL-C2-008 (tela de acks com 3 estados + polling 3s + cleanup).
+- ✅ BL-C2-009 (cancelamento com modal + writeCancel + estado pós-cancel).
+- Branch local com 5 commits separados, sem squash.
+- Testes monorepo: fs-adapter 286→308; Leader 210→332. Agent intocado.
+- Builds limpos em Leader + fs-adapter.
+
+### Decisões tomadas
+
+- **`writeCancel` API (Phase 1)**: assinatura mantida; `PendingStore` opcional
+  no construtor (`new CancelStore(adapter, sharedPath, pendingStore?)`).
+  Comportamento default da `writeCancel` é remover originais idempotentemente.
+  Permite testes isolados de escrita sem injetar PendingStore; produção sempre
+  injeta no composition root.
+- **Botão Cancelar (Phase 4)**: vive na tela de Acompanhamento (não na Nova
+  Sprint). Decidido pelo Renan via AskUserQuestion no início da sessão.
+  Coerente: líder vê estado dos acks e decide se cancela.
+- **Trim + fallback (Phase 2)**: `resolveTitle`/`resolveBodyTemplate` no
+  `DispatchService` aplicam `.trim()` antes de comparar com vazio. Líder que
+  apaga input ou deixa só whitespace cai pro default.
+- **Sanitização defensiva no preview do MessageCustomizer**: o preview passa
+  pelo `sanitizeBodyHtml` mesmo que o pipeline real também sanitize. Garante que
+  o líder digitando `<script>` não veja o script executando localmente.
+- **Polling interrompe em cancelled** (Phase 4): em vez de parar `setInterval`
+  no `markCancelled`, o `useEffect` da Acompanhamento observa
+  `current.cancelled` e retorna `undefined` no caso cancelado. Próxima invocação
+  do effect (causada pela mutação do store) faz o cleanup automático do interval
+  anterior.
+
+### Bloqueios encontrados
+
+Nenhum bloqueio. Issue de `exactOptionalPropertyTypes` no `AckTrackingService`
+resolvido com spread condicional (omite chave quando undefined em vez de
+atribuir undefined).
+
+### Próximo passo
+
+- Commit 5 (docs + changesets) + push.
+- PR único, merge sem squash em `develop`.
+- Validar manualmente o ciclo de cancelamento ponta-a-ponta com 1 Agent rodando
+  (gate final da sessão por especificação do prompt §6.4).
+- Sessão futura: BL-C8-008 (testes ≥85% do C9) ou ADRs C7-008/009.
+
+### Observações para a próxima sessão
+
+- **`exactOptionalPropertyTypes`** está ON no `tsconfig.base.json` — passar
+  `acknowledged_at: undefined` falha. Padrão da sessão: spread condicional
+  `...(x !== undefined ? { x } : {})`. Aplica a qualquer novo tipo opcional.
+- **Padrão de teste para componentes com modal/dialog**: use
+  `screen.getByRole('dialog')` para presença, `screen.queryByRole` para ausência
+  após fechar. Backdrop usa `role="presentation"`. O click no backdrop precisa
+  de `stopPropagation` no dialog content.
+- **Padrão de polling cleanup** com `useEffect`: declarar
+  `signal = { cancelled: false }` no escopo do effect; passar para a função
+  async; checar `if (signal.cancelled) return` antes de setState; no cleanup,
+  `signal.cancelled = true` + `clearInterval`. Padrão usado em
+  `Acompanhamento.tsx`.
+- **Cuidado com `sprintIdSchema.parse` direto**: ele lança `ZodError` (não
+  `ContractValidationError`). Se quiser o erro estruturado do contrato, passe
+  pelo schema completo (`parseSprintCancel` / `parseSprintPayload`), que
+  internamente faz safeParse e converte.
+
+---
+
 ## Sessões 35-42 — 2026-05-28 — Refino visual coordenado do Overlay (consolidação)
 
 **Wave atual:** W2 — em curso **Método:** iterações curtas de feedback visual

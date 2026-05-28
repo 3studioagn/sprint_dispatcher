@@ -9,6 +9,75 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Added — Sessão 43 (2026-05-28) — Leader W2 + writeCancel
+
+Encerra o C2 (Leader) na Wave 2 com 4 BLs entregues em commits atômicos
+e a fundação `writeCancel` no fs-adapter. Marco: **ciclo de cancelamento
+ponta-a-ponta funcionando** (Leader escreve `cancel-*.json` → Agent já
+mergeado em BL-C3-011 detecta e fecha overlay sem ack).
+
+**`@sprint/fs-adapter` (BL-C4-004):**
+
+- `CancelStore.writeCancel(cancel)` real (substitui stub
+  `NotImplementedError`). Escrita atômica de
+  `<sharedPath>/pending/cancel-<sprintId>.json` espelhando o padrão de
+  `PendingStore.writePendingSprint`.
+- `PendingStore` opcional no construtor — quando injetado, `writeCancel`
+  lista pendings da sprint e deleta idempotentemente (race-safe:
+  `FileNotFoundError` silenciado quando Agent processou primeiro).
+- `WriteCancelResult` ganha `removedOriginals: readonly string[]`.
+- Re-validação Zod via `parseSprintCancel` (defesa em profundidade).
+
+**`sprint-leader` — BL-C2-006 (customização):**
+
+- `useSprintComposerStore`: `setTitle`/`setBody` actions; selectors
+  propagam `title` + `body_template` para o IPC.
+- `composerFormSchema`: valida `title` (1..80) e `body` (max 500, vazio
+  permitido = "use default").
+- `DispatchSprintRequest`: campos `title?` e `body_template?` opcionais.
+- `DispatchService`: helpers exportados `resolveTitle` e
+  `resolveBodyTemplate` (trim + fallback default).
+- `<MessageCustomizer />`: input título + textarea body + preview com
+  `{meta}` substituído pela primeira meta selecionada (ou 0 + hint).
+  Sanitização defensiva no preview via `sanitizeBodyHtml`.
+
+**`sprint-leader` — BL-C2-008 (tela de acks):**
+
+- `AckTrackingService.list(sprintId, targets)` no main: agrega
+  `AckStore` + `OperatorsService`, devolve `AckStateView[]`. Estados
+  derivados do Anexo D (3 estados). Trata `DirectoryNotFoundError` de
+  `acks/` como benigno.
+- IPC `listAcks` com envelope `IpcResult<ListAcksResponse>`.
+- `useTrackedSprintStore` (Zustand): persiste sprint disparada na sessão.
+- `NovaSprint.handleDispatchClick` popula store quando
+  `result.summary.success > 0`.
+- `Acompanhamento.tsx` funcional: empty state, summary + lista de
+  targets com 3 estados (cinza/laranja/verde + timestamp), polling 3s
+  com cleanup no unmount.
+
+**`sprint-leader` — BL-C2-009 (cancelamento):**
+
+- `CancelService.cancel(request)` monta `SprintCancel` (Anexo E:
+  `sprint_id_ref`, `cancelado_por` do config, `cancelado_em` ISO,
+  `motivo` opcional trimmed). Validação via `parseSprintCancel`
+  (sprint_id inválido → `ContractValidationError`).
+- IPC `cancelSprint` com envelope `IpcResult<CancelSprintResponse>`.
+- `CancelStore` instanciado em `rebuildDeps` recebendo `pendingStore`.
+- `useTrackedSprintStore` estendido: `cancelled: boolean` +
+  `markCancelled()` + `selectIsSprintActive`.
+- `<CancelSprintButton />`: botão destrutivo + modal de confirmação com
+  textarea motivo opcional. Click no backdrop fecha; submitting
+  desabilita botões; sucesso marca cancelled; erro inline `role="alert"`.
+- `Acompanhamento` integra: botão visível enquanto sprint ativa, some
+  quando `cancelled`; polling para automaticamente.
+
+### Tests — Sessão 43
+
+- fs-adapter: 286 → 308 (+22).
+- Leader: 210 → 332 (+122).
+- Agent: 240 (estável).
+- Total monorepo: +144 testes, todos verdes.
+
 ### Changed — Sessões 35-42 (2026-05-28) — Refino visual coordenado do Overlay
 
 11 micro-iterações sobre o mesmo escopo, guiadas por screenshots do

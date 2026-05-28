@@ -179,8 +179,8 @@ renderer/
 │   ├── BulkSelectButtons/ # Marcar todos / Desmarcar todos
 │   └── DeadlineInput/     # time picker + warning anti-passado
 ├── routes/
-│   ├── NovaSprint/        # composer (Operadores + Deadline + botão Enviar stub)
-│   ├── Acompanhamento/    # placeholder W2 (BL-C2-008)
+│   ├── NovaSprint/        # composer (Operadores + Deadline + título/corpo + Disparar)
+│   ├── Acompanhamento/    # tela de acks (BL-C2-008) + cancelamento (BL-C2-009)
 │   └── Historico/         # placeholder W3 (BL-C2-010)
 ├── stores/
 │   ├── useSprintComposerStore.ts  # draft + selectors puros
@@ -291,6 +291,87 @@ apps/leader/src/
   `main/index.ts` + `main/ipc.ts` excluídos do coverage (boot + envelope;
   testados via E2E em W3 com Playwright).
 
+> **Atualização W2 — BL-C4-004 + BL-C2-006/008/009 (Sessão 43):**
+>
+> Encerra o C2 (Leader) na Wave 2 com 4 BLs entregues + a fundação `writeCancel`
+> no fs-adapter. Marco: **ciclo de cancelamento ponta-a-ponta funcionando**
+> (Leader escreve `cancel-*.json` → Agent já mergeado em BL-C3-011 detecta e
+> fecha overlay sem ack).
+>
+> **Novos services no main process:**
+>
+> - `AckTrackingService` (BL-C2-008) — agrega `AckStore` + `OperatorsService`,
+>   devolve `AckStateView[]` com 3 estados (Anexo D:
+>   `displayed_at`/`acknowledged_at`/sem ack). Trata `DirectoryNotFoundError` de
+>   `acks/` como benigno. Endpoint leve usado em polling 3s pela tela
+>   `/acompanhamento`.
+> - `CancelService` (BL-C2-009) — monta `SprintCancel` (Anexo E) com
+>   `cancelado_por` do `LeaderConfig.criado_por`, `cancelado_em` ISO, `motivo`
+>   opcional trimmed. Validação via `parseSprintCancel` (sprint_id inválido →
+>   `ContractValidationError` com contexto do campo). Delega para
+>   `CancelStore.writeCancel`.
+>
+> **Novos handlers IPC** (em `main/ipc.ts`):
+>
+> - `listAcks(sprintId, targets)` → `IpcResult<ListAcksResponse>`.
+> - `cancelSprint(request)` → `IpcResult<CancelSprintResponse>`.
+> - Ambos retornam `CONFIG_REQUIRED` quando o respectivo service é null.
+>
+> **`rebuildDeps()` estendido**: instancia `AckStore` (para o
+> AckTrackingService) e `CancelStore` (recebendo `pendingStore` para o
+> writeCancel remover originais idempotentemente).
+>
+> **DispatchService refinado (BL-C2-006):**
+>
+> - Novos helpers exportados `resolveTitle(requestTitle?)` e
+>   `resolveBodyTemplate(requestBody?)`: aplicam `.trim()` antes de comparar com
+>   vazio, caindo pro default. Líder que apaga input ou deixa só whitespace cai
+>   pro default. Helpers exportados para teste isolado.
+> - `dispatch()` usa `request.title`/`request.body_template` quando presentes
+>   (via helpers); `substituteMeta` + `sanitizeBodyHtml` permanecem no pipeline
+>   final (Agent fica "burro").
+>
+> **Renderer (BL-C2-006/008/009):**
+>
+> - `useSprintComposerStore` ganha `setTitle`/`setBody` actions;
+>   `composerFormSchema` valida title (1..80) e body (max 500). Selectors
+>   propagam title + body_template no `DispatchSprintRequest`.
+> - `useTrackedSprintStore` (Zustand novo): persiste sprint disparada na sessão
+>   `{sprint_id, dispatched_at, targets, title, deadline_hhmm, cancelled}`.
+>   Setada por `NovaSprint.handleDispatchClick` quando
+>   `result.summary.success > 0` (targets com falha ficam fora).
+> - `<MessageCustomizer />` (BL-C2-006): inputs título/corpo com preview
+>   sanitizado por `sanitizeBodyHtml` de contracts. Integrado em NovaSprint logo
+>   abaixo da listSection.
+> - `Acompanhamento.tsx` funcional (BL-C2-008): polling 3s com cleanup via
+>   `signal = { cancelled: false }` + `clearInterval`. Renderiza summary + lista
+>   de targets com 3 estados coloridos + timestamp. Polling para automaticamente
+>   em `current.cancelled` (BL-C2-009).
+> - `<CancelSprintButton />` (BL-C2-009): botão destrutivo + modal de
+>   confirmação com motivo opcional. Click no backdrop fecha; submitting
+>   desabilita botões; sucesso chama `markCancelled()`; erro inline
+>   `role="alert"`. Integrado em Acompanhamento, visível enquanto
+>   `selectIsSprintActive`.
+> - `LeaderAPI` ganha `listAcks` e `cancelSprint`. Preload + api wrapper
+>   - test-setup mock alinhados.
+>
+> **Convenções específicas adicionadas:**
+>
+> - **Validação de IDs via parseSprintCancel/Payload (não `sprintIdSchema.parse`
+>   direto)** — o parse direto lança `ZodError`. Em vez disso, passar o
+>   sprint_id ao parser completo, que internamente faz safeParse e converte para
+>   `ContractValidationError`. Mesma semântica do `DispatchService.dispatch`.
+> - **`exactOptionalPropertyTypes: true`** — passar `acknowledged_at: undefined`
+>   falha. Padrão da sessão: spread condicional
+>   `...(x !== undefined ? { x } : {})`. Aplica a qualquer novo tipo opcional.
+> - **Polling com cleanup em flag**: declarar `signal = { cancelled: false }` no
+>   escopo do `useEffect`; passar para a função async; checar
+>   `if (signal.cancelled) return` antes de setState; no cleanup,
+>   `signal.cancelled = true` + `clearInterval`. Pattern reutilizável.
+>
+> **Testes (Sessão 43):** Leader 210 → 332 (+122); fs-adapter 286 → 308 (+22);
+> Agent intocado (240 estável). Total monorepo +144.
+
 ### Estrutura interna de `@sprint/fs-adapter` (W1 domain layer)
 
 O package segue port-and-adapter hexagonal (ADR-013). Após W1.C4
@@ -311,7 +392,7 @@ packages/fs-adapter/src/
     ├── read-and-parse.ts        # utility read + JSON + Zod safeParse
     ├── pending-store.ts         # writePendingSprint, listPending, deletePending
     ├── ack-store.ts             # writeAck, listAcks
-    ├── cancel-store.ts          # writeCancel — stub W2 (BL-C4-004)
+    ├── cancel-store.ts          # writeCancel (BL-C4-004 W2) + remoção de originais
     └── archive-store.ts         # moveToArchive — stub W3 (BL-C4-005)
 ```
 
@@ -345,9 +426,15 @@ packages/fs-adapter/src/
   condition (skip) de corrupção (entry `kind: 'invalid'`) sem string match.
 - **`deletePending` aceita pending E cancel** (ambos vivem em `pending/`),
   rejeita ack e path traversal via `safeParseFilename` antes do `unlink`.
-- **`CancelStore`/`ArchiveStore` são stubs** com `NotImplementedError` (estende
-  `FilesystemError`). Assinaturas finais preservadas para callers poderem
-  escrever código contra o contrato. **Remover stubs em BL-C4-004 (W2) e
+- **`CancelStore.writeCancel` (BL-C4-004 W2, Sessão 43)** — escreve atômico
+  `cancel-<sprintId>.json` em `pending/` espelhando
+  `PendingStore.writePendingSprint`. Re-valida via `parseSprintCancel`.
+  Construtor opcional `pendingStore?` injeta dependência para remover arquivos
+  `<sprintId>-<userId>.json` da sprint cancelada como parte do writeCancel
+  (race-safe — `FileNotFoundError` silenciado).
+  `WriteCancelResult.removedOriginals` reporta filenames limpos.
+- **`ArchiveStore.moveToArchive` continua stub W3** com `NotImplementedError`
+  (estende `FilesystemError`). Assinatura final preservada. **Remover stub em
   BL-C4-005 (W3).**
 - **MemoryFilesystemAdapter é o mock de fato** — não há classe paralela.
   Paridade Node↔Memory garantida pela contract suite W0; testes do domain layer
