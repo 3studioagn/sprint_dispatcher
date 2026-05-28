@@ -72,19 +72,21 @@
 }
 
 .deadlineGroup {
-  /* Sessão 36 — Renan: "olhe como ele deveria ser e deixe IDENTICO"
-   * apontando para a imagem-alvo onde "Até" e "18:00h" são EMPILHADOS
-   * (column), alinhados pela direita. Reverte a interpretação
-   * literal de "esquerda" feita na Sessão 35 (row baseline). */
+  /* Sessão 37 — Renan comparou screenshot vs design alvo: "Até fica
+   * alinhado a esquerda, e não a direita". Empilhado em coluna (como
+   * Sessão 36), mas align-items flex-end → flex-start: "Até" e
+   * "18:00h" alinhados pela ESQUERDA do bloco do deadline. */
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: var(--sprint-space-1);
 }
 
 .deadlineLabel {
-  /* Sessão 35 mantida: sm (14px). Renan: "deixe ele menorzinho". */
-  font-size: var(--sprint-font-size-sm);
+  /* Sessão 37: sm (14px) → base (16px). Renan: "o Até é levemente
+   * maior". Bump sutil para combinar com a proporção da imagem-alvo
+   * sem competir com o "18:00h" 3xl. */
+  font-size: var(--sprint-font-size-base);
   color: var(--sprint-color-text-muted);
 }
 

@@ -91,8 +91,11 @@
   /* Surface "subtle" — apenas um tom acima do preto puro (Sessão 32).
    * Reservado para áreas que devem se diferenciar SUTILMENTE do
    * background-deep sem chamar atenção (header bar do Overlay sobre
-   * card preto). Entre `background-deep` (#000) e `surface` (#222). */
-  --sprint-color-surface-subtle: #111111;
+   * card preto). Entre `background-deep` (#000) e `surface` (#222).
+   * Sessão 37: #111 → #0a0a0a — Renan reportou que o header ainda
+   * estava visivelmente mais claro que o design alvo; diferenciação
+   * ainda mais sutil (~4% brightness vs preto puro). */
+  --sprint-color-surface-subtle: #0a0a0a;
   /* Surface intermediária (entre background e elevated) */
   --sprint-color-surface: #222222;
   /* Surface elevada (badge "27/05" da imagem, modais sobre cards) */
