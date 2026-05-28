@@ -153,6 +153,46 @@ export interface DispatchSprintResponse {
 }
 
 // =============================================================================
+// acks:list — leitura de <shared_path>/acks/<sprintId>-*.ack.json
+// =============================================================================
+
+/**
+ * Estado de um ack para um par (sprint_id, user_id) dentro do contexto de
+ * uma sprint específica (BL-C2-008). Derivado dos arquivos em `acks/`:
+ *
+ * - `nao_visto`: nenhum arquivo de ack ainda existe para esse user_id.
+ * - `visto`: arquivo existe com `displayed_at` mas sem `acknowledged_at`.
+ *   Operador viu o overlay (overlay mostrou) mas ainda não clicou "Recebi".
+ * - `confirmado`: arquivo existe com `acknowledged_at` populado. Operador
+ *   clicou "Recebi" — confirmação ativa.
+ *
+ * Timestamps preservam a ordem na UI (filed como string ISO).
+ */
+export type AckState = 'nao_visto' | 'visto' | 'confirmado';
+
+export interface AckStateView {
+  /** ID do operador (chave de match com `operators.json`). */
+  readonly user_id: string;
+  /** Nome de exibição resolvido via `operators.json`. */
+  readonly user_nome_exibicao: string;
+  /** Estado derivado do ack. */
+  readonly state: AckState;
+  /** ISO timestamp da exibição do overlay (presente se `state !== 'nao_visto'`). */
+  readonly displayed_at?: string;
+  /** ISO timestamp da confirmação (presente se `state === 'confirmado'`). */
+  readonly acknowledged_at?: string;
+  /** Hostname do PC onde o ack foi gerado (presente se `state !== 'nao_visto'`). */
+  readonly hostname?: string;
+}
+
+export interface ListAcksResponse {
+  /** Estados de cada target da sprint, na ordem em que o líder selecionou. */
+  readonly targets: readonly AckStateView[];
+  /** ISO timestamp da consulta — UI pode mostrar "atualizado às HH:MM:SS". */
+  readonly checked_at: string;
+}
+
+// =============================================================================
 // LeaderAPI — superfície exposta pelo preload via contextBridge
 // =============================================================================
 
@@ -197,4 +237,18 @@ export interface LeaderAPI {
    * fatal (ex.: config faltando) vira `IpcResult<T>{ ok: false }`.
    */
   dispatchSprint: (request: DispatchSprintRequest) => Promise<IpcResult<DispatchSprintResponse>>;
+
+  /**
+   * Lê os acks da sprint `sprint_id` em `<shared_path>/acks/` e devolve o
+   * estado derivado para cada target informado (BL-C2-008). Endpoint
+   * leve — usado em polling a cada 3s pela tela de acompanhamento.
+   *
+   * `targets` é a lista de `user_id`s da sprint disparada (preservada
+   * pelo renderer no `useTrackedSprintStore`). O main resolve
+   * `user_nome_exibicao` consultando o `OperatorsService`.
+   */
+  listAcks: (
+    sprintId: string,
+    targets: readonly { user_id: string }[],
+  ) => Promise<IpcResult<ListAcksResponse>>;
 }

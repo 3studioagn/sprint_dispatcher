@@ -46,6 +46,14 @@ const DEFAULT_DISPATCH_RESPONSE = {
   },
 };
 
+const DEFAULT_LIST_ACKS_RESPONSE = {
+  ok: true as const,
+  data: {
+    targets: [],
+    checked_at: '2026-05-28T14:00:00.000Z',
+  },
+};
+
 if (typeof window !== 'undefined') {
   // vi.fn() recebe um implementation para que o tipo do Mock case com a
   // assinatura declarada em LeaderAPI (arrow property em ipc-types.ts).
@@ -54,6 +62,7 @@ if (typeof window !== 'undefined') {
     getConfig: vi.fn(() => Promise.resolve(DEFAULT_CONFIG_RESPONSE)),
     listOperators: vi.fn(() => Promise.resolve(DEFAULT_OPERATORS_RESPONSE)),
     dispatchSprint: vi.fn(() => Promise.resolve(DEFAULT_DISPATCH_RESPONSE)),
+    listAcks: vi.fn(() => Promise.resolve(DEFAULT_LIST_ACKS_RESPONSE)),
   };
   Object.defineProperty(window, 'api', {
     configurable: true,
@@ -68,6 +77,7 @@ beforeEach(() => {
     vi.mocked(window.api.getConfig).mockReset().mockResolvedValue(DEFAULT_CONFIG_RESPONSE);
     vi.mocked(window.api.listOperators).mockReset().mockResolvedValue(DEFAULT_OPERATORS_RESPONSE);
     vi.mocked(window.api.dispatchSprint).mockReset().mockResolvedValue(DEFAULT_DISPATCH_RESPONSE);
+    vi.mocked(window.api.listAcks).mockReset().mockResolvedValue(DEFAULT_LIST_ACKS_RESPONSE);
   }
 });
 

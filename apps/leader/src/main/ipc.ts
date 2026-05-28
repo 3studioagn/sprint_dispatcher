@@ -22,10 +22,12 @@ import type {
   DispatchSprintResponse,
   GetConfigResult,
   IpcResult,
+  ListAcksResponse,
   OperatorsListResponse,
 } from '../shared/ipc-types';
 
 import { ConfigError, getConfigPath, type LeaderConfig, loadLeaderConfig } from './config';
+import type { AckTrackingService, AckTrackingTarget } from './services/ackTrackingService';
 import type { DispatchService } from './services/dispatchService';
 import type { OperatorsService } from './services/operatorsService';
 
@@ -37,6 +39,7 @@ import type { OperatorsService } from './services/operatorsService';
 export interface IpcDependencies {
   operatorsService: OperatorsService | null;
   dispatchService: DispatchService | null;
+  ackTrackingService: AckTrackingService | null;
 }
 
 /**
@@ -129,6 +132,35 @@ export function registerIpcHandlers(deps: IpcDependencies, rebuildDeps: RebuildD
       }
       try {
         const data = await deps.dispatchService.dispatch(request);
+        return { ok: true, data };
+      } catch (err) {
+        return { ok: false, error: toIpcError(err) };
+      }
+    },
+  );
+
+  // ===========================================================================
+  // listAcks — IpcResult<ListAcksResponse>. Endpoint de polling 3s da
+  // tela de acompanhamento (BL-C2-008).
+  // ===========================================================================
+  ipcMain.handle(
+    'listAcks',
+    async (
+      _event,
+      sprintId: string,
+      targets: readonly AckTrackingTarget[],
+    ): Promise<IpcResult<ListAcksResponse>> => {
+      if (deps.ackTrackingService === null) {
+        return {
+          ok: false,
+          error: {
+            code: 'CONFIG_REQUIRED',
+            message: 'config.json ausente ou inválido — corrija antes de consultar acks',
+          },
+        };
+      }
+      try {
+        const data = await deps.ackTrackingService.list(sprintId, targets);
         return { ok: true, data };
       } catch (err) {
         return { ok: false, error: toIpcError(err) };

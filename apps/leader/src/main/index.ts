@@ -18,11 +18,12 @@
 
 import path from 'node:path';
 
-import { NodeFilesystemAdapter, PendingStore } from '@sprint/fs-adapter';
+import { AckStore, NodeFilesystemAdapter, PendingStore } from '@sprint/fs-adapter';
 import { app, BrowserWindow } from 'electron';
 
 import { ConfigError, loadLeaderConfig, type LeaderConfig } from './config';
 import { type IpcDependencies, registerIpcHandlers } from './ipc';
+import { AckTrackingService } from './services/ackTrackingService';
 import { DispatchService } from './services/dispatchService';
 import { OperatorsService } from './services/operatorsService';
 
@@ -32,6 +33,7 @@ const IS_DEV = Boolean(DEV_SERVER_URL);
 const deps: IpcDependencies = {
   operatorsService: null,
   dispatchService: null,
+  ackTrackingService: null,
 };
 
 /**
@@ -45,8 +47,10 @@ async function rebuildDeps(): Promise<LeaderConfig> {
   const config = await loadLeaderConfig();
   const adapter = new NodeFilesystemAdapter();
   const pendingStore = new PendingStore(adapter, config.shared_path);
+  const ackStore = new AckStore(adapter, config.shared_path);
   deps.operatorsService = new OperatorsService(adapter, config.shared_path);
   deps.dispatchService = new DispatchService(pendingStore, deps.operatorsService, config);
+  deps.ackTrackingService = new AckTrackingService(ackStore, deps.operatorsService);
   return config;
 }
 

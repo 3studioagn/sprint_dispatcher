@@ -15,6 +15,7 @@ import {
   selectSelectedCount,
   useSprintComposerStore,
 } from '../../stores/useSprintComposerStore';
+import { useTrackedSprintStore } from '../../stores/useTrackedSprintStore';
 
 import styles from './NovaSprint.module.css';
 
@@ -53,7 +54,8 @@ export function NovaSprint() {
   }, [toast]);
 
   const handleDispatchClick = useCallback(async (): Promise<void> => {
-    const request = selectDispatchRequest(useSprintComposerStore.getState());
+    const composerState = useSprintComposerStore.getState();
+    const request = selectDispatchRequest(composerState);
     if (request === null) {
       return;
     }
@@ -62,6 +64,25 @@ export function NovaSprint() {
       const result = await api.dispatchSprint(request);
       if (result.ok) {
         useDispatchStore.getState().setResult(result.data);
+        // BL-C2-008: registra a sprint para a tela de acompanhamento se
+        // pelo menos 1 operador recebeu (caso contrário não há nada para
+        // acompanhar). Targets que falharam ficam de fora — o líder não
+        // vai polling acks de quem nunca recebeu o arquivo.
+        if (result.data.summary.success > 0) {
+          const successfulTargets = result.data.per_operator
+            .filter((op) => op.status === 'success')
+            .map((op) => {
+              const sel = request.selected.find((s) => s.user_id === op.user_id);
+              return { user_id: op.user_id, meta: sel?.meta ?? 0 };
+            });
+          useTrackedSprintStore.getState().setCurrent({
+            sprint_id: result.data.sprint_id,
+            dispatched_at: new Date().toISOString(),
+            targets: successfulTargets,
+            title: composerState.title.trim() || 'É hora de correr',
+            deadline_hhmm: request.deadline,
+          });
+        }
       } else {
         useDispatchStore.getState().setError(result.error.message);
       }

@@ -28,6 +28,7 @@ import type {
   GetConfigResult,
   IpcResult,
   LeaderAPI,
+  ListAcksResponse,
   OperatorsListResponse,
 } from '../shared/ipc-types';
 
@@ -55,6 +56,13 @@ const api: LeaderAPI = {
       'dispatchSprint',
       request,
     )) as IpcResult<DispatchSprintResponse>;
+  },
+
+  listAcks: async (
+    sprintId: string,
+    targets: readonly { user_id: string }[],
+  ): Promise<IpcResult<ListAcksResponse>> => {
+    return (await ipcRenderer.invoke('listAcks', sprintId, targets)) as IpcResult<ListAcksResponse>;
   },
 };
 

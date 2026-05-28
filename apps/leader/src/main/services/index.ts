@@ -13,4 +13,12 @@ export {
   operatorsFileSchema,
 } from './operatorsService';
 
-export { DispatchService, resolveDeadlineIso, substituteMeta } from './dispatchService';
+export {
+  DispatchService,
+  resolveBodyTemplate,
+  resolveDeadlineIso,
+  resolveTitle,
+  substituteMeta,
+} from './dispatchService';
+
+export { AckTrackingService, type AckTrackingTarget } from './ackTrackingService';

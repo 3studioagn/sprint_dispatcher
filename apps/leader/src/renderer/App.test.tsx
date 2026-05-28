@@ -81,13 +81,14 @@ describe('App — routing (smoke pós-config-ok)', () => {
     ).toBeInTheDocument();
   });
 
-  it('clicar em "Acompanhamento" navega para a rota de Wave 2', async () => {
+  it('clicar em "Acompanhamento" navega para a rota e mostra empty state quando nenhuma rodada foi disparada', async () => {
     const user = userEvent.setup();
     render(<App />);
     await screen.findByRole('heading', { name: /Escolher pessoas/i, level: 1 });
     await user.click(screen.getByRole('link', { name: 'Acompanhamento' }));
     expect(screen.getByRole('heading', { name: 'Acompanhamento', level: 1 })).toBeInTheDocument();
-    expect(screen.getByText(/Em desenvolvimento — Wave 2/i)).toBeInTheDocument();
+    // BL-C2-008: tela mostra empty state até o líder disparar uma rodada na sessão.
+    expect(screen.getByText(/Nenhuma rodada disparada nesta sessão/i)).toBeInTheDocument();
   });
 
   it('clicar em "Histórico" navega para a rota de Wave 3', async () => {
