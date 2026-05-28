@@ -2,34 +2,44 @@
 '@sprint/ui-kit': minor
 ---
 
-feat(C9): animação compact ↔ expanded do Pill com curva luxe (Sessão 28)
+feat(C9): animação smooth + layout refinado do Pill (Sessão 29)
 
-Renan pediu "algo mais smooth e mais bezier" após Sessão 27 (iOS canonical)
-ainda parecer pouco fluida. Troca exclusivamente CSS no `<Pill>`:
+Renan reportou após Sessão 28 (curva luxe + stagger 140ms) que a animação seguia
+"travada", com sensação "primeiro cresce pra baixo, depois pro lado levemente".
+Também pediu refino do layout compact (mais largo + menos alto) e expanded
+(matching imagem 2 — "20 Artes" em linha) + cor preto puro.
 
-**Easing — curva "luxe" extra-suave:**
+**Animação smooth (single-rate, sem stagger):**
 
-`cubic-bezier(0.19, 1, 0.22, 1)` substitui `cubic-bezier(0.32, 0.72, 0, 1)` (iOS
-canonical). Mais pronunciada visualmente: control point 1 puxa verticalmente
-para o topo (0.19→1.0), criando aceleração inicial sutil + plateau de
-deceleração estendido. Aplicada no `.pill` container E no content emerge
-(`.compactLayout` e `.expandedLayout`).
+- Easing: `cubic-bezier(0.4, 0, 0.2, 1)` (Material standard, "fast out, slow
+  in") substitui curva luxe `(0.19, 1, 0.22, 1)`. Sem plateau extremo — acelera
+  natural no início, desacelera natural no fim.
+- Duração: 480ms no container (era 620ms); 280ms no content emerge (era 460ms).
+- **Sem stagger** — `.expandedLayout` `animation-delay` 140ms → 0ms. Container e
+  conteúdo crescem em paralelo, sem ordem perceptível.
+- Keyframe `pill-content-emerge` translateY 8px → 4px (sutil).
 
-**Duração mais "considerada":**
+**Layout compact (mais largo, menos alto):**
 
-- Container transition: 480ms → 620ms.
-- Content emerge: 360ms → 460ms.
+- `.pill--compact` padding `space-3 / space-5` → `space-2 / space-6` (12/20 →
+  8/24px). Vertical menor (badge mais baixa), horizontal maior (badge mais larga
+  lateralmente).
 
-**Stagger maior:**
+**Layout expanded (matching imagem 2):**
 
-`.expandedLayout` `animation-delay` 80ms → 140ms. Com container 620ms, dá mais
-respiração entre o início do crescimento e a emersão do conteúdo.
-`.compactLayout` segue sem delay.
+- `.pill--expanded` padding `space-4 / space-6 / space-5` →
+  `space-3 / space-6 / space-4` (16/24/20 → 12/24/16). Menos altura total; badge
+  mais horizontal.
+- `min-width` 280px → 320px.
+- `.metricGroup` `flex-direction: column` → `row` com `align-items: baseline`.
+  "20" + "Artes" em linha (não empilhados), alinhados pela base do número.
+- `.unit` sem `margin-top` (gap do flex cobre o espaço horizontal).
+- `.expandedLayout` `gap` `space-4` → `space-3` (mais compacto).
 
-**Keyframe translateY:**
+**Cor preto puro:**
 
-`pill-content-emerge` translateY 6px → 8px. Conteúdo emerge com presença um
-pouco maior.
+- `.pill` background `--sprint-color-background` (#1A1A1A) →
+  `--sprint-color-background-deep` (#000000, novo token semântico em
+  `tokens.css`). Máximo contraste sobre o backdrop translúcido.
 
-Total ui-kit: 60 testes estáveis (mudanças cobertas pela suite existente; CSS
-não tem testes específicos de timing).
+Total ui-kit: 60 testes verdes (mudanças cobertas pela suite existente).

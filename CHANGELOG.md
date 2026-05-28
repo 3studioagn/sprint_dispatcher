@@ -9,21 +9,50 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Changed — Sessão 29 (2026-05-28) — Animação smooth + layout refinado do Pill
+
+Renan reportou após Sessão 28 que a curva luxe + stagger ainda dava
+sensação "primeiro cresce pra baixo, depois pro lado levemente". Pediu
+também refino do layout (compact mais largo + menos alto; expanded
+matching imagem 2) e cor preto puro. Mudanças:
+
+- **Animação smooth single-rate** — `cubic-bezier(0.4, 0, 0.2, 1)`
+  (Material standard "fast out, slow in") substitui luxe
+  `(0.19, 1, 0.22, 1)`. Duração 480ms container (era 620ms) + 280ms
+  content emerge (era 460ms). **Sem stagger** — `animation-delay`
+  140ms → 0ms. Container e conteúdo crescem em paralelo, sem ordem
+  perceptível. Keyframe translateY 8px → 4px (sutil).
+- **Layout compact** — padding `space-3 / space-5` →
+  `space-2 / space-6` (12/20 → 8/24px). Mais largo, menos alto.
+- **Layout expanded** — padding `space-4 / space-6 / space-5` →
+  `space-3 / space-6 / space-4`. `min-width` 280 → 320px.
+  `.metricGroup` `flex-direction: column` → `row` com
+  `align-items: baseline` — "20 Artes" em linha (matching imagem 2).
+  `.unit` sem `margin-top`. `.expandedLayout` `gap` `space-4` →
+  `space-3`.
+- **Cor preto puro** — `.pill` background
+  `--sprint-color-background-deep` (#000000, novo token semântico em
+  `tokens.css`) substitui `--sprint-color-background` (#1A1A1A).
+  Máximo contraste sobre o backdrop translúcido.
+
+### Added — Sessão 29 (2026-05-28)
+
+- **Token `--sprint-color-background-deep`** em `tokens.css` — preto
+  puro `#000000` reservado para superfícies sobre backdrop translúcido
+  onde precisa de máximo contraste com o desktop atrás.
+
 ### Changed — Sessão 28 (2026-05-28) — Curva luxe na animação compact ↔ expanded
 
+_(Superseded pela Sessão 29 — sequência ainda parecia travada. Histórico
+preservado.)_
+
 - **Easing extra-suave** no `<Pill>` — `cubic-bezier(0.19, 1, 0.22, 1)`
-  substitui `cubic-bezier(0.32, 0.72, 0, 1)` (iOS canonical). Curva
-  "luxe": control point 1 puxa verticalmente ao topo (0.19→1.0),
-  criando plateau de deceleração estendido. Mais pronunciada
-  visualmente; Renan pediu "algo mais smooth e mais bezier".
+  substitui `cubic-bezier(0.32, 0.72, 0, 1)` (iOS canonical).
 - **Duração estendida** — container transition 480ms → 620ms; content
   emerge 360ms → 460ms.
 - **Stagger maior no content emerge** — `.expandedLayout`
-  `animation-delay` 80ms → 140ms. Mais respiração entre crescimento
-  do container e emersão do conteúdo.
-- **Keyframe translateY** 6px → 8px (mais presença na emersão).
-- Aplicada uniformemente no `.pill` container, `.compactLayout` e
-  `.expandedLayout`. `prefers-reduced-motion: reduce` cobre tudo.
+  `animation-delay` 80ms → 140ms.
+- **Keyframe translateY** 6px → 8px.
 
 ### Changed — Sessão 27 (2026-05-28) — Refino animação compact ↔ expanded
 

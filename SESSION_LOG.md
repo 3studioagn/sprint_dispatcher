@@ -66,6 +66,111 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 29 — 2026-05-28 — Animação smooth + layout refinado do Pill
+
+**Wave atual:** W2 — em curso **Método:** extensão da Sessão 28 após Renan
+reportar que a luxe seguia travada + pedir refino de layout/cor **Duração
+estimada:** ~45min (1 commit) **Itens:** [animação click compact ↔ expanded —
+iteração 5 + dimensions compact + layout expanded + cor preto puro]
+
+### Objetivo da sessão
+
+Feedback do Renan com 4 pontos + 2 imagens-alvo:
+
+1. "A animação ainda está um pouco travada. Está dando leve impressão de travada
+   quando cresce pra baixo e depois cresce pro lado levemente."
+2. "A badge é um pouco mais larga para as laterais, com a altura um pouco menor,
+   igual está na imagem [1]."
+3. "Quando estiver extendida, ela ficar mais igual à segunda imagem que estou
+   enviando."
+4. "A cor dela vai ser preto mesmo."
+
+Imagem-alvo expanded: "20 Artes" em LINHA (baseline-aligned), não empilhados;
+"Até 18:00h" na coluna direita; "✓ Suas metas" footer esquerda; "27/05" badge
+footer direita. Background preto puro.
+
+### O que foi feito
+
+CSS-only no `<Pill>` do `@sprint/ui-kit` + novo token em `tokens.css`:
+
+- **Curva Material standard** — `cubic-bezier(0.4, 0, 0.2, 1)` (fast out, slow
+  in) substitui luxe `(0.19, 1, 0.22, 1)`. Sem plateau extremo, perceptualmente
+  "orgânica" (curva mais usada do setor para mudança de tamanho).
+- **Duração reduzida** — container 480ms (era 620ms); content emerge 280ms (era
+  460ms).
+- **SEM stagger** — `.expandedLayout` `animation-delay` 140 → 0ms. Resolução do
+  bug "primeiro pra baixo, depois pro lado": container e conteúdo crescem em
+  paralelo agora.
+- **Keyframe translateY** 8 → 4px (sutil — entrance suave em vez de
+  proeminente).
+- **Compact mais largo, menos alto** — padding `space-3/space-5` →
+  `space-2/space-6` (12/20 → 8/24px).
+- **Expanded mais "horizontal"** — padding `space-4/space-6/space-5` →
+  `space-3/space-6/space-4`. `min-width` 280 → 320px. `gap` `space-4` →
+  `space-3`.
+- **`.metricGroup` row baseline** — `flex-direction: column` → `row` +
+  `align-items: baseline`. "20" + "Artes" em linha, ancorados à base do número.
+  Match imagem-alvo. `.unit` perde `margin-top` (gap do flex cobre o espaço).
+- **Cor preto puro** — `.pill` background `var(--sprint-color-background-deep)`
+  (novo token #000000) substitui `var(--sprint-color-background)` (#1A1A1A).
+- **Novo token** `--sprint-color-background-deep` em `tokens.css` — preto puro
+  reservado para superfícies sobre backdrop translúcido.
+
+### Estado atual
+
+- 60 testes verdes no ui-kit (CSS de timing/layout não tem testes específicos;
+  tokens.test.ts valida estrutura sem restringir novos tokens).
+- Build ui-kit OK (`dist/index.js` 9.39 kB, `dist/assets/style.css` 11.24 kB —
+  +1.7 kB sobre Sessão 28 devido aos novos comments).
+- Agent inalterado nesta sessão (consome o ui-kit via CSS bundle).
+- 1 changeset: `c9-pill-expand-refine-v3.md` reescrito (estado final Sessão 29;
+  histórico das iterações no SESSION_LOG e Git).
+
+### Decisões tomadas
+
+- **Material standard `(0.4, 0, 0.2, 1)`** como curva padrão para transição de
+  TAMANHO no ui-kit — supersede iOS, luxe e ease-out expo testadas nas iterações
+  27/28. Razão: curva mais "natural" perceptualmente; não tem plateau extremo
+  que pode dar sensação de arrastar no fim.
+- **Sem stagger** é o fix real — o stagger entre container e conteúdo era a
+  causa principal da sensação "primeiro X depois Y". Curva também ajuda, mas
+  timing simétrico foi o pivot.
+- **Novo token `background-deep`** em vez de hardcode `#000` na pill — semântica
+  preservada, futuras superfícies similares podem reusar.
+- **Layout `metricGroup` row baseline** alinha com a imagem-alvo e com convenção
+  tipográfica (número grande + unidade pequena ancorada à base, padrão de
+  relatórios financeiros e dashboards).
+- **`min-width` 320px** para expanded — calculado a partir do conteúdo da
+  imagem-alvo (deadline largo "18:00h" + label "Suas metas" + badge data
+  "27/05" + paddings — caberia em ~280px mas 320px dá respiração).
+
+### Bloqueios encontrados
+
+Nenhum.
+
+### Próximo passo
+
+Aguardar validação visual do Renan. 5ª iteração — se ainda houver feedback,
+provavelmente recheck dimensions e/ou easing.
+
+### Observações para a próxima sessão
+
+- **Iteração 25 → 26 → 27 → 28 → 29 sobre a mesma animação**: spring overshoot →
+  ease-out expo → iOS canonical → luxe → Material standard. Pattern do feedback:
+  cada iteração corrigiu UM aspecto mas revelou outro. Lição: validar
+  visualmente NO RUNTIME antes de "polir" curvas; preview em Storybook ou
+  similar resolveria 80% das idas e voltas.
+- **Stagger entre container e conteúdo** é uma técnica popular mas pode dar
+  sensação "sequencial" se a duração total ficar perceptível. Evitar para
+  transições de tamanho — usar single-rate.
+- **Token `background-deep`** não foi adicionado ao `palette-preview.html`
+  (preview dev) — débito menor; pode ficar para W3 polish quando reorganizarmos
+  os previews.
+- **Não foi pedido refactor no `.pillEntrance`** — entrance segue com ease-out
+  expo. Se feedback futuro pedir consistência, unificar com a Material curve.
+
+---
+
 ## Sessão 28 — 2026-05-28 — Curva luxe na animação compact ↔ expanded do Pill
 
 **Wave atual:** W2 — em curso **Método:** extensão da Sessão 27 após Renan

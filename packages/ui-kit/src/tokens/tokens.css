@@ -84,6 +84,10 @@
 
   /* Fundo do card principal (extraído: ~#1A1A1A da imagem) */
   --sprint-color-background: #1a1a1a;
+  /* Fundo "deep" — preto puro, reservado para superfícies que ficam
+   * sobre backdrop translúcido onde o card precisa de máximo contraste
+   * com o app de trabalho abaixo (Pill standalone do Agent — Sessão 29). */
+  --sprint-color-background-deep: #000000;
   /* Surface intermediária (entre background e elevated) */
   --sprint-color-surface: #222222;
   /* Surface elevada (badge "27/05" da imagem, modais sobre cards) */

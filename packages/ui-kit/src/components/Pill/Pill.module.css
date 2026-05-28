@@ -3,11 +3,17 @@
  *
  * Topo reto + cantos inferiores arredondados — encaixa visualmente sob o
  * topo do monitor, simulando "pendurada" do borda. Sombra projeta para
- * baixo destacando a saliência. Background dark canonical
- * `--sprint-color-background`.
+ * baixo destacando a saliência. Background preto puro
+ * (`--sprint-color-background-deep`, Sessão 29) — escolhido sobre
+ * `--sprint-color-background` (#1A1A1A) para máximo contraste com o
+ * desktop atrás (backdrop transparente).
  *
- * Transição compact ↔ expanded animada via `padding` e `min-width` —
- * 250ms ease-in-out cobre a percepção de "crescimento" sem distrair.
+ * Transição compact ↔ expanded animada via `padding` e `min-width` com
+ * Material standard easing (`cubic-bezier(0.4, 0, 0.2, 1)`) — Sessão 29
+ * substituiu a curva luxe (0.19, 1, 0.22, 1) e o stagger 140ms anteriores;
+ * Renan reportou sensação "primeiro cresce pra baixo, depois pro lado".
+ * Sem stagger, curva natural single-rate → crescimento orgânico
+ * simultâneo em ambas direções.
  *
  * Magnitudes EXCLUSIVAMENTE via tokens `--sprint-*` (zero hex/px
  * hardcoded fora de tokens).
@@ -45,7 +51,7 @@
 }
 
 .pill {
-  background: var(--sprint-color-background);
+  background: var(--sprint-color-background-deep);
   color: var(--sprint-color-text);
   font-family: inherit;
   border: none;
@@ -67,23 +73,24 @@
   /* Sombra desce — reforça a sensação de "pendurada" */
   box-shadow: 0 6px 16px -2px rgba(0, 0, 0, 0.55);
 
-  /* Transições compact ↔ expanded (Sessão 28 — Renan pediu "algo mais
-   * smooth e mais bezier" após Sessão 27 ainda parecer pouco fluida).
-   * Mudanças:
+  /* Transições compact ↔ expanded (Sessão 29 — Renan reportou que a curva
+   * luxe (0.19, 1, 0.22, 1) com stagger 140ms ainda dava sensação
+   * "primeiro cresce pra baixo, depois pro lado levemente"). Solução:
    *
-   * - Easing: cubic-bezier(0.19, 1, 0.22, 1) — curva "luxe" com
-   *   deceleração extra-longa. Mais pronunciada visualmente que a
-   *   iOS canonical (0.32, 0.72, 0, 1): control point 1 puxa
-   *   verticalmente para o topo (0.19→1.0), criando aceleração inicial
-   *   sutil + plateau de deceleração estendido. Sensação de "settle"
-   *   gradual, ar de mecanismo refinado.
-   * - Duração: 620ms (era 480ms). Ar "considerado" reforçado;
-   *   crescimento horizontal sentido com presença.
-   * - Inclui `transform` na lista para o `:active` scale (feedback
-   *   tátil) animar suavemente. */
+   * - Easing: cubic-bezier(0.4, 0, 0.2, 1) — Material standard "fast out,
+   *   slow in". Acelera natural no início, desacelera natural no fim,
+   *   sem plateau extremo. Curva mais usada do setor para mudanças de
+   *   tamanho — perceptualmente "orgânica".
+   * - Duração: 480ms (era 620ms). Mais curto = menos chance de sensação
+   *   "lenta/arrastada" entre o início e o fim.
+   * - Sem stagger no content emerge (ver abaixo) — padding/min-width E
+   *   conteúdo crescem em paralelo. Resultado: pill cresce em AMBAS
+   *   direções simultaneamente, sem ordem perceptível.
+   * - Inclui `transform` na lista para o `:active` scale animar
+   *   suavemente. */
   transition:
-    padding 620ms cubic-bezier(0.19, 1, 0.22, 1),
-    min-width 620ms cubic-bezier(0.19, 1, 0.22, 1),
+    padding 480ms cubic-bezier(0.4, 0, 0.2, 1),
+    min-width 480ms cubic-bezier(0.4, 0, 0.2, 1),
     transform 140ms ease-out;
 }
 
@@ -131,7 +138,10 @@
  * ============================================================ */
 
 .pill--compact {
-  padding: var(--sprint-space-3) var(--sprint-space-5);
+  /* Sessão 29 — Renan: "A badge é um pouco mais larga para as laterais,
+   * com a altura um pouco menor". Padding vertical space-3 → space-2
+   * (12 → 8px); horizontal space-5 → space-6 (20 → 24px). */
+  padding: var(--sprint-space-2) var(--sprint-space-6);
   min-width: 0;
 }
 
@@ -139,10 +149,9 @@
   display: inline-flex;
   align-items: center;
   gap: var(--sprint-space-3);
-  /* Sessão 28: curva luxe (0.19, 1, 0.22, 1) + duração 460ms (era 360ms)
-   * + translateY 8px no keyframe (era 6px). Conteúdo emerge mais
-   * fluido enquanto o container 620ms cresce ao redor. */
-  animation: pill-content-emerge 460ms cubic-bezier(0.19, 1, 0.22, 1) both;
+  /* Sessão 29: Material curve + 280ms + SEM stagger. Container e
+   * conteúdo crescem juntos — sem ordem perceptível "primeiro X depois Y". */
+  animation: pill-content-emerge 280ms cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
 /* ============================================================
@@ -150,30 +159,29 @@
  * ============================================================ */
 
 .pill--expanded {
-  padding: var(--sprint-space-4) var(--sprint-space-6) var(--sprint-space-5);
-  /* min-width: 280px (Sessão 27 — era 220px). Renan reportou que o
-   * crescimento lateral estava "bem de leve"; aumentar o min-width
-   * torna a expansão horizontal mais perceptível visualmente sem
-   * afetar a densidade compacta. */
-  min-width: 280px;
+  /* Sessão 29 — Renan: "Quando estiver extendida, ela ficar mais igual à
+   * segunda imagem". Padding vertical reduzido (space-3 / space-4 era
+   * space-4 / space-5) — menos altura, badge mais "horizontal". Padding
+   * horizontal mantido em space-6. min-width 320px (era 280px) para a
+   * imagem-alvo mais ampla. */
+  padding: var(--sprint-space-3) var(--sprint-space-6) var(--sprint-space-4);
+  min-width: 320px;
 }
 
 .expandedLayout {
   display: flex;
   flex-direction: column;
-  gap: var(--sprint-space-4);
-  /* Sessão 28: stagger aumentado para 140ms (era 80ms) — com container
-   * 620ms, dá mais "respiração" entre o início do crescimento e a
-   * emersão do conteúdo. Duração 460ms + curva luxe casam com
-   * .compactLayout. `both` mantém opacity:0 durante o delay (evita
-   * flash). */
-  animation: pill-content-emerge 460ms cubic-bezier(0.19, 1, 0.22, 1) 140ms both;
+  gap: var(--sprint-space-3);
+  /* Sessão 29: SEM stagger (era 140ms). Container e conteúdo emergem
+   * em paralelo. Material curve + 280ms iguais ao .compactLayout —
+   * comportamento simétrico bidirecional. */
+  animation: pill-content-emerge 280ms cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
 @keyframes pill-content-emerge {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
@@ -196,9 +204,13 @@
 }
 
 .metricGroup {
+  /* Sessão 29 — Renan: layout expanded deve matchar imagem 2 ("20 Artes"
+   * em linha, não empilhado). Row + baseline alignment para que o "Artes"
+   * sm fique ancorado à base do "20" 3xl em vez de centralizado. */
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  flex-direction: row;
+  align-items: baseline;
+  gap: var(--sprint-space-2);
 }
 
 .valueBig {
@@ -210,9 +222,10 @@
 }
 
 .unit {
+  /* Sessão 29: sem margin-top (era space-1) — agora é row com baseline,
+   * o gap do flex já dá espaço horizontal entre "20" e "Artes". */
   font-size: var(--sprint-font-size-sm);
   color: var(--sprint-color-text-muted);
-  margin-top: var(--sprint-space-1);
 }
 
 .deadlineGroup {
