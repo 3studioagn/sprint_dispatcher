@@ -66,6 +66,70 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 32 — 2026-05-28 — Overlay mais estreito + header bar "subtle"
+
+**Wave atual:** W2 — em curso **Método:** extensão da Sessão 31 após Renan
+validar e reportar 2 ajustes finos **Duração estimada:** ~15min (1 commit)
+**Itens:** [max-width do `.card` + bg do `.header` no ui-kit `<Overlay>`]
+
+### Objetivo da sessão
+
+Feedback do Renan:
+
+1. "Ele ficou um pouco largo demais, comparado com a imagem que tinha te
+   enviado."
+2. "O fundo onde está escrito 'É hora de correr' deve ser um pouco mais escuro,
+   apenas um tom acima do preto mesmo."
+
+### O que foi feito
+
+Fix em `<Overlay>` do ui-kit + token novo em `tokens.css`:
+
+- **`.card` `max-width: 720px` → `520px`** — proporção mais quadrada matching
+  design alvo.
+- **Token novo `--sprint-color-surface-subtle: #111111`** em `tokens.css` —
+  entre `background-deep` (#000) e `surface` (#222).
+- **`.header` background `--surface-elevated` (#2A) → `--surface-subtle`
+  (#111)** — diferenciação sutil em vez de bar proeminente.
+
+### Estado atual
+
+- 60 testes verdes no ui-kit (estável; CSS visual não afeta tests funcionais).
+- Agent inalterado nesta sessão (consome o ui-kit via CSS bundle — rebuild
+  produz o novo style.css).
+- 1 changeset: `c9-overlay-width-header-subtle.md`.
+
+### Decisões tomadas
+
+- **520px** é um sweet spot — abaixo disso compromete legibilidade da meta
+  gigante 4xl (120px); acima volta a parecer largo. Reavaliar se feedback futuro
+  pedir ainda mais estreito.
+- **Novo token `surface-subtle`** em vez de hardcode `#111` no `.header` —
+  semântica preservada, futuras superfícies "next-to-black" podem reusar (ex.:
+  divider sutil entre seções de uma tela maior).
+
+### Bloqueios encontrados
+
+Nenhum.
+
+### Próximo passo
+
+Aguardar validação visual do Renan. Sessões 31-32 fecharam o ciclo visual do
+Overlay matching o design 'Hora do Rush!'. Se aprovado, branch fica pronta para
+PR/merge.
+
+### Observações para a próxima sessão
+
+- **Sessões 24-32 cobrem o ciclo "visual fidelity" do BL-C9 e BL-C3-015** com
+  iterações na Pill (24-30) e Overlay (31-32). Consolidação em
+  `dev/SCOPE_REVISITED.md` segue pendente para W3.
+- **Tokens neutros agora têm 3 níveis subtle/elevated:** `background-deep`
+  (#000) < `surface-subtle` (#111) < `surface` (#222) < `surface-elevated`
+  (#2A). Se novo nível precisar entrar, manter ordenação numérica
+  monotonicamente crescente em escuro→claro.
+
+---
+
 ## Sessão 31 — 2026-05-28 — Overlay matchando design 'Hora do Rush!'
 
 **Wave atual:** W2 — em curso **Método:** refactor coordenado ui-kit + Agent

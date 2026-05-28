@@ -9,6 +9,25 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Changed — Sessão 32 (2026-05-28) — Overlay mais estreito + header bar "subtle"
+
+Renan validou Sessão 31 e reportou 2 ajustes finos no Overlay:
+
+- **`.card` `max-width: 720px` → `520px`** — Renan: "ficou um pouco
+  largo demais comparado com a imagem que tinha te enviado". Proporção
+  mais quadrada/portrait matching o design.
+- **Header bg `--surface-elevated` (#2A) → `--surface-subtle` (#111)**
+  — Renan: "o fundo onde está escrito 'É hora de correr' deve ser um
+  pouco mais escuro, apenas um tom acima do preto mesmo". Diferenciação
+  sutil em vez de bar visualmente proeminente.
+
+### Added — Sessão 32 (2026-05-28)
+
+- **Token `--sprint-color-surface-subtle: #111111`** em `tokens.css`
+  — entre `background-deep` (#000) e `surface` (#222). Reservado para
+  áreas que precisam se diferenciar SUTILMENTE do background-deep sem
+  chamar atenção (header bar do Overlay).
+
 ### Changed — Sessão 31 (2026-05-28) — Overlay matchando design 'Hora do Rush!'
 
 Renan: "Agora precisamos arrumar somente a overlay, ela está muito

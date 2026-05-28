@@ -46,7 +46,11 @@
   box-shadow: var(--sprint-shadow-lg);
   /* Sessão 31: padding REMOVIDO do .card — cada section controla o
    * próprio para que o header possa ter bg distinto sem gap no topo. */
-  max-width: 720px;
+  /* Sessão 32: max-width 720 → 520px. Renan reportou que o card
+   * estava largo demais comparado com a imagem-alvo (proporção mais
+   * quadrada/portrait do design 'Hora do Rush!'). 520px aproxima a
+   * proporção sem comprometer legibilidade da meta gigante (4xl). */
+  max-width: 520px;
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -77,10 +81,11 @@
 }
 
 .header {
-  /* Sessão 31: bg distinto matching design alvo — header é uma "bar"
-   * cinza médio sobre o body preto, criando hierarquia visual clara
-   * entre title e conteúdo. */
-  background: var(--sprint-color-surface-elevated);
+  /* Sessão 32: bg `surface-subtle` (#111) substitui `surface-elevated`
+   * (#2A) — Renan: "o fundo onde está escrito 'É hora de correr' deve
+   * ser um pouco mais escuro, apenas um tom acima do preto mesmo".
+   * Token novo introduzido em tokens.css na mesma sessão. */
+  background: var(--sprint-color-surface-subtle);
   text-align: center;
   padding: var(--sprint-space-5) var(--sprint-space-6);
 }

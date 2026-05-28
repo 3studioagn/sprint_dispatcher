@@ -88,6 +88,11 @@
    * sobre backdrop translúcido onde o card precisa de máximo contraste
    * com o app de trabalho abaixo (Pill standalone do Agent — Sessão 29). */
   --sprint-color-background-deep: #000000;
+  /* Surface "subtle" — apenas um tom acima do preto puro (Sessão 32).
+   * Reservado para áreas que devem se diferenciar SUTILMENTE do
+   * background-deep sem chamar atenção (header bar do Overlay sobre
+   * card preto). Entre `background-deep` (#000) e `surface` (#222). */
+  --sprint-color-surface-subtle: #111111;
   /* Surface intermediária (entre background e elevated) */
   --sprint-color-surface: #222222;
   /* Surface elevada (badge "27/05" da imagem, modais sobre cards) */
