@@ -5,6 +5,17 @@ import { defineConfig } from 'vite';
 import dts from 'vite-plugin-dts';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 
+/**
+ * Watch mode (`vite build --watch`, usado pelo script `dev`) NÃO deve
+ * esvaziar o `dist/` na inicialização — apps consumidores (Agent
+ * renderer via Vite dev server) podem estar fazendo Pre-transform
+ * exatamente no intervalo entre o clear e o primeiro re-bundle, e
+ * falham com "Failed to load url .../dist/index.js" / "styles.css".
+ * Em one-shot build (`pnpm build`), `dist/` é reescrito por completo
+ * pelos outputs do Rollup; arquivos antigos não sobrevivem.
+ */
+const isWatchMode = process.argv.includes('--watch');
+
 export default defineConfig({
   plugins: [
     react(),
@@ -22,7 +33,7 @@ export default defineConfig({
   build: {
     target: 'es2022',
     sourcemap: true,
-    emptyOutDir: true,
+    emptyOutDir: !isWatchMode,
     lib: {
       entry: resolve(__dirname, 'src/index.ts'),
       formats: ['es'],
