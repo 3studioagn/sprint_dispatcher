@@ -18,6 +18,8 @@
 import { ipcMain } from 'electron';
 
 import type {
+  CancelSprintRequest,
+  CancelSprintResponse,
   DispatchSprintRequest,
   DispatchSprintResponse,
   GetConfigResult,
@@ -28,6 +30,7 @@ import type {
 
 import { ConfigError, getConfigPath, type LeaderConfig, loadLeaderConfig } from './config';
 import type { AckTrackingService, AckTrackingTarget } from './services/ackTrackingService';
+import type { CancelService } from './services/cancelService';
 import type { DispatchService } from './services/dispatchService';
 import type { OperatorsService } from './services/operatorsService';
 
@@ -40,6 +43,7 @@ export interface IpcDependencies {
   operatorsService: OperatorsService | null;
   dispatchService: DispatchService | null;
   ackTrackingService: AckTrackingService | null;
+  cancelService: CancelService | null;
 }
 
 /**
@@ -161,6 +165,31 @@ export function registerIpcHandlers(deps: IpcDependencies, rebuildDeps: RebuildD
       }
       try {
         const data = await deps.ackTrackingService.list(sprintId, targets);
+        return { ok: true, data };
+      } catch (err) {
+        return { ok: false, error: toIpcError(err) };
+      }
+    },
+  );
+
+  // ===========================================================================
+  // cancelSprint — IpcResult<CancelSprintResponse>. Grava cancel-<id>.json
+  // e remove originais pendentes (BL-C2-009 + BL-C4-004).
+  // ===========================================================================
+  ipcMain.handle(
+    'cancelSprint',
+    async (_event, request: CancelSprintRequest): Promise<IpcResult<CancelSprintResponse>> => {
+      if (deps.cancelService === null) {
+        return {
+          ok: false,
+          error: {
+            code: 'CONFIG_REQUIRED',
+            message: 'config.json ausente ou inválido — corrija antes de cancelar',
+          },
+        };
+      }
+      try {
+        const data = await deps.cancelService.cancel(request);
         return { ok: true, data };
       } catch (err) {
         return { ok: false, error: toIpcError(err) };

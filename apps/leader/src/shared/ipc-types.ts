@@ -193,6 +193,24 @@ export interface ListAcksResponse {
 }
 
 // =============================================================================
+// sprint:cancel — grava `pending/cancel-<sprintId>.json` e remove originais
+// =============================================================================
+
+export interface CancelSprintRequest {
+  /** ULID da sprint que será cancelada (= sprint_id_ref do payload de cancel). */
+  readonly sprint_id: string;
+  /** Motivo opcional anotado pelo líder (Anexo E, RF-11). */
+  readonly motivo?: string;
+}
+
+export interface CancelSprintResponse {
+  /** Nome do arquivo de cancelamento gravado em `pending/`. */
+  readonly filename: string;
+  /** Filenames das sprints originais que foram removidas de `pending/`. */
+  readonly removed_originals: readonly string[];
+}
+
+// =============================================================================
 // LeaderAPI — superfície exposta pelo preload via contextBridge
 // =============================================================================
 
@@ -251,4 +269,12 @@ export interface LeaderAPI {
     sprintId: string,
     targets: readonly { user_id: string }[],
   ) => Promise<IpcResult<ListAcksResponse>>;
+
+  /**
+   * Cancela a sprint `sprint_id` — grava `pending/cancel-<sprintId>.json`
+   * e remove os pendings originais que ainda não foram processados pelos
+   * Agents (BL-C2-009). O Agent (BL-C3-011) detecta o cancel e fecha o
+   * overlay no operador.
+   */
+  cancelSprint: (request: CancelSprintRequest) => Promise<IpcResult<CancelSprintResponse>>;
 }

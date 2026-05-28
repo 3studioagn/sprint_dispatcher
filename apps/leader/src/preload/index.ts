@@ -23,6 +23,8 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 import type {
+  CancelSprintRequest,
+  CancelSprintResponse,
   DispatchSprintRequest,
   DispatchSprintResponse,
   GetConfigResult,
@@ -63,6 +65,10 @@ const api: LeaderAPI = {
     targets: readonly { user_id: string }[],
   ): Promise<IpcResult<ListAcksResponse>> => {
     return (await ipcRenderer.invoke('listAcks', sprintId, targets)) as IpcResult<ListAcksResponse>;
+  },
+
+  cancelSprint: async (request: CancelSprintRequest): Promise<IpcResult<CancelSprintResponse>> => {
+    return (await ipcRenderer.invoke('cancelSprint', request)) as IpcResult<CancelSprintResponse>;
   },
 };
 

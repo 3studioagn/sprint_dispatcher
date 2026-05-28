@@ -54,6 +54,14 @@ const DEFAULT_LIST_ACKS_RESPONSE = {
   },
 };
 
+const DEFAULT_CANCEL_RESPONSE = {
+  ok: true as const,
+  data: {
+    filename: 'cancel-01HX9K2M4F8N7P2Q5R3S6T7V8W.json',
+    removed_originals: [],
+  },
+};
+
 if (typeof window !== 'undefined') {
   // vi.fn() recebe um implementation para que o tipo do Mock case com a
   // assinatura declarada em LeaderAPI (arrow property em ipc-types.ts).
@@ -63,6 +71,7 @@ if (typeof window !== 'undefined') {
     listOperators: vi.fn(() => Promise.resolve(DEFAULT_OPERATORS_RESPONSE)),
     dispatchSprint: vi.fn(() => Promise.resolve(DEFAULT_DISPATCH_RESPONSE)),
     listAcks: vi.fn(() => Promise.resolve(DEFAULT_LIST_ACKS_RESPONSE)),
+    cancelSprint: vi.fn(() => Promise.resolve(DEFAULT_CANCEL_RESPONSE)),
   };
   Object.defineProperty(window, 'api', {
     configurable: true,
@@ -78,6 +87,7 @@ beforeEach(() => {
     vi.mocked(window.api.listOperators).mockReset().mockResolvedValue(DEFAULT_OPERATORS_RESPONSE);
     vi.mocked(window.api.dispatchSprint).mockReset().mockResolvedValue(DEFAULT_DISPATCH_RESPONSE);
     vi.mocked(window.api.listAcks).mockReset().mockResolvedValue(DEFAULT_LIST_ACKS_RESPONSE);
+    vi.mocked(window.api.cancelSprint).mockReset().mockResolvedValue(DEFAULT_CANCEL_RESPONSE);
   }
 });
 

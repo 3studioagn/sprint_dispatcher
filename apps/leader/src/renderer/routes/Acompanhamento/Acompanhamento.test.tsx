@@ -174,4 +174,66 @@ describe('Acompanhamento (BL-C2-008)', () => {
       });
     });
   });
+
+  describe('estado pós-cancelamento (BL-C2-009)', () => {
+    beforeEach(() => {
+      trackedStore.getState().setCurrent(SAMPLE_SPRINT);
+      trackedStore.getState().markCancelled();
+    });
+
+    it('renderiza mensagem "rodada cancelada"', async () => {
+      render(<Acompanhamento />);
+      await waitFor(() => {
+        expect(screen.getByText(/Esta rodada foi/i)).toBeInTheDocument();
+      });
+      // Note: "cancelada" aparece tanto no subtitle quanto na nota inferior
+      const cancelados = screen.getAllByText(/cancelada/i);
+      expect(cancelados.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('NÃO renderiza o botão "Cancelar rodada" quando sprint já está cancelada', async () => {
+      render(<Acompanhamento />);
+      await waitFor(() => {
+        expect(screen.getByText(/Esta rodada foi/i)).toBeInTheDocument();
+      });
+      expect(screen.queryByRole('button', { name: /Cancelar rodada/ })).not.toBeInTheDocument();
+    });
+
+    it('NÃO chama api.listAcks (polling parou)', async () => {
+      vi.useFakeTimers();
+      render(<Acompanhamento />);
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(vi.mocked(window.api.listAcks)).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('cancelar sprint via botão (integração ponta-a-ponta no renderer)', () => {
+    beforeEach(() => {
+      trackedStore.getState().setCurrent(SAMPLE_SPRINT);
+    });
+
+    it('clicar em Cancelar rodada → modal → Confirmar cancelamento → chama api.cancelSprint', async () => {
+      const userEvent = (await import('@testing-library/user-event')).default;
+      const user = userEvent.setup();
+      render(<Acompanhamento />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /Cancelar rodada/ })).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole('button', { name: /Cancelar rodada/ }));
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /Confirmar cancelamento/ }));
+
+      await waitFor(() => {
+        expect(vi.mocked(window.api.cancelSprint)).toHaveBeenCalledWith({
+          sprint_id: SAMPLE_SPRINT.sprint_id,
+        });
+      });
+      await waitFor(() => {
+        expect(trackedStore.getState().current?.cancelled).toBe(true);
+      });
+    });
+  });
 });

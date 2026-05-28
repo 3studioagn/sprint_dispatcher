@@ -18,12 +18,13 @@
 
 import path from 'node:path';
 
-import { AckStore, NodeFilesystemAdapter, PendingStore } from '@sprint/fs-adapter';
+import { AckStore, CancelStore, NodeFilesystemAdapter, PendingStore } from '@sprint/fs-adapter';
 import { app, BrowserWindow } from 'electron';
 
 import { ConfigError, loadLeaderConfig, type LeaderConfig } from './config';
 import { type IpcDependencies, registerIpcHandlers } from './ipc';
 import { AckTrackingService } from './services/ackTrackingService';
+import { CancelService } from './services/cancelService';
 import { DispatchService } from './services/dispatchService';
 import { OperatorsService } from './services/operatorsService';
 
@@ -34,6 +35,7 @@ const deps: IpcDependencies = {
   operatorsService: null,
   dispatchService: null,
   ackTrackingService: null,
+  cancelService: null,
 };
 
 /**
@@ -48,9 +50,13 @@ async function rebuildDeps(): Promise<LeaderConfig> {
   const adapter = new NodeFilesystemAdapter();
   const pendingStore = new PendingStore(adapter, config.shared_path);
   const ackStore = new AckStore(adapter, config.shared_path);
+  // CancelStore recebe pendingStore para remover originais pendentes
+  // como parte do writeCancel (BL-C4-004).
+  const cancelStore = new CancelStore(adapter, config.shared_path, pendingStore);
   deps.operatorsService = new OperatorsService(adapter, config.shared_path);
   deps.dispatchService = new DispatchService(pendingStore, deps.operatorsService, config);
   deps.ackTrackingService = new AckTrackingService(ackStore, deps.operatorsService);
+  deps.cancelService = new CancelService(cancelStore, config);
   return config;
 }
 

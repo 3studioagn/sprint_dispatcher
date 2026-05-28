@@ -20,6 +20,8 @@
  */
 
 import type {
+  CancelSprintRequest,
+  CancelSprintResponse,
   DispatchSprintRequest,
   DispatchSprintResponse,
   GetConfigResult,
@@ -43,4 +45,7 @@ export const api: LeaderAPI = {
     sprintId: string,
     targets: readonly { user_id: string }[],
   ): Promise<IpcResult<ListAcksResponse>> => window.api.listAcks(sprintId, targets),
+
+  cancelSprint: (request: CancelSprintRequest): Promise<IpcResult<CancelSprintResponse>> =>
+    window.api.cancelSprint(request),
 };

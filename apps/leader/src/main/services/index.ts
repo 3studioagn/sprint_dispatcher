@@ -22,3 +22,5 @@ export {
 } from './dispatchService';
 
 export { AckTrackingService, type AckTrackingTarget } from './ackTrackingService';
+
+export { CancelService } from './cancelService';

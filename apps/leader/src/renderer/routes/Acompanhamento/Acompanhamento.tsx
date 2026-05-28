@@ -22,8 +22,13 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import type { AckStateView } from '../../../shared/ipc-types';
+import { CancelSprintButton } from '../../components/CancelSprintButton';
 import { api } from '../../services/api';
-import { selectHasCurrentSprint, useTrackedSprintStore } from '../../stores/useTrackedSprintStore';
+import {
+  selectHasCurrentSprint,
+  selectIsSprintActive,
+  useTrackedSprintStore,
+} from '../../stores/useTrackedSprintStore';
 
 import styles from './Acompanhamento.module.css';
 
@@ -64,6 +69,7 @@ function formatTime(iso: string | undefined): string | null {
 export function Acompanhamento() {
   const current = useTrackedSprintStore((s) => s.current);
   const hasCurrent = useTrackedSprintStore(selectHasCurrentSprint);
+  const isActive = useTrackedSprintStore(selectIsSprintActive);
   const [load, setLoad] = useState<LoadState>({ status: 'idle' });
 
   const fetchAcks = useCallback(
@@ -96,6 +102,11 @@ export function Acompanhamento() {
   useEffect(() => {
     if (current === null) {
       setLoad({ status: 'idle' });
+      return undefined;
+    }
+    if (current.cancelled) {
+      // BL-C2-009: sprint cancelada — mantém última leitura visível,
+      // mas não pollea mais.
       return undefined;
     }
     const signal = { cancelled: false };
@@ -133,10 +144,19 @@ export function Acompanhamento() {
       <header className={styles.pageHeader}>
         <div className={styles.titleRow}>
           <h1 className={styles.pageTitle}>Acompanhamento</h1>
+          {isActive && <CancelSprintButton />}
         </div>
         <p className={styles.pageSubtitle}>
-          Atualizando a cada 3s — status dos avisos para esta rodada (
-          <code className={styles.sprintIdHint}>{current.sprint_id.slice(0, 8)}…</code>).
+          {current.cancelled ? (
+            <>
+              Esta rodada foi <strong>cancelada</strong>. O polling foi encerrado.
+            </>
+          ) : (
+            <>
+              Atualizando a cada 3s — status dos avisos para esta rodada (
+              <code className={styles.sprintIdHint}>{current.sprint_id.slice(0, 8)}…</code>).
+            </>
+          )}
         </p>
       </header>
 
@@ -207,6 +227,12 @@ export function Acompanhamento() {
           </ul>
         )}
       </section>
+
+      {current.cancelled && (
+        <p className={styles.cancelledNote} role="status">
+          Rodada cancelada. Os acks acima refletem o último estado antes do cancelamento.
+        </p>
+      )}
     </div>
   );
 }
