@@ -194,9 +194,11 @@
       .om-frame {
         background: #e0e0e0;
         border-radius: var(--sprint-radius-md);
-        overflow: hidden; /* corta a bar nos limites do frame */
         margin-bottom: var(--sprint-space-5);
-        padding-bottom: var(--sprint-space-6); /* espaço para mostrar a badge transbordando */
+        /* min-height generosa porque a badge fica abaixo da bar
+         * (bar 32px + badge body ~50px) */
+        min-height: 130px;
+        position: relative; /* contém a positioner absoluta da bar */
       }
       .om-frame__label {
         font-size: var(--sprint-font-size-sm);
@@ -209,21 +211,23 @@
       .om-bar {
         position: relative;
         width: 100%;
-        height: var(--sprint-space-2);
+        height: var(--sprint-space-8); /* 32px */
         background: var(--sprint-color-background);
       }
       .om-positioner {
         position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        display: flex;
-        padding: 0 var(--sprint-space-4);
+        top: 0; /* mesmo nível da bar — corners overlap, badge desce */
+        display: inline-flex;
+        align-items: flex-start;
         pointer-events: none;
       }
-      .om-positioner[data-position='center'] { justify-content: center; }
-      .om-positioner[data-position='left']   { justify-content: flex-start; }
-      .om-positioner[data-position='right']  { justify-content: flex-end; }
+      .om-corner {
+        display: block;
+        width: 28px;
+        height: var(--sprint-space-8); /* 32px — match bar height */
+        flex-shrink: 0;
+        color: var(--sprint-color-background); /* fill via currentColor */
+      }
       .om-badge {
         display: inline-flex;
         align-items: center;
@@ -236,7 +240,9 @@
         cursor: pointer;
         font-family: inherit;
         pointer-events: auto;
+        flex-shrink: 0;
         box-shadow: 0 6px 12px -2px rgba(0, 0, 0, 0.5);
+        transition: background-color 120ms ease-in-out;
       }
       .om-badge:hover { background: var(--sprint-color-surface); }
       .om-badge__icon {
@@ -335,24 +341,27 @@
       </section>
 
       <!-- ====================================================== -->
-      <!-- 2. <OverlayMinimized> — bar full-width + badge pendurada -->
+      <!-- 2. <OverlayMinimized> — bar full-width + SVG corners -->
       <!-- ====================================================== -->
       <section class="demo-section">
-        <h2>2. &lt;OverlayMinimized&gt; (BL-C9-006, NOVO) — redesign bar + badge</h2>
+        <h2>2. &lt;OverlayMinimized&gt; (BL-C9-006) — bar + SVG corners côncavos</h2>
         <p class="note">
-          Faixa horizontal full-width dark com badge "pendurada" no
-          centro (mesma cor → parece extensão da faixa). Substitui o
-          <code>&lt;Overlay&gt;</code> após auto-close. Prop
-          <code>position</code> move a badge para esquerda, centro
-          ou direita. Positioning vertical da faixa (top:0, fixed,
-          BrowserWindow frameless) é responsabilidade do host (Agent
-          em BL-C3-017).
+          Faixa full-width dark com badge "pendurada", curvas côncavas
+          desenhadas via <strong>SVG inline path arc</strong> (vetor
+          preciso). Prop <code>position</code> aceita enum
+          (<code>'left'|'center'|'right'</code>) ou <strong>number 0–100</strong>
+          (percent horizontal — para drag controlado pelo host em
+          BL-C3-017). Positioning vertical da bar (top:0, fixed,
+          BrowserWindow frameless) também é responsabilidade do host.
         </p>
 
         <div class="om-frame">
-          <div class="om-frame__label">position="center" (default)</div>
+          <div class="om-frame__label">position="center" (default = 50%)</div>
           <div class="om-bar">
-            <div class="om-positioner" data-position="center">
+            <div class="om-positioner" data-position="center" style="left: 50%; transform: translateX(-50%);">
+              <svg class="om-corner" viewBox="0 0 28 32" preserveAspectRatio="none" aria-hidden="true">
+                <path d="M 0 0 H 28 V 32 A 28 32 0 0 1 0 0 Z" fill="currentColor" />
+              </svg>
               <button type="button" class="om-badge" aria-label="Suas metas: 20">
                 <svg class="om-badge__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
                   <circle cx="12" cy="12" r="10" stroke-width="2" stroke-dasharray="3 3" />
@@ -361,14 +370,20 @@
                 <span class="om-badge__label">Suas metas</span>
                 <span class="om-badge__value">20</span>
               </button>
+              <svg class="om-corner" viewBox="0 0 28 32" preserveAspectRatio="none" aria-hidden="true">
+                <path d="M 28 0 H 0 V 32 A 28 32 0 0 0 28 0 Z" fill="currentColor" />
+              </svg>
             </div>
           </div>
         </div>
 
         <div class="om-frame">
-          <div class="om-frame__label">position="left"</div>
+          <div class="om-frame__label">position="left" (= 0%)</div>
           <div class="om-bar">
-            <div class="om-positioner" data-position="left">
+            <div class="om-positioner" data-position="left" style="left: 0%; transform: translateX(0%);">
+              <svg class="om-corner" viewBox="0 0 28 32" preserveAspectRatio="none" aria-hidden="true">
+                <path d="M 0 0 H 28 V 32 A 28 32 0 0 1 0 0 Z" fill="currentColor" />
+              </svg>
               <button type="button" class="om-badge" aria-label="Suas metas: 20">
                 <svg class="om-badge__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
                   <circle cx="12" cy="12" r="10" stroke-width="2" stroke-dasharray="3 3" />
@@ -377,14 +392,20 @@
                 <span class="om-badge__label">Suas metas</span>
                 <span class="om-badge__value">20</span>
               </button>
+              <svg class="om-corner" viewBox="0 0 28 32" preserveAspectRatio="none" aria-hidden="true">
+                <path d="M 28 0 H 0 V 32 A 28 32 0 0 0 28 0 Z" fill="currentColor" />
+              </svg>
             </div>
           </div>
         </div>
 
         <div class="om-frame">
-          <div class="om-frame__label">position="right"</div>
+          <div class="om-frame__label">position="right" (= 100%)</div>
           <div class="om-bar">
-            <div class="om-positioner" data-position="right">
+            <div class="om-positioner" data-position="right" style="left: 100%; transform: translateX(-100%);">
+              <svg class="om-corner" viewBox="0 0 28 32" preserveAspectRatio="none" aria-hidden="true">
+                <path d="M 0 0 H 28 V 32 A 28 32 0 0 1 0 0 Z" fill="currentColor" />
+              </svg>
               <button type="button" class="om-badge" aria-label="Suas metas: 20">
                 <svg class="om-badge__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
                   <circle cx="12" cy="12" r="10" stroke-width="2" stroke-dasharray="3 3" />
@@ -393,6 +414,31 @@
                 <span class="om-badge__label">Suas metas</span>
                 <span class="om-badge__value">20</span>
               </button>
+              <svg class="om-corner" viewBox="0 0 28 32" preserveAspectRatio="none" aria-hidden="true">
+                <path d="M 28 0 H 0 V 32 A 28 32 0 0 0 28 0 Z" fill="currentColor" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="om-frame">
+          <div class="om-frame__label">position={'{'}73{'}'} (numeric — drag do host)</div>
+          <div class="om-bar">
+            <div class="om-positioner" data-position="numeric" style="left: 73%; transform: translateX(-73%);">
+              <svg class="om-corner" viewBox="0 0 28 32" preserveAspectRatio="none" aria-hidden="true">
+                <path d="M 0 0 H 28 V 32 A 28 32 0 0 1 0 0 Z" fill="currentColor" />
+              </svg>
+              <button type="button" class="om-badge" aria-label="Suas metas: 20">
+                <svg class="om-badge__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10" stroke-width="2" stroke-dasharray="3 3" />
+                  <path d="M8 12.5 L11 15.5 L16.5 9.5" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                <span class="om-badge__label">Suas metas</span>
+                <span class="om-badge__value">20</span>
+              </button>
+              <svg class="om-corner" viewBox="0 0 28 32" preserveAspectRatio="none" aria-hidden="true">
+                <path d="M 28 0 H 0 V 32 A 28 32 0 0 0 28 0 Z" fill="currentColor" />
+              </svg>
             </div>
           </div>
         </div>

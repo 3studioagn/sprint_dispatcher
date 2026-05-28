@@ -1,24 +1,21 @@
 /**
- * <OverlayMinimized> — styling (bar + badge extension)
+ * <OverlayMinimized> — styling (bar + badge com SVG corners côncavos)
  *
- * Replica o design entregue por Renan na sessão BL-C9-completo
- * (refinamento pós-screenshot inicial):
+ * Replica o design entregue por Renan:
  *
- *   ┌─────────────────────────────────────────────┐
- *   │  bar (full-width, dark, 8px)                │  ← anchor superior
- *   └────────────┐  ┌───────────┐  ┌──────────────┘
- *                │  │  badge    │  │
- *                │  │ (extends  │  │
- *                │  │  down)    │  │
- *                └──┴───────────┴──┘
+ *   ═══════════════════════════════════════════════════
+ *                ╮  ✓ Suas metas  20  ╭
+ *                │                     │
+ *                ╰─────────────────────╯
  *
- * Mesma cor entre bar e badge cria efeito visual de "extensão" da
- * faixa — a badge parece uma aba/saliência pendurada.
- *
- * **Positioning NÃO está aqui** — host (Agent em BL-C3-017) decide
- * como renderizar a bar (BrowserWindow frameless+topmost ancorado no
- * topo, portal fixed top:0, etc.). O componente assume que será
- * renderizado em um container de largura plena.
+ * Estrutura DOM:
+ *   <div class=bar>
+ *     <div class=positioner>    ← absolute, controlado por left%/translateX
+ *       <svg class=cornerLeft>  ← SVG path arc côncavo (vetor preciso)
+ *       <button class=badge>    ← corpo dark, cantos inf. arredondados
+ *       <svg class=cornerRight> ← espelho do cornerLeft
+ *     </div>
+ *   </div>
  *
  * Magnitudes via tokens --sprint-*.
  */
@@ -26,55 +23,87 @@
 .bar {
   position: relative;
   width: 100%;
-  height: var(--sprint-space-2); /* faixa fina 8px */
+  height: var(--sprint-space-8); /* faixa de 32px = altura do corner SVG */
   background: var(--sprint-color-background);
 }
 
-/* badge container — posicionado absolutamente sobre a bar, deixa a
- * badge "transbordar" para baixo. Padding horizontal cria gutter
- * mínimo às laterais da tela para variants left/right. */
 .badgePositioner {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  padding: 0 var(--sprint-space-4);
+  top: 0; /* mesmo nível da bar — corners overlap com bar, badge desce abaixo */
+  display: inline-flex;
+  align-items: flex-start; /* corners e badge alinhados no topo (= top da bar) */
   pointer-events: none; /* só a badge recebe clicks */
+
+  /* `left` e `transform` são injetados via style inline no .tsx
+   * (controlados pela prop position, incluindo numeric drag). */
 }
 
-.badgePositioner--center {
-  justify-content: center;
+/* ============================================================
+ * Corner SVGs — desenham as curvas côncavas
+ *
+ * Cada SVG é um path "L com arc" preenchido com a cor da bar
+ * via currentColor. preserveAspectRatio="none" permite stretch
+ * caso necessário, mas com dimensões fixas em CSS o aspect
+ * ratio se mantém.
+ *
+ * 28×32 = (concave-width × bar-height). Mantém a curva
+ * proporcional à altura da faixa.
+ * ============================================================ */
+
+/* Corner dimensions: 28×32 (match bar height). SVG path desenha
+ * curva côncava quarter-elíptica simples. */
+.cornerLeft,
+.cornerRight {
+  display: block;
+  width: 28px;
+  height: var(--sprint-space-8); /* 32px — match bar height */
+  flex-shrink: 0;
+  color: var(--sprint-color-background); /* fill via currentColor */
 }
 
-.badgePositioner--left {
-  justify-content: flex-start;
-}
-
-.badgePositioner--right {
-  justify-content: flex-end;
-}
+/* ============================================================
+ * Badge — corpo principal
+ *
+ * Top edge reto (continua os corners visualmente). Cantos
+ * inferiores arredondados em pill. Mesma cor dos corners +
+ * bar → forma única visual.
+ * ============================================================ */
 
 .badge {
   display: inline-flex;
   align-items: center;
   gap: var(--sprint-space-3);
-  background: var(--sprint-color-background); /* mesma cor da bar */
+  background: var(--sprint-color-background);
   color: var(--sprint-color-text);
   padding: var(--sprint-space-3) var(--sprint-space-6);
-  /* só cantos inferiores arredondados — o topo se mescla com a bar */
+  /* topo reto + cantos inferiores arredondados (pill) */
   border-radius: 0 0 var(--sprint-radius-pill) var(--sprint-radius-pill);
   border: none;
   cursor: pointer;
   font-family: inherit;
   pointer-events: auto;
+  flex-shrink: 0;
   /* sombra sutil só na parte inferior — destaca a "saliência" */
   box-shadow: 0 6px 12px -2px rgba(0, 0, 0, 0.5);
   transition: background-color 120ms ease-in-out;
+  /* badge tem altura maior que a bar; cresce para baixo. Como
+   * está alinhada flex-start, seu top fica no top da bar (= 0)
+   * e ela desce — overlap com a bar nos primeiros 32px. */
 }
 
-.badge:hover {
+.badge:hover,
+.badge:hover ~ .cornerRight,
+.badgePositioner:has(.badge:hover) .cornerLeft {
   background: var(--sprint-color-surface);
+  color: var(--sprint-color-surface);
+}
+
+/* Fallback para hover (caso :has não seja suportado em runtime antigo).
+ * Apenas a badge muda; corners ficam estáticos.  */
+@supports not selector(:has(*)) {
+  .badge:hover {
+    background: var(--sprint-color-surface);
+  }
 }
 
 .badge:focus-visible {
@@ -86,6 +115,10 @@
 .badge--urgent {
   /* TODO: enfatizar urgência (pulse, borda laranja, etc.) */
 }
+
+/* ============================================================
+ * Conteúdo da badge (ícone, label, value)
+ * ============================================================ */
 
 .icon {
   flex-shrink: 0;
