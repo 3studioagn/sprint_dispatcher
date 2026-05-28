@@ -262,6 +262,10 @@ importers:
         version: 1.6.1(@types/node@20.19.41)(jsdom@28.1.0)
 
   packages/ui-kit:
+    dependencies:
+      '@sprint/contracts':
+        specifier: workspace:*
+        version: link:../contracts
     devDependencies:
       '@testing-library/jest-dom':
         specifier: ^6.9.1

@@ -1,0 +1,39 @@
+/**
+ * <TextBlock> — tipografia para HTML sanitizado
+ *
+ * Aplica estilos de tipografia consistentes às tags whitelistadas pelo
+ * sanitizeBodyHtml (`<b>`, `<i>`, `<br>`, `<p>`, `<h1>`, `<span>`).
+ * Magnitudes via tokens --sprint-*.
+ */
+
+.textBlock {
+  font-family: var(--sprint-font-family-sans);
+  font-size: var(--sprint-font-size-base);
+  line-height: var(--sprint-line-height-normal);
+  color: var(--sprint-color-text);
+}
+
+.textBlock h1 {
+  font-size: var(--sprint-font-size-2xl);
+  font-weight: var(--sprint-font-weight-bold);
+  line-height: var(--sprint-line-height-tight);
+  margin-bottom: var(--sprint-space-3);
+}
+
+.textBlock p {
+  margin-bottom: var(--sprint-space-3);
+}
+
+.textBlock p:last-child {
+  margin-bottom: 0;
+}
+
+.textBlock b {
+  font-weight: var(--sprint-font-weight-semibold);
+}
+
+.textBlock i {
+  font-style: italic;
+}
+
+/* <span> e <br> sem styling default — uso inline composicional */
