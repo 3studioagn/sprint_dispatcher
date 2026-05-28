@@ -147,6 +147,31 @@ export class QueueService {
   }
 
   /**
+   * Remove o item cujo `payload.sprint_id` casa com `sprintId` (BL-C3-011 —
+   * detecção de cancelamento). Idempotente — retorna `false` se não havia
+   * sprint com esse id na fila.
+   *
+   * Emite `queueUpdated` quando remove. NÃO emite `nextSprint` mesmo se
+   * a sprint removida estava em `items[0]` (caller — handler de cancel
+   * no main — é responsável por orquestrar próxima exibição ou hide,
+   * mesma semântica de `dequeue`).
+   *
+   * @param sprintId ULID da sprint a remover (vem do `sprint_id_ref` do
+   *                 `SprintCancel`).
+   * @returns `true` se removeu; `false` se não havia sprint com esse id.
+   */
+  removeBySprintId(sprintId: string): boolean {
+    const idx = this.items.findIndex((i) => i.payload.sprint_id === sprintId);
+    if (idx === -1) return false;
+    const removed = this.items[idx]!;
+    const key = makeDedupKey(removed.payload.sprint_id, removed.payload.user_id);
+    this.items.splice(idx, 1);
+    this.keys.delete(key);
+    this.emitter.emit(QUEUE_UPDATED_EVENT, this.items.length);
+    return true;
+  }
+
+  /**
    * Esvazia a fila. Emite `queueUpdated(0)`. Uso primário em testes;
    * em produção, dequeues seriais cobrem o caso.
    */

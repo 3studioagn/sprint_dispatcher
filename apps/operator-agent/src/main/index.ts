@@ -247,6 +247,9 @@ async function rebuildDeps(): Promise<RuntimeConfig> {
       pendingStore: pendingStoreLocal,
       queueService: queueLocal,
       historyService: historyLocal,
+      // BL-C3-011: overlayService injetado para cancels poderem fechar
+      // overlay quando referenciam a sprint atualmente exibida.
+      overlayService: overlayLocal,
       userId: config.userId,
       pollingIntervalMs: config.pollingIntervalMs,
       log: {

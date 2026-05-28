@@ -25,7 +25,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import type { QueueItem } from '../../shared/types/queue';
 
 import { HistoryService } from './historyService';
-import { PollingService } from './pollingService';
+import { PollingService, type PollingDeps } from './pollingService';
 import { QueueService } from './queueService';
 
 const SHARED_PATH = '/test/shared';
@@ -283,10 +283,22 @@ describe('PollingService — deadline passado (BL-C3-012)', () => {
 
 describe('PollingService — entries especiais', () => {
   let kit: TestKit;
+  let archiveSpy: MockInstance<
+    Parameters<HistoryService['archive']>,
+    ReturnType<HistoryService['archive']>
+  >;
 
   beforeEach(() => {
     kit = makeKit();
     vi.useFakeTimers();
+    // Mock archive para evitar disk write em /test/userData (BL-C3-011
+    // adicionou archive() em processCancel). Cobertura real está em
+    // historyService.test.ts.
+    archiveSpy = vi.spyOn(kit.historyService, 'archive');
+    archiveSpy.mockImplementation((_p, filename) => {
+      kit.historyService.markProcessed(filename);
+      return Promise.resolve();
+    });
   });
 
   afterEach(() => {
@@ -305,35 +317,6 @@ describe('PollingService — entries especiais', () => {
     expect(kit.log.warn).toHaveBeenCalledWith(
       expect.stringContaining('malformado'),
       expect.objectContaining({ filename }),
-    );
-  });
-
-  it('cancel entry (branch defensivo): log warn + skip', async () => {
-    // listPending com userId filtra cancels naturalmente. Para exercitar
-    // o branch, mockamos um cancel entry direto. Schema do SprintCancel
-    // confere com `sprintCancelSchema` (sprint_id_ref + cancelado_por +
-    // cancelado_em + motivo opcional + discriminador `type: 'cancel'`).
-    const cancelEntry: PendingEntry = {
-      kind: 'cancel',
-      filename: `cancel-${VALID_SPRINT_ID_1}.json`,
-      modifiedAt: new Date('2026-05-26T10:00:00.000Z'),
-      payload: parseSprintCancel({
-        schema_version: '1.0',
-        type: 'cancel',
-        sprint_id_ref: VALID_SPRINT_ID_1,
-        cancelado_por: 'Renan',
-        cancelado_em: '2026-05-26T10:00:00.000Z',
-        motivo: 'Mudança de prioridade',
-      }),
-    };
-    vi.spyOn(kit.pendingStore, 'listPending').mockResolvedValueOnce([cancelEntry]);
-
-    await kit.pollingService.pollOnce();
-
-    expect(kit.queueService.length()).toBe(0);
-    expect(kit.log.warn).toHaveBeenCalledWith(
-      expect.stringContaining('cancel'),
-      expect.objectContaining({ filename: cancelEntry.filename }),
     );
   });
 
@@ -357,6 +340,256 @@ describe('PollingService — entries especiais', () => {
     expect(kit.queueService.length()).toBe(1);
     await kit.pollingService.pollOnce();
     expect(kit.queueService.length()).toBe(1); // dedup via queueService
+  });
+});
+
+describe('PollingService — detecção de cancelamento (BL-C3-011)', () => {
+  let kit: TestKit;
+  let archiveSpy: MockInstance<
+    Parameters<HistoryService['archive']>,
+    ReturnType<HistoryService['archive']>
+  >;
+  let mockOverlayService: {
+    getCurrentEvent: ReturnType<
+      typeof vi.fn<[], { sprint: SprintPayload; queueLength: number } | null>
+    >;
+    hide: ReturnType<typeof vi.fn>;
+    showSprint: ReturnType<typeof vi.fn>;
+  };
+
+  function makeCancelEntry(sprintId: string): PendingEntry {
+    return {
+      kind: 'cancel',
+      filename: `cancel-${sprintId}.json`,
+      modifiedAt: new Date('2026-05-26T10:00:00.000Z'),
+      payload: parseSprintCancel({
+        schema_version: '1.0',
+        type: 'cancel',
+        sprint_id_ref: sprintId,
+        cancelado_por: 'Renan',
+        cancelado_em: '2026-05-26T10:00:00.000Z',
+        motivo: 'Mudança de prioridade',
+      }),
+    };
+  }
+
+  beforeEach(() => {
+    kit = makeKit();
+    vi.useFakeTimers();
+    archiveSpy = vi.spyOn(kit.historyService, 'archive');
+    archiveSpy.mockImplementation((_p, filename) => {
+      kit.historyService.markProcessed(filename);
+      return Promise.resolve();
+    });
+    mockOverlayService = {
+      getCurrentEvent: vi.fn<[], { sprint: SprintPayload; queueLength: number } | null>(() => null),
+      hide: vi.fn(),
+      showSprint: vi.fn(),
+    };
+    // Recria pollingService com overlayService injetado.
+    const ps = new PollingService({
+      pendingStore: kit.pendingStore,
+      queueService: kit.queueService,
+      historyService: kit.historyService,
+      overlayService: mockOverlayService as unknown as NonNullable<PollingDeps['overlayService']>,
+      userId: USER_ID,
+      pollingIntervalMs: POLLING_INTERVAL_MS,
+      now: () => new Date('2026-05-26T10:00:00.000Z'),
+      log: kit.log,
+    });
+    kit.pollingService = ps;
+  });
+
+  afterEach(() => {
+    kit.pollingService.stop();
+    vi.useRealTimers();
+  });
+
+  it('cancel para sprint na fila (não exibida): removeBySprintId + archive + delete', async () => {
+    // Sprint enfileirada (não exibida — overlay.getCurrentEvent retorna null)
+    const sprintPayload = makePayload({ sprintId: VALID_SPRINT_ID_1 });
+    kit.queueService.enqueue({
+      payload: sprintPayload,
+      filename: `${VALID_SPRINT_ID_1}-${USER_ID}.json`,
+      rawContent: JSON.stringify(sprintPayload, null, 2),
+    });
+    expect(kit.queueService.length()).toBe(1);
+
+    vi.spyOn(kit.pendingStore, 'listPending').mockResolvedValueOnce([
+      makeCancelEntry(VALID_SPRINT_ID_1),
+    ]);
+    const deleteSpy = vi.spyOn(kit.pendingStore, 'deletePending');
+
+    await kit.pollingService.pollOnce();
+
+    expect(kit.queueService.length()).toBe(0);
+    expect(mockOverlayService.hide).not.toHaveBeenCalled(); // não estava exibida
+    expect(archiveSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ sprint_id_ref: VALID_SPRINT_ID_1 }),
+      `cancel-${VALID_SPRINT_ID_1}.json`,
+      expect.any(String),
+    );
+    expect(deleteSpy).toHaveBeenCalledWith(`cancel-${VALID_SPRINT_ID_1}.json`);
+  });
+
+  it('cancel para sprint EXIBIDA no overlay: hide + remove fila (sem ack)', async () => {
+    // Sprint exibida (overlay.getCurrentEvent retorna ela)
+    const sprintPayload = makePayload({ sprintId: VALID_SPRINT_ID_1 });
+    kit.queueService.enqueue({
+      payload: sprintPayload,
+      filename: `${VALID_SPRINT_ID_1}-${USER_ID}.json`,
+      rawContent: JSON.stringify(sprintPayload, null, 2),
+    });
+    mockOverlayService.getCurrentEvent.mockReturnValue({
+      sprint: sprintPayload,
+      queueLength: 1,
+    });
+
+    vi.spyOn(kit.pendingStore, 'listPending').mockResolvedValueOnce([
+      makeCancelEntry(VALID_SPRINT_ID_1),
+    ]);
+
+    await kit.pollingService.pollOnce();
+
+    expect(kit.queueService.length()).toBe(0);
+    expect(mockOverlayService.hide).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancel para sprint exibida COM próxima na fila: hide + showSprint da próxima', async () => {
+    const sprintA = makePayload({ sprintId: VALID_SPRINT_ID_1 });
+    const sprintB = makePayload({ sprintId: VALID_SPRINT_ID_2 });
+    kit.queueService.enqueue({
+      payload: sprintA,
+      filename: `${VALID_SPRINT_ID_1}-${USER_ID}.json`,
+      rawContent: JSON.stringify(sprintA, null, 2),
+    });
+    kit.queueService.enqueue({
+      payload: sprintB,
+      filename: `${VALID_SPRINT_ID_2}-${USER_ID}.json`,
+      rawContent: JSON.stringify(sprintB, null, 2),
+    });
+    mockOverlayService.getCurrentEvent.mockReturnValue({
+      sprint: sprintA,
+      queueLength: 2,
+    });
+
+    vi.spyOn(kit.pendingStore, 'listPending').mockResolvedValueOnce([
+      makeCancelEntry(VALID_SPRINT_ID_1),
+    ]);
+
+    await kit.pollingService.pollOnce();
+
+    expect(kit.queueService.length()).toBe(1);
+    expect(mockOverlayService.hide).toHaveBeenCalledTimes(1);
+    expect(mockOverlayService.showSprint).toHaveBeenCalledTimes(1);
+    // Inspeção direta evita unsafe-assignment do nested objectContaining
+    const [showSprintArg, queueLengthArg] = mockOverlayService.showSprint.mock.calls[0] as [
+      { payload: { sprint_id: string } },
+      number,
+    ];
+    expect(showSprintArg.payload.sprint_id).toBe(VALID_SPRINT_ID_2);
+    expect(queueLengthArg).toBe(1);
+  });
+
+  it('cancel para sprint INEXISTENTE (já ackeada/expirada): archive + delete, sem touch fila/overlay', async () => {
+    vi.spyOn(kit.pendingStore, 'listPending').mockResolvedValueOnce([
+      makeCancelEntry(VALID_SPRINT_ID_3),
+    ]);
+    const deleteSpy = vi.spyOn(kit.pendingStore, 'deletePending');
+
+    await kit.pollingService.pollOnce();
+
+    expect(kit.queueService.length()).toBe(0);
+    expect(mockOverlayService.hide).not.toHaveBeenCalled();
+    expect(mockOverlayService.showSprint).not.toHaveBeenCalled();
+    expect(archiveSpy).toHaveBeenCalled();
+    expect(deleteSpy).toHaveBeenCalledWith(`cancel-${VALID_SPRINT_ID_3}.json`);
+  });
+
+  it('cancel já processado (dedup via historyService): skip silencioso', async () => {
+    kit.historyService.markProcessed(`cancel-${VALID_SPRINT_ID_1}.json`);
+    vi.spyOn(kit.pendingStore, 'listPending').mockResolvedValueOnce([
+      makeCancelEntry(VALID_SPRINT_ID_1),
+    ]);
+    const deleteSpy = vi.spyOn(kit.pendingStore, 'deletePending');
+
+    await kit.pollingService.pollOnce();
+
+    expect(archiveSpy).not.toHaveBeenCalled();
+    expect(deleteSpy).not.toHaveBeenCalled();
+  });
+
+  it('falha em archive: fallback markProcessed + log error + ciclo continua', async () => {
+    archiveSpy.mockRejectedValueOnce(new Error('disco cheio'));
+    vi.spyOn(kit.pendingStore, 'listPending').mockResolvedValueOnce([
+      makeCancelEntry(VALID_SPRINT_ID_1),
+    ]);
+
+    await expect(kit.pollingService.pollOnce()).resolves.toBeUndefined();
+
+    expect(kit.historyService.isAlreadyArchived(`cancel-${VALID_SPRINT_ID_1}.json`)).toBe(true);
+    expect(kit.log.error).toHaveBeenCalledWith(
+      expect.stringContaining('arquivar cancel'),
+      expect.any(Object),
+    );
+  });
+
+  it('falha em deletePending de cancel: log error + ciclo continua', async () => {
+    vi.spyOn(kit.pendingStore, 'listPending').mockResolvedValueOnce([
+      makeCancelEntry(VALID_SPRINT_ID_1),
+    ]);
+    vi.spyOn(kit.pendingStore, 'deletePending').mockRejectedValueOnce(new Error('SMB caiu'));
+
+    await expect(kit.pollingService.pollOnce()).resolves.toBeUndefined();
+    expect(kit.log.error).toHaveBeenCalledWith(
+      expect.stringContaining('deletar cancel'),
+      expect.any(Object),
+    );
+  });
+
+  it('cancel sem overlayService injetado (cenário de teste): processCancel não crash', async () => {
+    // Reproduz cenário sem overlayService — branches defensivos.
+    const psSemOverlay = new PollingService({
+      pendingStore: kit.pendingStore,
+      queueService: kit.queueService,
+      historyService: kit.historyService,
+      // overlayService omitido (?:)
+      userId: USER_ID,
+      pollingIntervalMs: POLLING_INTERVAL_MS,
+      now: () => new Date('2026-05-26T10:00:00.000Z'),
+      log: kit.log,
+    });
+    vi.spyOn(kit.pendingStore, 'listPending').mockResolvedValueOnce([
+      makeCancelEntry(VALID_SPRINT_ID_1),
+    ]);
+
+    await expect(psSemOverlay.pollOnce()).resolves.toBeUndefined();
+    expect(archiveSpy).toHaveBeenCalled();
+  });
+
+  it('lista pending sem filter userId — cancels NÃO são filtrados pelo store', async () => {
+    // BL-C3-011 mudou listPending para SEM filter — verificamos que
+    // o pollingService consegue ver cancels broadcast deixados no shared.
+    await kit.adapter.mkdir(`${SHARED_PATH}/pending`);
+    const cancelFile = `cancel-${VALID_SPRINT_ID_1}.json`;
+    await kit.adapter.writeFileAtomic(
+      `${SHARED_PATH}/pending/${cancelFile}`,
+      JSON.stringify({
+        schema_version: '1.0',
+        type: 'cancel',
+        sprint_id_ref: VALID_SPRINT_ID_1,
+        cancelado_por: 'Renan',
+        cancelado_em: '2026-05-26T10:00:00.000Z',
+      }),
+    );
+
+    await kit.pollingService.pollOnce();
+
+    expect(archiveSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ sprint_id_ref: VALID_SPRINT_ID_1 }),
+      cancelFile,
+      expect.any(String),
+    );
   });
 });
 

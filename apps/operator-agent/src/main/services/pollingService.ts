@@ -1,5 +1,6 @@
 /**
- * PollingService — ciclo de detecção de sprints novas em `<shared>/pending/`.
+ * PollingService — ciclo de detecção de sprints novas e cancelamentos em
+ * `<shared>/pending/`.
  *
  * Implementação per ADR-004 (polling, NÃO `fs.watch` ou chokidar — pastas
  * SMB têm suporte instável a eventos de kernel). Default 3s entre ciclos
@@ -13,31 +14,29 @@
  *
  * **Caminhos por kind de PendingEntry:**
  *
- * | kind      | Ação                                                                   |
- * | --------- | ---------------------------------------------------------------------- |
- * | `invalid` | log warn + skip (RN-09 — não bloqueia outras entries do ciclo)         |
- * | `cancel`  | log warn + skip — handler de cancelamento é BL-C3-009 W2 (defer)       |
- * | `sprint`  | dedup via history → check deadline → enqueue OU descarta+delete        |
+ * | kind      | Ação                                                                                     |
+ * | --------- | ---------------------------------------------------------------------------------------- |
+ * | `invalid` | log warn + skip (RN-09 — não bloqueia outras entries do ciclo)                           |
+ * | `cancel`  | (BL-C3-011) processCancel: remove fila + fecha overlay se exibido (sem ack) + archive   |
+ * | `sprint`  | filtra user_id local → dedup via history → check deadline → enqueue OU descarta+delete  |
  *
- * **Filtros do `listPending({ userId })`:** já filtra arquivos cancel
- * automaticamente quando passamos `userId` (cancels são broadcast — ver
- * `PendingStore.listPending`). Mas em Gate 3, o agent NÃO passa
- * `userId` em filtro de listPending? Reler... — passa SIM o userId
- * (sprints são por operador), e a doc do PendingStore diz que filter
- * com userId "ignora cancels também". Resultado: o branch `kind: 'cancel'`
- * só é exercitado se o usuário do agent receber um cancel direcionado a
- * outro user (não vai acontecer com filter por userId). Mantemos o
- * branch defensivo + um cancel direto (sem filter user) em testes para
- * exercitar a lógica.
+ * **Filtragem por userId (BL-C3-011):** `listPending` é chamado SEM
+ * filter `userId` para capturar também os `cancel-*.json` (que são
+ * broadcast — não embutem user_id). Sprints de outros operadores são
+ * filtradas inline em `processSprint`. Antes desta sessão o filter
+ * `{ userId }` era aplicado no `listPending`, mas isso descartava
+ * cancels — comportamento corrigido por BL-C3-011.
  *
  * @see DECISIONS.md ADR-004 — polling deliberado
  * @see DECISIONS.md ADR-016 — domain layer do fs-adapter (listPending entrega
  *   discriminated union PendingEntry)
+ * @see Requisitos UC-05, RN-06 — cancelamento last-write-wins
  */
 
 import { DirectoryNotFoundError, type PendingEntry, type PendingStore } from '@sprint/fs-adapter';
 
 import type { HistoryService } from './historyService';
+import type { OverlayService } from './overlayService';
 import type { QueueService } from './queueService';
 
 /**
@@ -59,10 +58,17 @@ const SILENT_LOG: PollingLogger = {
 export interface PollingDeps {
   /** Domain layer wrapping `<shared>/pending/`. Injetado pelo caller. */
   pendingStore: PendingStore;
-  /** Fila FIFO destino dos sprints válidos detectados. */
+  /** Fila ordenada destino dos sprints válidos detectados. */
   queueService: QueueService;
   /** Cache de filenames já processados — dedup entre ciclos. */
   historyService: HistoryService;
+  /**
+   * `OverlayService` — necessário para fechar overlay quando um cancel
+   * referencia a sprint atualmente exibida (BL-C3-011). Opcional para
+   * testes que isolam fluxos sem overlay; em produção sempre injetado
+   * pelo composition root do main.
+   */
+  overlayService?: OverlayService;
   /** `RuntimeConfig.userId` — filtra sprints destinadas a este operador. */
   userId: string;
   /** `RuntimeConfig.pollingIntervalMs`. */
@@ -121,9 +127,10 @@ export class PollingService {
    */
   async pollOnce(): Promise<void> {
     try {
-      const entries = await this.deps.pendingStore.listPending({
-        userId: this.deps.userId,
-      });
+      // BL-C3-011: listPending SEM filter userId — precisa retornar também
+      // os `cancel-*.json` (broadcast, sem user_id no filename). Sprints
+      // de outros operadores são filtradas inline em `processSprint`.
+      const entries = await this.deps.pendingStore.listPending();
       for (const entry of entries) {
         await this.processEntry(entry);
       }
@@ -165,13 +172,96 @@ export class PollingService {
         });
         return;
       case 'cancel':
-        log.warn('cancel file detectado — deferido para W2 (BL-C3-009)', {
-          filename: entry.filename,
-        });
+        await this.processCancel(entry);
         return;
       case 'sprint':
+        // BL-C3-011: sprints de outros operadores são descartadas inline.
+        // O filter foi removido do `listPending` para capturar cancels.
+        if (entry.payload.user_id !== this.deps.userId) return;
         await this.processSprint(entry);
         return;
+    }
+  }
+
+  /**
+   * Processa um arquivo `cancel-<sprintId>.json` (BL-C3-011, UC-05,
+   * RN-06). Cancels são broadcast (sem user_id) — todos os agents do
+   * shared os recebem.
+   *
+   * Algoritmo:
+   * 1. Dedup via cache (já processado em ciclo anterior).
+   * 2. Snapshot do `sprint_id_ref` e do `currentItem` do overlay ANTES
+   *    de mutar estado — evita race entre remover da fila e fechar
+   *    overlay.
+   * 3. Remove sprint da fila se ainda enfileirada (sem ack).
+   * 4. Fecha overlay se estava exibindo essa sprint (sem ack — RN-06).
+   *    Próxima da fila (se houver) é exibida automaticamente pelo wire
+   *    em main/index.ts (queueService.onNextSprint não dispara por
+   *    `removeBySprintId`; caller orquestra).
+   * 5. Arquiva o `cancel-*.json` localmente para auditoria + dedup
+   *    pós-restart. Fallback `markProcessed` em falha (consistente
+   *    com BL-C3-012).
+   * 6. Deleta do shared para não acumular. Falha não-fatal.
+   *
+   * Cancel para sprint inexistente (já ackeada, expirada, ou nunca
+   * chegou a este agent): é no-op no overlay/fila, mas ainda arquiva
+   * e deleta (cleanup).
+   */
+  private async processCancel(entry: Extract<PendingEntry, { kind: 'cancel' }>): Promise<void> {
+    const log = this.getLog();
+    const { filename, payload } = entry;
+    const sprintIdRef = payload.sprint_id_ref;
+
+    if (this.deps.historyService.isAlreadyArchived(filename)) return;
+
+    // Snapshot: a sprint cancelada está sendo exibida AGORA?
+    const overlay = this.deps.overlayService;
+    const wasDisplayed = overlay?.getCurrentEvent()?.sprint.sprint_id === sprintIdRef;
+
+    // Remove da fila se estava lá (sem ack). Retorna false silently se
+    // não estava — cenário comum quando cancel é tardio.
+    const removed = this.deps.queueService.removeBySprintId(sprintIdRef);
+
+    log.warn('cancel detectado — processando (sem ack)', {
+      filename,
+      sprint_id_ref: sprintIdRef,
+      was_displayed: wasDisplayed,
+      was_in_queue: removed,
+    });
+
+    // Fecha overlay se estava exibindo essa sprint. `hide()` limpa
+    // currentItem; próximo `peek()` da fila (já sem a removida) é
+    // exibido se houver, senão estado permanece hidden.
+    if (wasDisplayed && overlay !== undefined) {
+      overlay.hide();
+      // Se há próxima sprint na fila, exibe via showSprint manualmente
+      // (queueService.removeBySprintId não emite nextSprint).
+      const next = this.deps.queueService.peek();
+      if (next !== null) {
+        overlay.showSprint(next, this.deps.queueService.length());
+      }
+    }
+
+    // Archive cancel para auditoria + dedup pós-restart.
+    const rawContent = JSON.stringify(payload, null, 2);
+    try {
+      await this.deps.historyService.archive(payload, filename, rawContent);
+    } catch (err) {
+      log.error('falha ao arquivar cancel — fallback markProcessed', {
+        filename,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      this.deps.historyService.markProcessed(filename);
+    }
+
+    // Delete shared — não-fatal.
+    try {
+      await this.deps.pendingStore.deletePending(filename);
+    } catch (err) {
+      log.error('falha ao deletar cancel do shared', {
+        filename,
+        err: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 

@@ -285,6 +285,84 @@ describe('QueueService — ordenação por criado_em (BL-C3-010)', () => {
   });
 });
 
+describe('QueueService — removeBySprintId (BL-C3-011)', () => {
+  const VALID_SPRINT_ID_3 = '01HXBBBCCCDDDEEEFFFGGGHHHJ';
+
+  let q: QueueService;
+  beforeEach(() => {
+    q = new QueueService();
+  });
+
+  it('remove item por sprint_id e retorna true', () => {
+    q.enqueue(makeItem({ sprintId: VALID_SPRINT_ID }));
+    q.enqueue(makeItem({ sprintId: ANOTHER_SPRINT_ID }));
+    expect(q.length()).toBe(2);
+
+    expect(q.removeBySprintId(VALID_SPRINT_ID)).toBe(true);
+
+    expect(q.length()).toBe(1);
+    expect(q.peek()?.payload.sprint_id).toBe(ANOTHER_SPRINT_ID);
+  });
+
+  it('retorna false quando sprint_id não está na fila (idempotência)', () => {
+    q.enqueue(makeItem({ sprintId: VALID_SPRINT_ID }));
+    expect(q.removeBySprintId(ANOTHER_SPRINT_ID)).toBe(false);
+    expect(q.length()).toBe(1);
+  });
+
+  it('remove permite re-enqueue do mesmo identificador (limpou Set)', () => {
+    const item = makeItem({ sprintId: VALID_SPRINT_ID });
+    q.enqueue(item);
+    q.removeBySprintId(VALID_SPRINT_ID);
+    expect(q.enqueue(item)).toBe(true);
+  });
+
+  it('remove emite queueUpdated com novo length', () => {
+    const cb = vi.fn<[number], void>();
+    q.enqueue(makeItem({ sprintId: VALID_SPRINT_ID }));
+    q.enqueue(makeItem({ sprintId: ANOTHER_SPRINT_ID }));
+    q.onQueueUpdated(cb);
+
+    q.removeBySprintId(VALID_SPRINT_ID);
+
+    expect(cb).toHaveBeenCalledWith(1);
+  });
+
+  it('remove do meio preserva ordem das demais', () => {
+    q.enqueue(makeItem({ sprintId: VALID_SPRINT_ID, criadoEm: '2026-05-26T10:00:00.000Z' }));
+    q.enqueue(makeItem({ sprintId: ANOTHER_SPRINT_ID, criadoEm: '2026-05-26T10:05:00.000Z' }));
+    q.enqueue(makeItem({ sprintId: VALID_SPRINT_ID_3, criadoEm: '2026-05-26T10:10:00.000Z' }));
+
+    expect(q.removeBySprintId(ANOTHER_SPRINT_ID)).toBe(true);
+
+    const snap = q.snapshot();
+    expect(snap.items.map((i) => i.payload.sprint_id)).toEqual([
+      VALID_SPRINT_ID,
+      VALID_SPRINT_ID_3,
+    ]);
+  });
+
+  it('remove items[0] (sprint exibida) NÃO emite nextSprint (caller orquestra)', () => {
+    const onNext = vi.fn();
+    q.enqueue(makeItem({ sprintId: VALID_SPRINT_ID }));
+    q.enqueue(makeItem({ sprintId: ANOTHER_SPRINT_ID }));
+    q.onNextSprint(onNext); // subscribe APÓS enqueues iniciais
+
+    q.removeBySprintId(VALID_SPRINT_ID); // remove a "exibida"
+
+    expect(onNext).not.toHaveBeenCalled();
+    // peek deve agora retornar a próxima
+    expect(q.peek()?.payload.sprint_id).toBe(ANOTHER_SPRINT_ID);
+  });
+
+  it('remove em fila vazia: false sem emit', () => {
+    const cb = vi.fn();
+    q.onQueueUpdated(cb);
+    expect(q.removeBySprintId(VALID_SPRINT_ID)).toBe(false);
+    expect(cb).not.toHaveBeenCalled();
+  });
+});
+
 describe('QueueService — eventos', () => {
   let q: QueueService;
   beforeEach(() => {
