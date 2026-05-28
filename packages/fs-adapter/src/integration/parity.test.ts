@@ -3,7 +3,7 @@
  *
  * O `__tests__/contract.test.ts` (W0) cobre paridade para os 8
  * primitivos do {@link IFilesystemAdapter}. Este arquivo cobre a
- * camada acima — `PendingStore`, `AckStore`, `CancelStore` (stub W2),
+ * camada acima — `PendingStore`, `AckStore`, `CancelStore`,
  * `ArchiveStore` (stub W3) — garantindo que consumers (Leader, Agent)
  * podem trocar Node por Memory em testes sem mudar comportamento.
  *
@@ -17,7 +17,6 @@ import {
   parseSprintCancel,
   parseSprintPayload,
   type SprintAck,
-  type SprintCancel,
   type SprintPayload,
 } from '@sprint/contracts';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -59,16 +58,6 @@ function buildAck(overrides: { sprint_id?: string; user_id?: string } = {}): Spr
     hostname: 'PC-PARIDADE',
     displayed_at: new Date().toISOString(),
     agent_version: '0.1.0',
-  });
-}
-
-function buildCancel(): SprintCancel {
-  return parseSprintCancel({
-    schema_version: '1.0',
-    type: 'cancel',
-    sprint_id_ref: generateSprintId(),
-    cancelado_por: 'Renan',
-    cancelado_em: new Date().toISOString(),
   });
 }
 
@@ -205,25 +194,66 @@ function describeParity(label: string, factory: AdapterFactory): void {
     });
 
     // ===================================================================
-    // Stubs (CancelStore W2, ArchiveStore W3)
+    // CancelStore (BL-C4-004)
+    // ===================================================================
+
+    describe('CancelStore', () => {
+      it('writeCancel produz o mesmo filename e content em ambos adapters', async () => {
+        const sprintId = generateSprintId();
+        const cancel = parseSprintCancel({
+          schema_version: '1.0',
+          type: 'cancel',
+          sprint_id_ref: sprintId,
+          cancelado_por: 'Renan',
+          cancelado_em: new Date().toISOString(),
+          motivo: 'Paridade',
+        });
+        const store = new CancelStore(ctx.adapter, ctx.sharedPath);
+
+        const { filename, filepath, removedOriginals } = await store.writeCancel(cancel);
+
+        expect(filename).toBe(`cancel-${sprintId}.json`);
+        expect(filepath.endsWith(filename)).toBe(true);
+        expect(removedOriginals).toEqual([]);
+        await expect(ctx.adapter.exists(filepath)).resolves.toBe(true);
+
+        const raw = await ctx.adapter.readFile(filepath);
+        const parsed = JSON.parse(raw) as Record<string, unknown>;
+        expect(parsed.sprint_id_ref).toBe(sprintId);
+        expect(parsed.type).toBe('cancel');
+        expect(parsed.motivo).toBe('Paridade');
+      });
+
+      it('writeCancel remove pendings da mesma sprint quando PendingStore injetado', async () => {
+        const sprintId = generateSprintId();
+        const pendingStore = new PendingStore(ctx.adapter, ctx.sharedPath);
+        const cancelStore = new CancelStore(ctx.adapter, ctx.sharedPath, pendingStore);
+
+        const w1 = await pendingStore.writePendingSprint(
+          buildPayload({ sprint_id: sprintId, user_id: 'joao' }),
+        );
+
+        const result = await cancelStore.writeCancel(
+          parseSprintCancel({
+            schema_version: '1.0',
+            type: 'cancel',
+            sprint_id_ref: sprintId,
+            cancelado_por: 'Renan',
+            cancelado_em: new Date().toISOString(),
+          }),
+        );
+
+        expect(result.removedOriginals).toEqual([w1.filename]);
+        await expect(ctx.adapter.exists(w1.filepath)).resolves.toBe(false);
+        await expect(ctx.adapter.exists(result.filepath)).resolves.toBe(true);
+      });
+    });
+
+    // ===================================================================
+    // Stubs (ArchiveStore W3)
     // ===================================================================
 
     describe('Stubs — NotImplementedError com mesma mensagem em ambos adapters', () => {
-      it('CancelStore.writeCancel lança NotImplementedError com operationName "writeCancel"', async () => {
-        const store = new CancelStore(ctx.adapter, ctx.sharedPath);
-
-        try {
-          await store.writeCancel(buildCancel());
-          expect.fail('writeCancel deveria ter lançado');
-        } catch (err) {
-          expect(err).toBeInstanceOf(NotImplementedError);
-          if (err instanceof NotImplementedError) {
-            expect(err.operationName).toBe('writeCancel');
-            expect(err.message).toContain('writeCancel');
-          }
-        }
-      });
-
       it('ArchiveStore.moveToArchive lança NotImplementedError com operationName "moveToArchive"', async () => {
         const store = new ArchiveStore(ctx.adapter, ctx.sharedPath);
 
