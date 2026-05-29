@@ -1901,22 +1901,6 @@ Descobertas durante o desenvolvimento que economizam tempo da próxima sessão.
 Itens conhecidos que **deveriam** existir mas dependem de pré-requisito ainda
 não entregue. Cada um tem disparador explícito que reabre o trabalho.
 
-#### Débito: `--sprint-font-weight-semibold: 300` corrupted em `tokens.css`
-
-- **Status:** ativo — alteração externa do Renan em sessão de experimentação
-  visual (provavelmente Sessão 32-34 timeline). O valor correto seria `600`.
-  Atualmente `300` = light.
-- **Sintoma:** qualquer consumer code que use
-  `var(--sprint-font-weight-semibold)` vai renderizar com peso 300 (light), não
-  semibold. Regressão visual silenciosa.
-- **Workaround atual (Sessão 41+):** sessions posteriores ao bug evitam o token
-  semibold — usam `--sprint-font-weight-medium` (500),
-  `--sprint-font-weight-bold` (700), ou `--sprint-font-weight-light` (300)
-  conforme o caso.
-- **Plano:** reverter para `600` em sessão dedicada após Renan confirmar.
-  Auditar `packages/`/`apps/` por referências ao token semibold antes do fix
-  para garantir que nenhum estilo dependa do valor 300 corrupted.
-
 #### Débito: regra ESLint `no-console` estrita (apenas `@sprint/logger`)
 
 - **Status:** pendente — disparador é a entrega do BL-C6-001 (`@sprint/logger`)
