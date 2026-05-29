@@ -28,18 +28,22 @@ mergeado em BL-C3-011 detecta e fecha overlay sem ack).
 - `WriteCancelResult` ganha `removedOriginals: readonly string[]`.
 - Re-validação Zod via `parseSprintCancel` (defesa em profundidade).
 
-**`sprint-leader` — BL-C2-006 (customização):**
+**`sprint-leader` — BL-C2-006 (customização de título; título-only):**
 
-- `useSprintComposerStore`: `setTitle`/`setBody` actions; selectors
-  propagam `title` + `body_template` para o IPC.
-- `composerFormSchema`: valida `title` (1..80) e `body` (max 500, vazio
-  permitido = "use default").
-- `DispatchSprintRequest`: campos `title?` e `body_template?` opcionais.
-- `DispatchService`: helpers exportados `resolveTitle` e
-  `resolveBodyTemplate` (trim + fallback default).
-- `<MessageCustomizer />`: input título + textarea body + preview com
-  `{meta}` substituído pela primeira meta selecionada (ou 0 + hint).
-  Sanitização defensiva no preview via `sanitizeBodyHtml`.
+- `useSprintComposerStore`: `setTitle` action; selector propaga `title`
+  para o IPC.
+- `composerFormSchema`: valida `title` (1..80; vazio bloqueia o dispatch).
+- `DispatchSprintRequest`: campo `title?` opcional.
+- `DispatchService`: helper exportado `resolveTitle` (trim + fallback
+  default `'É hora de correr'`). Corpo do aviso usa template fixo do
+  sistema (`BODY_TEMPLATE` com `{meta}`) — NÃO é customizável.
+- Input de título inline no header da NovaSprint (`maxLength={80}`).
+
+> **Nota (descopo, AUD-W2-007):** o commit `0b01ec3` simplificou o
+> BL-C2-006 para título-only, removendo o `<MessageCustomizer>` (campo de
+> corpo + preview + `body_template` + `resolveBodyTemplate`). Decisão de UX
+> aprovada por Renan; o corte de corpo/preview (item "Should" entregue
+> parcialmente) deve ser refletido no backlog externo.
 
 **`sprint-leader` — BL-C2-008 (tela de acks):**
 
@@ -71,12 +75,15 @@ mergeado em BL-C3-011 detecta e fecha overlay sem ack).
 - `Acompanhamento` integra: botão visível enquanto sprint ativa, some
   quando `cancelled`; polling para automaticamente.
 
-### Tests — Sessão 43
+### Tests — Sessão 43 (contagens corrigidas — AUD-W2-006)
 
-- fs-adapter: 286 → 308 (+22).
-- Leader: 210 → 332 (+122).
-- Agent: 240 (estável).
-- Total monorepo: +144 testes, todos verdes.
+Medições reais em `develop` (docs antigas alegavam Leader 332):
+
+- fs-adapter: 308 verdes.
+- Leader: **280** verdes (o commit `0b01ec3` removeu o `<MessageCustomizer>`
+  e ~25 testes; BL-C2-006 ficou título-only).
+- Agent: 298 verdes (chegou a 298 nas Sessões 21-42 do C3).
+- ui-kit: 60 verdes.
 
 ### Changed — Sessões 35-42 (2026-05-28) — Refino visual coordenado do Overlay
 

@@ -133,7 +133,7 @@ describe('substituteMeta', () => {
 });
 
 // =============================================================================
-// resolveTitle / resolveBodyTemplate — helpers de defaults (BL-C2-006)
+// resolveTitle — helper de default do título (BL-C2-006)
 // =============================================================================
 
 describe('resolveTitle', () => {

@@ -321,28 +321,31 @@ apps/leader/src/
 > AckTrackingService) e `CancelStore` (recebendo `pendingStore` para o
 > writeCancel remover originais idempotentemente).
 >
-> **DispatchService refinado (BL-C2-006):**
+> **DispatchService refinado (BL-C2-006 — título-only após `0b01ec3`):**
 >
-> - Novos helpers exportados `resolveTitle(requestTitle?)` e
->   `resolveBodyTemplate(requestBody?)`: aplicam `.trim()` antes de comparar com
->   vazio, caindo pro default. Líder que apaga input ou deixa só whitespace cai
->   pro default. Helpers exportados para teste isolado.
-> - `dispatch()` usa `request.title`/`request.body_template` quando presentes
->   (via helpers); `substituteMeta` + `sanitizeBodyHtml` permanecem no pipeline
->   final (Agent fica "burro").
+> - Helper exportado `resolveTitle(requestTitle?)`: aplica `.trim()` antes de
+>   comparar com vazio, caindo pro default `'É hora de correr'`. Líder que apaga
+>   o input ou deixa só whitespace cai pro default. Exportado para teste
+>   isolado.
+> - `dispatch()` usa `request.title` quando presente (via helper). O **corpo do
+>   aviso NÃO é customizável** — usa o template fixo do sistema
+>   (`BODY_TEMPLATE`, com `{meta}`); `substituteMeta` + `sanitizeBodyHtml`
+>   permanecem no pipeline final (Agent fica "burro").
 >
 > **Renderer (BL-C2-006/008/009):**
 >
-> - `useSprintComposerStore` ganha `setTitle`/`setBody` actions;
->   `composerFormSchema` valida title (1..80) e body (max 500). Selectors
->   propagam title + body_template no `DispatchSprintRequest`.
+> - `useSprintComposerStore` ganha `setTitle` action; `composerFormSchema`
+>   valida title (1..80). Selector propaga title no `DispatchSprintRequest` (sem
+>   `body_template` — corpo não é customizável).
 > - `useTrackedSprintStore` (Zustand novo): persiste sprint disparada na sessão
 >   `{sprint_id, dispatched_at, targets, title, deadline_hhmm, cancelled}`.
 >   Setada por `NovaSprint.handleDispatchClick` quando
 >   `result.summary.success > 0` (targets com falha ficam fora).
-> - `<MessageCustomizer />` (BL-C2-006): inputs título/corpo com preview
->   sanitizado por `sanitizeBodyHtml` de contracts. Integrado em NovaSprint logo
->   abaixo da listSection.
+> - **Input de título inline** (BL-C2-006): `<input>` simples no header da
+>   NovaSprint (`placeholder` "Título do aviso", `maxLength={80}`,
+>   `aria-label`). NÃO há `<MessageCustomizer>` dedicado nem campo de
+>   corpo/preview — removidos no commit `0b01ec3` (descopo registrado no
+>   SESSION_LOG da remediação 2026-05-29; ver AUD-W2-007).
 > - `Acompanhamento.tsx` funcional (BL-C2-008): polling 3s com cleanup via
 >   `signal = { cancelled: false }` + `clearInterval`. Renderiza summary + lista
 >   de targets com 3 estados coloridos + timestamp. Polling para automaticamente
@@ -369,8 +372,10 @@ apps/leader/src/
 >   `if (signal.cancelled) return` antes de setState; no cleanup,
 >   `signal.cancelled = true` + `clearInterval`. Pattern reutilizável.
 >
-> **Testes (Sessão 43):** Leader 210 → 332 (+122); fs-adapter 286 → 308 (+22);
-> Agent intocado (240 estável). Total monorepo +144.
+> **Testes (contagens reais em `develop` — corrige AUD-W2-006):** Leader **280**
+> (o commit `0b01ec3` removeu o `<MessageCustomizer>` e ~25 testes; docs antigas
+> alegavam 332); fs-adapter **308**; Agent **298** (chegou a 298 nas Sessões
+> 21-42 do C3, não 240); ui-kit **60**.
 
 ### Estrutura interna de `@sprint/fs-adapter` (W1 domain layer)
 
