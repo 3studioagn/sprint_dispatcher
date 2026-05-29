@@ -2249,13 +2249,17 @@ entre adapters só apareceriam em produção.
 
 Decisões internas tomadas no scaffold e conteúdo do package `@sprint/ui-kit`,
 **não promovidas a ADR** porque estão dentro do escopo de implementação do
-componente. ADRs formais do C9 chegam em BL-C7-008 (**ADR-022: adoção do C9**) e
-BL-C7-009 (**ADR-023: não adoção de Storybook na v1.0**) — sessões futuras.
+componente. Os ADRs formais do C9 estão registrados **abaixo**: **ADR-022**
+(adoção do C9 — fecha BL-C7-008) e **ADR-023** (não adoção de Storybook na v1.0
+— fecha BL-C7-009), escritos na remediação R1 da auditoria da W2 (2026-05-29).
 
-> **Atenção à numeração:** o prompt master original referenciava "ADR-003 /
-> ADR-004" para o C9, mas esses números já estão ocupados (ADR-003 = SMB;
-> ADR-004 = Polling). Os ADRs reais serão **ADR-022 e ADR-023** (próximos livres
-> após ADR-021).
+> **Numeração/local (resolvido — AUD-W2-014):** o backlog e o Gate W2→W3
+> referenciam "ADR-003 / ADR-004 em `docs/adr/`", mas esses números já estão
+> ocupados (ADR-003 = SMB; ADR-004 = Polling) e o projeto não usa `docs/adr/` —
+> usa este `DECISIONS.md` sequencial. Ratificou-se **`DECISIONS.md` como o
+> repositório de ADRs do projeto**; os ADRs do C9 são **ADR-022/023** (próximos
+> livres após ADR-021). O texto do gate/backlog deve ser ajustado por Renan
+> (pendência externa, fora deste repo).
 
 ### Decisões
 
@@ -2575,4 +2579,140 @@ já existia em `@sprint/contracts`.
 - ADR-014 — sanitização de body_html (preservada no pipeline customizado)
 - ADR-015 — composer do Leader W1 (refinado por BL-C2-006)
 - ADR-017 — main process do Leader W1 (estendido por C2-006/008/009)
-- Pendências W2: BL-C7-008/009 (ADRs), BL-C8-008 (testes ≥85% C9)
+- Pendências W2: BL-C7-008/009 (ADRs) e BL-C8-008 (threshold ≥85% C9) —
+  **fechados na remediação R1 (2026-05-29)**: ver ADR-022/023 abaixo e
+  thresholds materializados em `packages/ui-kit/vitest.config.ts`.
+
+---
+
+## ADR-022: Adoção do `@sprint/ui-kit` (C9) como design system compartilhado
+
+- **Status:** Accepted
+- **Data:** 2026-05-29
+- **Decisores:** Renan (3Studio), Claude Opus 4.7
+
+> Formaliza, como ADR rastreável, a decisão antes registrada apenas como "Nota
+> técnica — C9 (BL-C9-001 a 006)" (acima). Escrito na remediação R1 da auditoria
+> da W2 (AUD-W2-002). Fecha o BL-C7-008 e destrava o critério 7 do Gate W2→W3.
+
+### Contexto
+
+A Wave 2 introduziu um quarto package compartilhado, `@sprint/ui-kit` (C9), que
+concentra o chrome visual do overlay do Agent (`<Overlay>`,
+`<OverlayMinimized>`/`<Pill>`, `<TextBlock>`, `<ThemeProvider>`) e os design
+tokens da identidade ARTFLEXÍVEIS (tema DARK extraído da imagem 'Hora do
+Rush!'). Antes do C9, o markup e os estilos do overlay viviam dentro de
+`apps/operator-agent`. Com o redesign visual (ADR-018) e a perspectiva de o
+Leader também consumir componentes compartilhados, era preciso decidir
+formalmente (a) extrair um package de UI e (b) com qual arquitetura de build, já
+que ele diverge dos demais packages (React + CSS Modules vs. TS puro
+source-first).
+
+### Decisão
+
+Adotamos `@sprint/ui-kit` como o design system compartilhado do monorepo, com:
+
+- **Vite library mode + `vite-plugin-dts` (rollupTypes)** em vez do padrão
+  source-first (contracts/fs-adapter/logger). Integra CSS Modules e gera ESM
+  tree-shakeable + `.d.ts` agrupado num pipeline só; tsc puro não lida bem com
+  CSS Modules. Build produz `dist/{index.js, index.d.ts, tokens.css}`.
+- **Tokens com prefixo obrigatório `--sprint-`** (RNF-23), validados por
+  `tokens.test.ts` no CI. Zero hex/px hardcoded nos `.module.css` dos
+  componentes.
+- **`<ThemeProvider>` sem Context API** — tokens propagam por cascata CSS,
+  idempotentes em aninhamento.
+- **`react`/`react-dom` como `peerDependencies`** (`^18.3.0`);
+  **`@sprint/contracts` como `dependency` workspace** (primeira ligação
+  inter-package partindo do C9), usada só pelo `<TextBlock>` para
+  `sanitizeBodyHtml` e externalizada no bundle.
+- **Path alias `@sprint/ui-kit` é responsabilidade do consumidor** (não entra em
+  `tsconfig.base.json`) — coerente com o padrão de paths do monorepo.
+
+Consumo: o Agent migrou para o ui-kit em BL-C3-015/016; o Leader pode consumir
+em waves futuras. Apps referenciam `dist/` em produção; dev/test podem usar
+source via alias próprio.
+
+### Alternativas consideradas
+
+| Alternativa                                       | Por que rejeitada                                                                                                                                                      |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Manter a UI dentro de `apps/operator-agent`**   | Impede reuso pelo Leader; acopla a identidade visual a um app; testes de UI ficam presos ao runtime do Electron.                                                       |
+| **Source-first com tsc puro (padrão dos outros)** | tsc puro não processa CSS Modules nem extrai `tokens.css`; exigiria pipeline paralelo. Vite library mode resolve num passo.                                            |
+| **Tokens sem prefixo / two-tier**                 | Two-tier (primitivos + semânticos) é overkill para o MVP (≈4 componentes). Single-tier semântico + escala neutra basta; o prefixo `--sprint-` evita colisão de tokens. |
+| **Context API no `<ThemeProvider>`**              | Desnecessário — a cascata CSS já propaga tokens estáticos; Context adicionaria re-render e boilerplate sem benefício.                                                  |
+
+### Consequências
+
+- O monorepo passa de 3 para **4 packages compartilhados**; o ui-kit é o único
+  em Vite library mode. Divergência documentada e justificada.
+- Apps consumidores precisam do `dist/` populado em dev — exige `predev` na raiz
+  - `emptyOutDir` condicional em watch (G-026).
+- Mudança de token vira mudança visível em todos os consumidores — disciplina de
+  changeset (`@sprint/ui-kit`) + teste anti-regressão de tokens.
+- Ratifica-se **`DECISIONS.md` como o repositório de ADRs do projeto**
+  (AUD-W2-014); não há `docs/adr/` separado. O texto literal do gate
+  ("ADR-003/004 em docs/adr/") fica como pendência de ajuste no backlog externo.
+
+### Referências
+
+- "Nota técnica — C9 (BL-C9-001 a 006)" (acima) — decisões de implementação
+- CLAUDE.md §4 "Estrutura interna de `@sprint/ui-kit` (W2.C9)"
+- ADR-014 (sanitização — base do `<TextBlock>`), ADR-018 (redesign visual)
+- G-010 (`tsconfig.node.json`), G-026 (`predev` + `emptyOutDir` em watch)
+- Backlog v1.1 §6/C7 (BL-C7-008), Gate W2→W3 critério 7
+- AUD-W2-002 / AUD-W2-014 (auditoria da W2 — origem desta formalização)
+
+---
+
+## ADR-023: Não adoção de Storybook na v1.0
+
+- **Status:** Accepted
+- **Data:** 2026-05-29
+- **Decisores:** Renan (3Studio), Claude Opus 4.7
+
+> Escrito na remediação R1 da auditoria da W2 (AUD-W2-002). Fecha o BL-C7-009 e
+> completa o critério 7 do Gate W2→W3 junto com ADR-022.
+
+### Contexto
+
+Design systems costumam vir acompanhados de Storybook para desenvolvimento
+isolado e documentação visual de componentes. Ao formalizar o C9 (ADR-022),
+avaliamos se a v1.0 do `@sprint/ui-kit` deveria adotar Storybook.
+
+### Decisão
+
+**Não adotamos Storybook na v1.0.** A superfície de componentes é pequena
+(`<Overlay>`, `<OverlayMinimized>`/`<Pill>`, `<TextBlock>`, `<ThemeProvider>`) e
+já é coberta por:
+
+- **Vitest + jsdom + Testing Library** para comportamento (ARIA, sanitização
+  XSS, auto-close, idempotência) — testes honestos, cobertura ≥85% enforçada em
+  CI (BL-C8-008, AUD-W2-001/004).
+- **`dev/palette-preview.html`** — preview estático standalone do tema DARK.
+- **Os próprios apps consumidores** — o Agent renderiza os componentes em
+  `BrowserWindow` real (fullscreen/topmost), fidelidade maior que stories
+  isoladas para um overlay cujo comportamento depende do chrome da janela.
+
+### Alternativas consideradas
+
+| Alternativa                       | Por que rejeitada na v1.0                                                                                                                                                               |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Adotar Storybook agora**        | Segundo pipeline de build/bundler + manutenção de stories + deps, desproporcional a ≈4 componentes. O overlay depende de window chrome (fullscreen/topmost) que stories não reproduzem. |
+| **Ladle / Histoire (mais leves)** | Mesmo custo conceitual (manter stories) sem ganho relevante no porte atual; adiciona ferramenta nova ao stack.                                                                          |
+| **Documentação só em Markdown**   | Já existe (README do package + CLAUDE.md §4 + `palette-preview.html`). Suficiente para a v1.0.                                                                                          |
+
+### Consequências
+
+- Componentes são desenvolvidos e validados via testes + preview estático + apps
+  reais. Sem catálogo interativo isolado.
+- Sem dívida de stories desatualizadas — não há stories para manter.
+- **Trigger de reavaliação:** se a contagem de componentes crescer
+  substancialmente (expansão real do design system em W4+) ou se um time de
+  design passar a consumir o kit isoladamente, reabrir a decisão.
+
+### Referências
+
+- ADR-022 (adoção do C9 — contexto imediato desta decisão)
+- `packages/ui-kit/README.md`, `packages/ui-kit/dev/palette-preview.html`
+- Backlog v1.1 §6/C7 (BL-C7-009), Gate W2→W3 critério 7
+- AUD-W2-002 (auditoria da W2 — origem desta formalização)
