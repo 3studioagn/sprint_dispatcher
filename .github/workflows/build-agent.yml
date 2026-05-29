@@ -51,6 +51,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # O Agent consome @sprint/ui-kit via dist/ (Vite library mode). O `make`
+      # abaixo roda `pnpm --filter sprint-operator-agent ...` direto (sem o
+      # `^build` do Turbo), então o dist/ do ui-kit precisa ser gerado antes —
+      # senão `tsc --noEmit` falha com TS2307 (Cannot find module '@sprint/ui-kit').
+      - name: Build @sprint/ui-kit (dist consumido pelo Agent)
+        run: pnpm --filter @sprint/ui-kit build
+
       - name: Build Agent (portable .exe + instalador NSIS)
         run: pnpm --filter sprint-operator-agent run make
 
