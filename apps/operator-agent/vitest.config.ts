@@ -1,5 +1,12 @@
 import { defineConfig } from 'vitest/config';
 
+// Fixa o timezone dos testes em BRT — timezone dos operadores ARTFLEXÍVEIS e do
+// ambiente de dev. Sem isso, testes que asseguram horários formatados em hora
+// local (ex.: deadline "HH:MMh" no Overlay) passam localmente mas FALHAM nos
+// runners UTC do CI. Definido aqui (processo principal do vitest, antes dos
+// workers) para valer em qualquer máquina/CI.
+process.env.TZ = 'America/Sao_Paulo';
+
 export default defineConfig({
   test: {
     globals: true,
