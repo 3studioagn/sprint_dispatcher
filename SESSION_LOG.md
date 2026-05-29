@@ -66,6 +66,22 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Auditoria W2 — 2026-05-29 (read-only)
+
+Auditoria técnica independente da Wave 2 concluída — relatório completo em
+[`docs/audits/W2-AUDIT-2026-05-29.md`](docs/audits/W2-AUDIT-2026-05-29.md)
+(commit `2c9f52e`). Sessão **read-only**: nenhum código, teste, config ou doc de
+contexto foi alterado pela auditoria (apenas o relatório foi escrito).
+
+- **Veredito:** ❌ NO-GO condicional para a W3. Bloqueadores do gate: BL-C8-008
+  (threshold de coverage não enforçado + CI sem coverage — AUD-W2-001/004) e
+  BL-C7-008/009 (ADRs do C9 não escritos; `docs/adr/` inexistente — AUD-W2-002).
+- **Engenharia sólida:** cancelamento e acks consistentes ponta-a-ponta, XSS
+  robusto, `@sprint/ui-kit` com coverage real 99.41%, build/lint/type-check/test
+  verdes. 16 findings (🔴2 🟠2 🟡5 🔵3 ⚪4).
+- **Próximo passo:** sessão de remediação separada (write-mode), começando por
+  **R1** (plano R1..R5 na §7 do relatório; IDs estáveis AUD-W2-NNN).
+
 ## Sessão 43 — 2026-05-28 — Leader W2 + writeCancel (ciclo de cancelamento ponta-a-ponta)
 
 **Wave atual:** W2 — em curso **Duração estimada:** ~3h **Itens:** [BL-C4-004,
