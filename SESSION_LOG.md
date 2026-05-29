@@ -66,6 +66,95 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 44 — 2026-05-29 — Remediação pós-auditoria W2 · R1+R2+R3
+
+**Tipo:** Remediação (correção de findings; sem novas features) **Auditoria de
+referência:**
+[`docs/audits/W2-AUDIT-2026-05-29.md`](docs/audits/W2-AUDIT-2026-05-29.md)
+**Branch:** `feature/audit-W2-remediation-R1-R3` **Status:** ✅ Concluído (9
+findings: 001, 002, 003, 004, 006, 007, 008, 012, 014)
+
+### Objetivo
+
+Executar as três primeiras sessões de remediação do plano da auditoria (§7),
+desbloqueando o Gate W2→W3. Escopo escolhido por Renan: **R1** (gate) + **R2**
+(bug de ack) + **R3** (sync de docs). 1 commit por finding (sem squash).
+
+### Findings corrigidos
+
+| ID                     | Sev   | Commit    | Validação                                                                                               |
+| ---------------------- | ----- | --------- | ------------------------------------------------------------------------------------------------------- |
+| AUD-W2-001 + 012       | 🔴/🔵 | `35fb755` | thresholds (85/85/80/85) ativos no ui-kit; TextBlock branch 50%→100% (60→61 testes)                     |
+| AUD-W2-004             | 🟠    | `b7900c3` | CI roda `pnpm test:coverage`; `grep coverage ci.yml` casa; root `test:coverage` 9/9 tasks exit 0        |
+| AUD-W2-002 + 014       | 🔴    | `492f635` | ADR-022 + ADR-023 em DECISIONS.md; numeração/local ratificados (DECISIONS.md é o repositório de ADRs)   |
+| AUD-W2-001 (changeset) | —     | `91526ca` | `.changeset/c8-008-uikit-coverage-threshold.md`; `changeset status` exit 0                              |
+| AUD-W2-003             | 🟠    | `180a1d0` | `processCancel` grava `displayed_at` da promovida via `ackService.writeDisplayed`; novo teste (298→299) |
+| AUD-W2-006 + 007       | 🟡    | `2c3a7e7` | CHANGELOG/CLAUDE título-only + contagens reais; descopo registrado abaixo                               |
+| AUD-W2-008             | 🟡    | `e572931` | débito fantasma do semibold removido de CLAUDE §12 (token é 600; nunca foi 300)                         |
+
+### Registro formal do descopo do BL-C2-006 (AUD-W2-007)
+
+O commit `0b01ec3` ("simplificar BL-C2-006 para título inline") cortou **corpo
+customizável + preview + `body_template` + `resolveBodyTemplate` +
+`<MessageCustomizer>`**, entregando o BL-C2-006 como **título-only**. Item
+"Should" entregue parcialmente; decisão de UX aprovada por Renan, mas o corte
+não estava registrado (CLAUDE.md §9.1). **Ação para Renan:** refletir o descopo
+de corpo/preview no backlog externo.
+
+### Contagens de teste reais (corrige AUD-W2-006 — docs antigas alegavam Leader 332 / Agent 240)
+
+contracts **317** · fs-adapter **308** (+3 skip) · logger **57** · ui-kit **61**
+(+1 TextBlock) · leader **280** · operator-agent **299** (+1 cancel-ack). Só +2
+testes vs baseline (os dois que adicionei); zero regressão.
+
+### Retratação do débito fantasma do semibold (AUD-W2-008)
+
+CLAUDE.md §12 e as notas das Sessões 34/41/42 deste log alegavam um débito
+**ativo**: `--sprint-font-weight-semibold` corrompido para `300`. **É falso** —
+`tokens.css:159` tem `600` e `git log -S "font-weight-semibold: 300"` não
+retorna commit algum. As notas das Sessões 34/41/42 ficam **retratadas**: o
+token é seguro, nenhum workaround é necessário.
+
+### Findings pulados / bloqueados
+
+Nenhum. Todos os 9 do escopo R1+R2+R3 corrigidos. Nenhum finding novo descoberto
+(um comentário stale citando `resolveBodyTemplate` em `dispatchService.test.ts`
+foi corrigido junto do AUD-W2-006 — mesmo recurso).
+
+### Decisão pendente para Renan (não é código)
+
+Texto do Gate W2→W3 / backlog diz "ADR-003 e ADR-004 em `docs/adr/`". Resolvido
+in-repo como **ADR-022/023 em `DECISIONS.md`** (AUD-W2-014). Ajustar o texto
+literal do gate/backlog externo para apontar para `DECISIONS.md`.
+
+### Validação final (sem regressão vs `/tmp/remed/*-before.log`)
+
+✅ lint · type-check · `turbo build` · `pnpm -r test` · `pnpm test:coverage`
+(9/9 tasks, thresholds dos 6 packages) · `changeset status` — todos exit 0.
+Relatório de auditoria **não** editado (P-10).
+
+### Gate W2→W3 — reavaliação
+
+- **Critério 5** (ui-kit ≥85% + DoD bloqueia merge): ❌ → ✅ (001/004).
+- **Critério 7** (ADRs do C9): ❌ → ✅ (002/014).
+- **Critério 2** (cancelamento testado): ressalva 🟠 003 corrigida → sólido.
+- **Critérios 3/4** (tray status / histórico do Leader): tensões de escopo W3
+  (AUD-W2-013 — decisão de Renan).
+- **Critério 6** (overlay): ressalva AUD-W2-005 (`body_html` não exibido) fica
+  para **R4** (decisão de produto; não bloqueia o gate).
+
+Veredito da auditoria muda de ❌ NO-GO para **✅ GO** (condicional às decisões
+de produto de R4/R5, que não bloqueiam o gate).
+
+### Próximo passo
+
+1. Abrir PR da branch (Renan revisor, §9.3; sem squash).
+2. **R4** (🟡 005, 009): decisão de Renan sobre exibir `body_html` no overlay +
+   bump de `schema_version` para `kind`/`unit` (remove hardcode "Artes"/"Suas
+   metas"); self-host da fonte Inter (offline).
+3. **R5** (🔵 010, 011): tokenizar ícone 28px; migrar `historyService` para o
+   adapter junto de BL-C4-005/W3. _(012 já fechado em R1.)_
+
 ## Auditoria W2 — 2026-05-29 (read-only)
 
 Auditoria técnica independente da Wave 2 concluída — relatório completo em
