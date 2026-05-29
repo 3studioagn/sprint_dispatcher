@@ -155,6 +155,26 @@ de produto de R4/R5, que não bloqueiam o gate).
 3. **R5** (🔵 010, 011): tokenizar ícone 28px; migrar `historyService` para o
    adapter junto de BL-C4-005/W3. _(012 já fechado em R1.)_
 
+### Pós-push — 2 builds vermelhos no CI corrigidos
+
+Renan optou por push direto em `develop` (fluxo estabelecido de deploy). O push
+disparou `ci.yml` + `build-agent.yml` + `build-leader.yml`; dois falharam (não
+flake) — ambos bugs pré-existentes, mascarados até agora:
+
+- **`ci.yml` (Test)**: `Overlay.test.tsx:67` esperava "17:00h" para deadline
+  `-03:00`; em runner UTC renderiza "20:00h". Teste timezone-dependente, antes
+  mascarado pelo turbo cache (o `pnpm test` antigo replicava passes de BRT);
+  exposto agora que o CI roda coverage fresh (AUD-W2-004). Fix (`1b925ec`):
+  `process.env.TZ='America/Sao_Paulo'` no `vitest.config.ts` do Agent.
+- **`build-agent.yml` (Build)**: `tsc` falhava com TS2307 (`@sprint/ui-kit` não
+  encontrado) — o `make` do Agent não roda o `^build` do Turbo e o `dist/` do
+  ui-kit é gitignored. Quebrado desde BL-C3-015 (adoção do ui-kit pelo Agent).
+  Fix (`c75150f`): step `pnpm --filter @sprint/ui-kit build` antes do make.
+
+Validação: monorepo fresh sob `TZ=UTC` **sem cache** → 9/9 tasks; reproduce+fix
+do build confirmado local (sem dist → TS2307; com dist → exit 0). `build-leader`
+não consome ui-kit (não afetado).
+
 ## Auditoria W2 — 2026-05-29 (read-only)
 
 Auditoria técnica independente da Wave 2 concluída — relatório completo em
