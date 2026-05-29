@@ -491,6 +491,52 @@ describe('PollingService — detecção de cancelamento (BL-C3-011)', () => {
     expect(queueLengthArg).toBe(1);
   });
 
+  it('cancel da sprint exibida promove a próxima COM ack inicial displayed_at [AUD-W2-003]', async () => {
+    // Regressão: antes, processCancel promovia a próxima via showSprint direto,
+    // sem gravar displayed_at — o líder via a sprint promovida como `nao_visto`
+    // permanentemente. Agora o ackService.writeDisplayed é chamado p/ a próxima.
+    const sprintA = makePayload({ sprintId: VALID_SPRINT_ID_1 });
+    const sprintB = makePayload({ sprintId: VALID_SPRINT_ID_2 });
+    kit.queueService.enqueue({
+      payload: sprintA,
+      filename: `${VALID_SPRINT_ID_1}-${USER_ID}.json`,
+      rawContent: JSON.stringify(sprintA, null, 2),
+    });
+    kit.queueService.enqueue({
+      payload: sprintB,
+      filename: `${VALID_SPRINT_ID_2}-${USER_ID}.json`,
+      rawContent: JSON.stringify(sprintB, null, 2),
+    });
+    mockOverlayService.getCurrentEvent.mockReturnValue({ sprint: sprintA, queueLength: 2 });
+
+    const writeDisplayed = vi.fn<[SprintPayload], Promise<string | null>>(() =>
+      Promise.resolve('2026-05-26T10:00:00.000Z'),
+    );
+    const ps = new PollingService({
+      pendingStore: kit.pendingStore,
+      queueService: kit.queueService,
+      historyService: kit.historyService,
+      overlayService: mockOverlayService as unknown as NonNullable<PollingDeps['overlayService']>,
+      ackService: { writeDisplayed } as unknown as NonNullable<PollingDeps['ackService']>,
+      userId: USER_ID,
+      pollingIntervalMs: POLLING_INTERVAL_MS,
+      now: () => new Date('2026-05-26T10:00:00.000Z'),
+      log: kit.log,
+    });
+
+    vi.spyOn(kit.pendingStore, 'listPending').mockResolvedValueOnce([
+      makeCancelEntry(VALID_SPRINT_ID_1),
+    ]);
+
+    await ps.pollOnce();
+
+    // A próxima (B) foi promovida ao overlay E recebeu o ack inicial displayed_at.
+    expect(mockOverlayService.showSprint).toHaveBeenCalledTimes(1);
+    expect(writeDisplayed).toHaveBeenCalledTimes(1);
+    const [ackedPayload] = writeDisplayed.mock.calls[0] as [{ sprint_id: string }];
+    expect(ackedPayload.sprint_id).toBe(VALID_SPRINT_ID_2);
+  });
+
   it('cancel para sprint INEXISTENTE (já ackeada/expirada): archive + delete, sem touch fila/overlay', async () => {
     vi.spyOn(kit.pendingStore, 'listPending').mockResolvedValueOnce([
       makeCancelEntry(VALID_SPRINT_ID_3),

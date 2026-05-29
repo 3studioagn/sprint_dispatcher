@@ -261,6 +261,10 @@ async function rebuildDeps(): Promise<RuntimeConfig> {
       // BL-C3-011: overlayService injetado para cancels poderem fechar
       // overlay quando referenciam a sprint atualmente exibida.
       overlayService: overlayLocal,
+      // AUD-W2-003: ackService injetado para gravar o displayed_at da sprint
+      // promovida quando um cancel fecha a exibida e promove a próxima da fila
+      // (espelha o writeDisplayed do wire onNextSprint abaixo).
+      ackService: ackLocal,
       userId: config.userId,
       pollingIntervalMs: config.pollingIntervalMs,
       log: {

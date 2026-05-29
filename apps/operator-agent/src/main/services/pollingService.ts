@@ -35,6 +35,7 @@
 
 import { DirectoryNotFoundError, type PendingEntry, type PendingStore } from '@sprint/fs-adapter';
 
+import type { AckService } from './ackService';
 import type { HistoryService } from './historyService';
 import type { OverlayService } from './overlayService';
 import type { QueueService } from './queueService';
@@ -69,6 +70,16 @@ export interface PollingDeps {
    * pelo composition root do main.
    */
   overlayService?: OverlayService;
+  /**
+   * `AckService` — grava o ack inicial (`displayed_at`) da sprint promovida
+   * quando um cancel fecha a sprint exibida e promove a próxima da fila
+   * (AUD-W2-003). Espelha o `writeDisplayed` do wire
+   * `queueService.onNextSprint` (main/index.ts): sem ele, a sprint promovida
+   * apareceria sem `displayed_at` e o acompanhamento do líder a marcaria como
+   * `nao_visto` permanentemente. Opcional só para testes; em produção sempre
+   * injetado pelo composition root.
+   */
+  ackService?: AckService;
   /** `RuntimeConfig.userId` — filtra sprints destinadas a este operador. */
   userId: string;
   /** `RuntimeConfig.pollingIntervalMs`. */
@@ -239,6 +250,11 @@ export class PollingService {
       const next = this.deps.queueService.peek();
       if (next !== null) {
         overlay.showSprint(next, this.deps.queueService.length());
+        // AUD-W2-003: a sprint promovida precisa do MESMO ack inicial
+        // (displayed_at) que o wire `onNextSprint` grava — senão o líder a
+        // veria como `nao_visto` para sempre. Não-throw (writeDisplayed loga
+        // warn em falha; o overlay já está exibido).
+        void this.deps.ackService?.writeDisplayed(next.payload);
       }
     }
 
