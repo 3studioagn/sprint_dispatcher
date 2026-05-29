@@ -11,8 +11,12 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'json-summary', 'html', 'lcov'],
-      // TODO(BL-C8-008): habilitar thresholds (lines/functions/statements ≥ 85%, branches ≥ 80%).
-      // Por ora, smoke tests apenas — coverage threshold OFF nesta sessão.
+      thresholds: {
+        lines: 85,
+        functions: 85,
+        branches: 80,
+        statements: 85,
+      },
     },
   },
 });

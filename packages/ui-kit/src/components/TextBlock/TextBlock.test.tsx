@@ -57,6 +57,14 @@ describe('<TextBlock>', () => {
     expect(container.querySelector('p')?.textContent).toBe('p');
   });
 
+  it('compõe a className fornecida com a classe base do design system', () => {
+    const { container } = render(<TextBlock bodyHtml="<p>x</p>" className="extra-classe" />);
+
+    const root = container.firstElementChild;
+    expect(root).not.toBeNull();
+    expect(root?.className).toContain('extra-classe');
+  });
+
   it('é idempotente — segundo passe não muta o output (ADR-014)', () => {
     // Re-render com mesmo bodyHtml deve produzir mesmo DOM. Garante
     // que sanitização defensiva não introduz drift entre renders.
