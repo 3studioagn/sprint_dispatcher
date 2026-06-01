@@ -10,12 +10,15 @@
 import { randomBytes } from 'node:crypto';
 import { promises as fs, type Stats } from 'node:fs';
 import { open } from 'node:fs/promises';
+import path from 'node:path';
 
 import { DirectoryNotFoundError, FileNotFoundError, FilesystemIOError } from './errors';
 import type { FileStat, IFilesystemAdapter } from './interface';
 
 const TMP_SUFFIX_BYTES = 6;
 const TMP_EXTENSION = '.tmp';
+/** Entropia (bytes) do sufixo aleatório do arquivo de probe de permissão. */
+const PROBE_SUFFIX_BYTES = 8;
 
 export class NodeFilesystemAdapter implements IFilesystemAdapter {
   async readFile(filepath: string): Promise<string> {
@@ -140,6 +143,40 @@ export class NodeFilesystemAdapter implements IFilesystemAdapter {
       isFile: stats.isFile(),
       isDirectory: stats.isDirectory(),
     };
+  }
+
+  async probeWritePermission(dirpath: string): Promise<boolean> {
+    // Sufixo aleatório isola probes concorrentes; prefixo `.permcheck-`
+    // + extensão `.tmp` garantem que não casa com o padrão de sprint
+    // (<sprintId>-<userId>.json), então o polling do Agent o ignora.
+    const probePath = path.join(
+      dirpath,
+      `.permcheck-${randomBytes(PROBE_SUFFIX_BYTES).toString('hex')}${TMP_EXTENSION}`,
+    );
+    let created = false;
+    try {
+      // `wx`: cria exclusivo, falha se já existir (improvável com sufixo
+      // aleatório). Escrita vazia basta para exercitar a ACL efetiva.
+      const handle = await open(probePath, 'wx');
+      created = true;
+      await handle.close();
+      return true;
+    } catch {
+      // Permissão negada, diretório inexistente, disco cheio, etc. — o
+      // dispatch falharia da mesma forma. Reporta como "sem permissão".
+      return false;
+    } finally {
+      // Cleanup garantido — só tenta remover se chegou a criar.
+      if (created) {
+        try {
+          await fs.unlink(probePath);
+        } catch {
+          // Cleanup best-effort: outro processo pode tê-lo removido, ou
+          // a permissão de delete diverge da de create. Não mascara o
+          // resultado do probe (a escrita já provou o que importa).
+        }
+      }
+    }
   }
 }
 

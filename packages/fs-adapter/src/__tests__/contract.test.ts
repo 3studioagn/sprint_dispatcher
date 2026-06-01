@@ -270,6 +270,26 @@ function describeContract(name: string, setup: () => Promise<ContractContext>): 
         expect(await adapter.readFile(archivePath)).toBe('{"meta":5}');
       });
     });
+
+    // === probeWritePermission (BL-C2-012) ===
+    describe('probeWritePermission', () => {
+      it('retorna true em diretório com escrita permitida', async () => {
+        const dir = resolvePath('writable');
+        await adapter.mkdir(dir);
+        // Seed garante existência da pasta no Memory (diretórios implícitos).
+        await adapter.writeFileAtomic(resolvePath('writable/seed.json'), '{}');
+        expect(await adapter.probeWritePermission(dir)).toBe(true);
+      });
+
+      it('não deixa arquivo de probe órfão (cleanup garantido)', async () => {
+        const dir = resolvePath('writable2');
+        await adapter.mkdir(dir);
+        await adapter.writeFileAtomic(resolvePath('writable2/seed.json'), '{}');
+        await adapter.probeWritePermission(dir);
+        const entries = await adapter.listDir(dir);
+        expect(entries.filter((e) => e.includes('permcheck'))).toEqual([]);
+      });
+    });
   });
 }
 

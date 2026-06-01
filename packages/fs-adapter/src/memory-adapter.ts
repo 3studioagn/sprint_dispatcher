@@ -16,6 +16,8 @@
  *
  * @see DECISIONS.md ADR-013
  */
+import { randomBytes } from 'node:crypto';
+
 import { DirectoryNotFoundError, FileNotFoundError, FilesystemIOError } from './errors';
 import type { FileStat, IFilesystemAdapter } from './interface';
 
@@ -26,6 +28,14 @@ interface MemoryFileEntry {
 
 export class MemoryFilesystemAdapter implements IFilesystemAdapter {
   private readonly files = new Map<string, MemoryFileEntry>();
+
+  /**
+   * Override do resultado de {@link probeWritePermission}. `null` (default)
+   * = comportamento real (tenta escrever+remover na memória). `true`/`false`
+   * = força o resultado, para simular um share sem permissão de escrita em
+   * testes do gate de dispatch (BL-C2-012) sem precisar de FS real.
+   */
+  private probeOverride: boolean | null = null;
 
   async readFile(filepath: string): Promise<string> {
     const norm = normalize(filepath);
@@ -132,12 +142,39 @@ export class MemoryFilesystemAdapter implements IFilesystemAdapter {
     throw new FileNotFoundError(filepath);
   }
 
+  async probeWritePermission(dirpath: string): Promise<boolean> {
+    if (this.probeOverride !== null) {
+      return Promise.resolve(this.probeOverride);
+    }
+    // Comportamento real (espelha o Node): tenta escrever um temporário
+    // e removê-lo. Em memória a escrita só falha se `dirpath` for um
+    // arquivo (path é diretório implícito) — caso raro mas possível.
+    const probePath = `${dirpath}/.permcheck-${randomBytes(4).toString('hex')}.tmp`;
+    try {
+      await this.writeFileAtomic(probePath, '');
+      await this.unlink(probePath);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Helper de teste — força o resultado de {@link probeWritePermission}.
+   * `null` restaura o comportamento real. Permite simular um share sem
+   * permissão de escrita (`false`) nos testes do gate de dispatch.
+   */
+  setProbeWritePermission(allowed: boolean | null): void {
+    this.probeOverride = allowed;
+  }
+
   /**
    * Helper de teste — limpa o filesystem in-memory.
    * Útil em `beforeEach` para isolar testes.
    */
   reset(): void {
     this.files.clear();
+    this.probeOverride = null;
   }
 
   /**

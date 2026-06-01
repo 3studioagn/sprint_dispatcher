@@ -127,4 +127,30 @@ export interface IFilesystemAdapter {
    * @throws {FilesystemIOError} em outros erros
    */
   stat(filepath: string): Promise<FileStat>;
+
+  /**
+   * Testa a permissão **efetiva** de escrita em `dirpath` escrevendo um
+   * arquivo temporário e removendo-o em seguida.
+   *
+   * Por que probe em vez de `fs.access(W_OK)`: em shares SMB/NTFS o
+   * `access` reporta a permissão do *modo* do arquivo, não a ACL efetiva
+   * — frequentemente diz "ok" onde a escrita real falha. O probe write +
+   * unlink reflete o que o dispatch realmente faz (ADR-007).
+   *
+   * Capability primitiva (como {@link IFilesystemAdapter.exists}/`stat`):
+   * Node faz a checagem real no FS; Memory devolve um stub configurável.
+   * Quem decide *qual* diretório probar (ex.: `pending/`) é a camada de
+   * domínio/serviço — esta primitiva só recebe o path já resolvido.
+   *
+   * **Nunca lança** e **sempre faz cleanup** do temporário (inclusive em
+   * erro). O nome do temporário (`.permcheck-<rand>.tmp`) **não casa** com
+   * o padrão de sprint (`<sprintId>-<userId>.json`), então o polling do
+   * Agent não o confunde com uma sprint durante a janela em que existe.
+   *
+   * @param dirpath - diretório onde testar a escrita.
+   * @returns `true` se conseguiu escrever **e** remover; `false` se a
+   *   escrita falhou (permissão negada, diretório inexistente, disco
+   *   cheio, etc.).
+   */
+  probeWritePermission(dirpath: string): Promise<boolean>;
 }

@@ -39,6 +39,7 @@ function adapterRejectingReadFile(err: Error): IFilesystemAdapter {
         isFile: true,
         isDirectory: false,
       }),
+    probeWritePermission: () => Promise.resolve(true),
   };
   return stub;
 }
