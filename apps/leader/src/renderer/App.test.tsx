@@ -91,13 +91,14 @@ describe('App — routing (smoke pós-config-ok)', () => {
     expect(screen.getByText(/Nenhuma rodada disparada nesta sessão/i)).toBeInTheDocument();
   });
 
-  it('clicar em "Histórico" navega para a rota de Wave 3', async () => {
+  it('clicar em "Histórico" navega para a rota de histórico (BL-C2-010)', async () => {
     const user = userEvent.setup();
     render(<App />);
     await screen.findByRole('heading', { name: /Escolher pessoas/i, level: 1 });
     await user.click(screen.getByRole('link', { name: 'Histórico' }));
     expect(screen.getByRole('heading', { name: 'Histórico', level: 1 })).toBeInTheDocument();
-    expect(screen.getByText(/Em desenvolvimento — Wave 3/i)).toBeInTheDocument();
+    // Mock default de listArchive retorna vazio → empty state da tela real.
+    expect(await screen.findByText(/Nenhuma rodada arquivada/i)).toBeInTheDocument();
   });
 
   it('persistência inter-rotas: marcar usuário → Histórico → voltar mantém seleção', async () => {

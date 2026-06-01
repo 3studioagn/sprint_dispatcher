@@ -20,6 +20,8 @@
  */
 
 import type {
+  ArchiveFilter,
+  CanDispatchResponse,
   CancelSprintRequest,
   CancelSprintResponse,
   DispatchSprintRequest,
@@ -28,7 +30,10 @@ import type {
   IpcResult,
   LeaderAPI,
   ListAcksResponse,
+  ListArchiveResponse,
   OperatorsListResponse,
+  ReadArchivedSprintRequest,
+  ReadArchivedSprintResponse,
 } from '../../shared/ipc-types';
 
 export const api: LeaderAPI = {
@@ -48,4 +53,13 @@ export const api: LeaderAPI = {
 
   cancelSprint: (request: CancelSprintRequest): Promise<IpcResult<CancelSprintResponse>> =>
     window.api.cancelSprint(request),
+
+  listArchive: (filter: ArchiveFilter): Promise<IpcResult<ListArchiveResponse>> =>
+    window.api.listArchive(filter),
+
+  readArchivedSprint: (
+    request: ReadArchivedSprintRequest,
+  ): Promise<IpcResult<ReadArchivedSprintResponse>> => window.api.readArchivedSprint(request),
+
+  canDispatch: (): Promise<IpcResult<CanDispatchResponse>> => window.api.canDispatch(),
 };

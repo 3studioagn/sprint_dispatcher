@@ -1,3 +1,4 @@
+import { ShieldAlert } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 import { BulkSelectButtons } from '../../components/BulkSelectButtons';
@@ -8,6 +9,7 @@ import { OperatorList } from '../../components/OperatorList';
 import { api } from '../../services/api';
 import { selectIsDispatching, useDispatchStore } from '../../stores/useDispatchStore';
 import { useOperatorsStore } from '../../stores/useOperatorsStore';
+import { selectIsDispatchBlocked, usePermissionStore } from '../../stores/usePermissionStore';
 import {
   selectDispatchRequest,
   selectIsValid,
@@ -34,6 +36,14 @@ export function NovaSprint() {
   const isFormValid = useSprintComposerStore(selectIsValid);
   const isDispatching = useDispatchStore(selectIsDispatching);
 
+  // BL-C2-012: gate de permissão. Bloqueia o dispatch quando o usuário
+  // Windows não tem escrita em pending/ (probe via IPC no main).
+  const permissionChecking = usePermissionStore((s) => s.checking);
+  const permissionReason = usePermissionStore((s) => s.reason);
+  const dispatchBlocked = usePermissionStore(selectIsDispatchBlocked);
+  const recheckPermission = usePermissionStore((s) => s.check);
+  const permissionAllowed = usePermissionStore((s) => s.allowed);
+
   // BL-C2-006 (refinamento UX): título customizável via input inline no
   // header, entre o H1 e o grupo de ações (deadline + botão).
   const title = useSprintComposerStore((s) => s.title);
@@ -46,6 +56,14 @@ export function NovaSprint() {
       void loadOperators();
     }
   }, [loadStatus, loadOperators]);
+
+  // Verifica a permissão ao entrar na tela (uma vez). O líder pode
+  // "Verificar novamente" manualmente se corrigir o acesso (RN-01).
+  useEffect(() => {
+    if (permissionAllowed === null && !permissionChecking) {
+      void recheckPermission();
+    }
+  }, [permissionAllowed, permissionChecking, recheckPermission]);
 
   useEffect(() => {
     if (toast === null) return undefined;
@@ -110,11 +128,13 @@ export function NovaSprint() {
     useDispatchStore.getState().reset();
   }, []);
 
-  const buttonTitle = isDispatching
-    ? 'Disparando…'
-    : isFormValid
-      ? 'Disparar evento'
-      : 'Preencha todos os campos para disparar';
+  const buttonTitle = dispatchBlocked
+    ? 'Sem permissão para disparar — verifique o acesso à pasta de sprints'
+    : isDispatching
+      ? 'Disparando…'
+      : isFormValid
+        ? 'Disparar evento'
+        : 'Preencha todos os campos para disparar';
 
   const countLabel =
     selectedCount === 0
@@ -149,7 +169,7 @@ export function NovaSprint() {
           <button
             type="button"
             className={styles.dispatchButton}
-            disabled={!isFormValid || isDispatching}
+            disabled={!isFormValid || isDispatching || dispatchBlocked}
             title={buttonTitle}
             onClick={() => {
               void handleDispatchClick();
@@ -175,6 +195,26 @@ export function NovaSprint() {
           </button>
         </div>
       </header>
+
+      {dispatchBlocked && (
+        <div className={styles.permissionBanner} role="alert">
+          <ShieldAlert size={20} aria-hidden="true" className={styles.permissionIcon} />
+          <div className={styles.permissionText}>
+            <p className={styles.permissionTitle}>Disparo bloqueado</p>
+            <p className={styles.permissionReason}>{permissionReason}</p>
+          </div>
+          <button
+            type="button"
+            className={styles.permissionRecheck}
+            onClick={() => {
+              void recheckPermission();
+            }}
+            disabled={permissionChecking}
+          >
+            {permissionChecking ? 'Verificando…' : 'Verificar novamente'}
+          </button>
+        </div>
+      )}
 
       <section className={styles.listSection} aria-label="Composer de rodada">
         <div className={styles.listHeader}>

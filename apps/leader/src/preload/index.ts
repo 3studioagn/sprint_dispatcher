@@ -23,6 +23,8 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 import type {
+  ArchiveFilter,
+  CanDispatchResponse,
   CancelSprintRequest,
   CancelSprintResponse,
   DispatchSprintRequest,
@@ -31,7 +33,10 @@ import type {
   IpcResult,
   LeaderAPI,
   ListAcksResponse,
+  ListArchiveResponse,
   OperatorsListResponse,
+  ReadArchivedSprintRequest,
+  ReadArchivedSprintResponse,
 } from '../shared/ipc-types';
 
 const api: LeaderAPI = {
@@ -69,6 +74,23 @@ const api: LeaderAPI = {
 
   cancelSprint: async (request: CancelSprintRequest): Promise<IpcResult<CancelSprintResponse>> => {
     return (await ipcRenderer.invoke('cancelSprint', request)) as IpcResult<CancelSprintResponse>;
+  },
+
+  listArchive: async (filter: ArchiveFilter): Promise<IpcResult<ListArchiveResponse>> => {
+    return (await ipcRenderer.invoke('listArchive', filter)) as IpcResult<ListArchiveResponse>;
+  },
+
+  readArchivedSprint: async (
+    request: ReadArchivedSprintRequest,
+  ): Promise<IpcResult<ReadArchivedSprintResponse>> => {
+    return (await ipcRenderer.invoke(
+      'readArchivedSprint',
+      request,
+    )) as IpcResult<ReadArchivedSprintResponse>;
+  },
+
+  canDispatch: async (): Promise<IpcResult<CanDispatchResponse>> => {
+    return (await ipcRenderer.invoke('canDispatch')) as IpcResult<CanDispatchResponse>;
   },
 };
 

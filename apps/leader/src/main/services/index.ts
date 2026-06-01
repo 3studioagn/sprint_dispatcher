@@ -23,3 +23,7 @@ export {
 export { AckTrackingService, type AckTrackingTarget } from './ackTrackingService';
 
 export { CancelService } from './cancelService';
+
+export { ArchiveService } from './archiveService';
+
+export { PermissionService, PERMISSION_DENIED_REASON } from './permissionService';

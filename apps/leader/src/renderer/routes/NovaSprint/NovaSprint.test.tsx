@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DispatchSprintResponse } from '../../../shared/ipc-types';
 import { useDispatchStore } from '../../stores/useDispatchStore';
 import { useOperatorsStore } from '../../stores/useOperatorsStore';
+import { usePermissionStore } from '../../stores/usePermissionStore';
 import { selectIsValid, useSprintComposerStore } from '../../stores/useSprintComposerStore';
 
 import { NovaSprint } from './NovaSprint';
@@ -338,5 +339,71 @@ describe('NovaSprint — surfacing de erro de carregamento (regressão F-025)', 
     // Lista carrega; banner some
     expect(await screen.findByRole('checkbox', { name: /João Silva/ })).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
+describe('NovaSprint — gate de permissão do líder (BL-C2-012)', () => {
+  beforeEach(() => {
+    useOperatorsStore.getState().reset();
+    useSprintComposerStore.getState().reset();
+    useDispatchStore.getState().reset();
+    usePermissionStore.getState().reset();
+  });
+
+  it('verifica a permissão ao montar (chama canDispatch)', async () => {
+    render(<NovaSprint />);
+    await waitFor(() => {
+      expect(vi.mocked(window.api.canDispatch)).toHaveBeenCalled();
+    });
+  });
+
+  it('sem permissão: desabilita "Disparar" + mostra mensagem clara', async () => {
+    vi.mocked(window.api.canDispatch).mockResolvedValue({
+      ok: true,
+      data: {
+        allowed: false,
+        reason:
+          'Você não tem permissão para disparar sprints — sem acesso de escrita à pasta de sprints. Contate o TI.',
+      },
+    });
+
+    render(<NovaSprint />);
+
+    expect(await screen.findByText('Disparo bloqueado')).toBeInTheDocument();
+    expect(screen.getByText(/sem acesso de escrita à pasta de sprints/i)).toBeInTheDocument();
+
+    const button = screen.getByRole('button', { name: /Disparar evento/i });
+    expect(button).toBeDisabled();
+    expect(button.getAttribute('title')).toContain('Sem permissão');
+  });
+
+  it('com permissão: não mostra o banner de bloqueio', async () => {
+    // default mock = allowed:true
+    render(<NovaSprint />);
+    await waitFor(() => {
+      expect(vi.mocked(window.api.canDispatch)).toHaveBeenCalled();
+    });
+    expect(screen.queryByText('Disparo bloqueado')).not.toBeInTheDocument();
+  });
+
+  it('"Verificar novamente" re-checa e destrava ao recuperar a permissão', async () => {
+    vi.mocked(window.api.canDispatch).mockResolvedValueOnce({
+      ok: true,
+      data: { allowed: false, reason: 'Sem acesso de escrita. Contate o TI.' },
+    });
+
+    const user = userEvent.setup();
+    render(<NovaSprint />);
+
+    await screen.findByText('Disparo bloqueado');
+    expect(vi.mocked(window.api.canDispatch)).toHaveBeenCalledTimes(1);
+
+    // Recheck usa o default mock (allowed:true) → banner some.
+    await user.click(screen.getByRole('button', { name: /Verificar novamente/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Disparo bloqueado')).not.toBeInTheDocument();
+    });
+    expect(vi.mocked(window.api.canDispatch)).toHaveBeenCalledTimes(2);
   });
 });

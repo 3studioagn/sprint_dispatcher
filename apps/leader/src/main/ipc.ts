@@ -18,6 +18,8 @@
 import { ipcMain } from 'electron';
 
 import type {
+  ArchiveFilter,
+  CanDispatchResponse,
   CancelSprintRequest,
   CancelSprintResponse,
   DispatchSprintRequest,
@@ -25,14 +27,19 @@ import type {
   GetConfigResult,
   IpcResult,
   ListAcksResponse,
+  ListArchiveResponse,
   OperatorsListResponse,
+  ReadArchivedSprintResponse,
 } from '../shared/ipc-types';
 
 import { ConfigError, getConfigPath, type LeaderConfig, loadLeaderConfig } from './config';
+import { archiveFilterSchema, readArchivedSprintRequestSchema } from './ipc-schemas';
 import type { AckTrackingService, AckTrackingTarget } from './services/ackTrackingService';
+import type { ArchiveService } from './services/archiveService';
 import type { CancelService } from './services/cancelService';
 import type { DispatchService } from './services/dispatchService';
 import type { OperatorsService } from './services/operatorsService';
+import type { PermissionService } from './services/permissionService';
 
 /**
  * Estado mutável compartilhado entre o `main/index.ts` (bootstrap) e os
@@ -44,6 +51,8 @@ export interface IpcDependencies {
   dispatchService: DispatchService | null;
   ackTrackingService: AckTrackingService | null;
   cancelService: CancelService | null;
+  archiveService: ArchiveService | null;
+  permissionService: PermissionService | null;
 }
 
 /**
@@ -196,6 +205,102 @@ export function registerIpcHandlers(deps: IpcDependencies, rebuildDeps: RebuildD
       }
     },
   );
+
+  // ===========================================================================
+  // listArchive — IpcResult<ListArchiveResponse>. Histórico compartilhado
+  // read-only (BL-C2-010). Input validado via Zod (defesa em profundidade).
+  // ===========================================================================
+  ipcMain.handle(
+    'listArchive',
+    async (_event, rawFilter: unknown): Promise<IpcResult<ListArchiveResponse>> => {
+      if (deps.archiveService === null) {
+        return {
+          ok: false,
+          error: {
+            code: 'CONFIG_REQUIRED',
+            message: 'config.json ausente ou inválido — corrija antes de ver o histórico',
+          },
+        };
+      }
+      const parsed = archiveFilterSchema.safeParse(rawFilter ?? {});
+      if (!parsed.success) {
+        return {
+          ok: false,
+          // Só `code` + `message` (string) cruzam o IPC — o ZodError instance
+          // não é estruturalmente clonável de forma confiável pelo Electron.
+          error: { code: 'INVALID_INPUT', message: parsed.error.message },
+        };
+      }
+      const filter: ArchiveFilter =
+        parsed.data.date !== undefined ? { date: parsed.data.date } : {};
+      try {
+        const data = await deps.archiveService.list(filter);
+        return { ok: true, data };
+      } catch (err) {
+        return { ok: false, error: toIpcError(err) };
+      }
+    },
+  );
+
+  // ===========================================================================
+  // readArchivedSprint — IpcResult<ReadArchivedSprintResponse>. Detalhe de
+  // uma sprint arquivada (payload + ack). Read-only (BL-C2-010).
+  // ===========================================================================
+  ipcMain.handle(
+    'readArchivedSprint',
+    async (_event, rawRequest: unknown): Promise<IpcResult<ReadArchivedSprintResponse>> => {
+      if (deps.archiveService === null) {
+        return {
+          ok: false,
+          error: {
+            code: 'CONFIG_REQUIRED',
+            message: 'config.json ausente ou inválido — corrija antes de ver o histórico',
+          },
+        };
+      }
+      const parsed = readArchivedSprintRequestSchema.safeParse(rawRequest);
+      if (!parsed.success) {
+        return {
+          ok: false,
+          // Só `code` + `message` (string) cruzam o IPC — o ZodError instance
+          // não é estruturalmente clonável de forma confiável pelo Electron.
+          error: { code: 'INVALID_INPUT', message: parsed.error.message },
+        };
+      }
+      try {
+        const data = await deps.archiveService.read({
+          date: parsed.data.date,
+          sprint_id: parsed.data.sprint_id,
+          user_id: parsed.data.user_id,
+        });
+        return { ok: true, data };
+      } catch (err) {
+        return { ok: false, error: toIpcError(err) };
+      }
+    },
+  );
+
+  // ===========================================================================
+  // canDispatch — IpcResult<CanDispatchResponse>. Gate de permissão do
+  // líder antes do dispatch (BL-C2-012). Sem input.
+  // ===========================================================================
+  ipcMain.handle('canDispatch', async (): Promise<IpcResult<CanDispatchResponse>> => {
+    if (deps.permissionService === null) {
+      return {
+        ok: false,
+        error: {
+          code: 'CONFIG_REQUIRED',
+          message: 'config.json ausente ou inválido — corrija antes de verificar permissão',
+        },
+      };
+    }
+    try {
+      const data = await deps.permissionService.canDispatch();
+      return { ok: true, data };
+    } catch (err) {
+      return { ok: false, error: toIpcError(err) };
+    }
+  });
 }
 
 function toIpcError(err: unknown): { code: string; message: string } {

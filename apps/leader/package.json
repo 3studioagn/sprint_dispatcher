@@ -21,6 +21,9 @@
   "dependencies": {
     "@sprint/contracts": "workspace:*",
     "@sprint/fs-adapter": "workspace:*",
+    "@sprint/logger": "workspace:*",
+    "date-fns": "^3.6.0",
+    "lucide-react": "^0.460.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "react-router-dom": "^6.30.3",

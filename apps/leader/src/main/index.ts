@@ -18,24 +18,43 @@
 
 import path from 'node:path';
 
-import { AckStore, CancelStore, NodeFilesystemAdapter, PendingStore } from '@sprint/fs-adapter';
+import {
+  AckStore,
+  ArchiveStore,
+  CancelStore,
+  NodeFilesystemAdapter,
+  PendingStore,
+} from '@sprint/fs-adapter';
+import { createLogger } from '@sprint/logger';
 import { app, BrowserWindow } from 'electron';
 
 import { ConfigError, loadLeaderConfig, type LeaderConfig } from './config';
 import { type IpcDependencies, registerIpcHandlers } from './ipc';
 import { AckTrackingService } from './services/ackTrackingService';
+import { ArchiveService } from './services/archiveService';
 import { CancelService } from './services/cancelService';
 import { DispatchService } from './services/dispatchService';
 import { OperatorsService } from './services/operatorsService';
+import { PermissionService } from './services/permissionService';
 
 const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
 const IS_DEV = Boolean(DEV_SERVER_URL);
+
+/**
+ * Logger do gate de permissão (BL-C2-012). `destination: process.stdout`
+ * força JSON síncrono — sem o worker do pino-pretty, que quebraria sob o
+ * empacotamento Electron (asar) e bundling do vite-plugin-electron.
+ * Primeiro uso de `@sprint/logger` no Leader; integração ampla é BL-C6-002.
+ */
+const permissionLogger = createLogger('permission-service', { destination: process.stdout });
 
 const deps: IpcDependencies = {
   operatorsService: null,
   dispatchService: null,
   ackTrackingService: null,
   cancelService: null,
+  archiveService: null,
+  permissionService: null,
 };
 
 /**
@@ -53,10 +72,15 @@ async function rebuildDeps(): Promise<LeaderConfig> {
   // CancelStore recebe pendingStore para remover originais pendentes
   // como parte do writeCancel (BL-C4-004).
   const cancelStore = new CancelStore(adapter, config.shared_path, pendingStore);
+  const archiveStore = new ArchiveStore(adapter, config.shared_path);
   deps.operatorsService = new OperatorsService(adapter, config.shared_path);
   deps.dispatchService = new DispatchService(pendingStore, deps.operatorsService, config);
   deps.ackTrackingService = new AckTrackingService(ackStore, deps.operatorsService);
   deps.cancelService = new CancelService(cancelStore, config);
+  // BL-C2-010: histórico compartilhado (read-only via ArchiveStore C4).
+  deps.archiveService = new ArchiveService(archiveStore, deps.operatorsService);
+  // BL-C2-012: gate de permissão (probe write em pending/ via adapter C4).
+  deps.permissionService = new PermissionService(adapter, config.shared_path, permissionLogger);
   return config;
 }
 

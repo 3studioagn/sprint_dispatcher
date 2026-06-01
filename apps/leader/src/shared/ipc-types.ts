@@ -18,6 +18,8 @@
  * @see DECISIONS.md ADR-009 — IPC contract-first
  */
 
+import type { SprintAck, SprintPayload } from '@sprint/contracts';
+
 import type { Operator } from './types/operator';
 
 // =============================================================================
@@ -205,6 +207,100 @@ export interface CancelSprintResponse {
 }
 
 // =============================================================================
+// listArchive / readArchivedSprint — histórico compartilhado (BL-C2-010)
+//
+// Lê de `<shared_path>/arquivo/<YYYY-MM-DD>/` via `ArchiveStore`
+// (@sprint/fs-adapter). Read-only: nenhum handler muta o `arquivo/`.
+// =============================================================================
+
+/**
+ * Filtro do `listArchive`. Apenas `date` é aplicado **na fonte** (C4
+ * `listArchive({ date })`) — operador e líder são filtrados client-side
+ * no renderer sobre o resultado enriquecido (RF-15, §4.5).
+ */
+export interface ArchiveFilter {
+  /** Pasta de data `YYYY-MM-DD`. Ausente = todas as datas. */
+  readonly date?: string;
+}
+
+/**
+ * Item de uma sprint arquivada — uma entrada por par (sprint_id, user_id),
+ * enriquecida com metadados do payload + estado do ack para a UI listar,
+ * agrupar (por `sprint_id`) e filtrar (por `user_id`/`criado_por`).
+ *
+ * **Sem `body_html`** — o corpo do aviso é buscado sob demanda no detalhe
+ * via `readArchivedSprint` (mantém a listagem enxuta no IPC).
+ */
+export interface ArchivedSprintListItem {
+  /** Pasta de data `YYYY-MM-DD` (derivada do ULID na origem). */
+  readonly date: string;
+  /** ULID da sprint (chave de agrupamento da "rodada"). */
+  readonly sprint_id: string;
+  /** Operador alvo deste arquivo. */
+  readonly user_id: string;
+  /** Nome de exibição resolvido via `operators.json` (best-effort). */
+  readonly user_nome_exibicao: string;
+  /** Título do aviso (`SprintPayload.title`). */
+  readonly title: string;
+  /** Líder que disparou (`SprintPayload.criado_por`) — filtro client-side. */
+  readonly criado_por: string;
+  /** ISO de criação (`SprintPayload.criado_em`). */
+  readonly criado_em: string;
+  /** ISO do deadline (`SprintPayload.deadline_at`). */
+  readonly deadline_at: string;
+  /** Meta despachada para o operador. */
+  readonly meta: number;
+  /** Estado do ack arquivado (mesma semântica do Acompanhamento). */
+  readonly state: AckState;
+  /** ISO de exibição do overlay (se `state !== 'nao_visto'`). */
+  readonly displayed_at?: string;
+  /** ISO da confirmação (se `state === 'confirmado'`). */
+  readonly acknowledged_at?: string;
+  /** Hostname onde o ack foi gerado (se houver ack). */
+  readonly hostname?: string;
+}
+
+export interface ListArchiveResponse {
+  readonly items: readonly ArchivedSprintListItem[];
+  /** ISO da consulta — UI pode mostrar "atualizado às HH:MM". */
+  readonly checked_at: string;
+}
+
+/**
+ * Request do `readArchivedSprint` — identifica uma sprint arquivada
+ * específica. O main reconstrói o `ArchivedSprintRef` do C4 via
+ * `buildPendingFilename(sprint_id, user_id)` + a pasta de data.
+ */
+export interface ReadArchivedSprintRequest {
+  readonly date: string;
+  readonly sprint_id: string;
+  readonly user_id: string;
+}
+
+export interface ReadArchivedSprintResponse {
+  /** Payload completo da sprint arquivada (inclui `body_html`). */
+  readonly payload: SprintPayload;
+  /** Ack pareado, quando existe e é válido. */
+  readonly ack?: SprintAck;
+}
+
+// =============================================================================
+// canDispatch — gate de permissão do líder antes do dispatch (BL-C2-012)
+// =============================================================================
+
+/**
+ * Resultado da verificação de permissão de escrita em `pending/`
+ * (probe write+unlink no adapter C4 — ADR-007). Dirige o gate do botão
+ * "Disparar" na tela Nova Rodada.
+ */
+export interface CanDispatchResponse {
+  /** `true` se o usuário Windows pode escrever em `pending/`. */
+  readonly allowed: boolean;
+  /** Mensagem pt-BR exibida ao líder quando `!allowed`. */
+  readonly reason?: string;
+}
+
+// =============================================================================
 // LeaderAPI — superfície exposta pelo preload via contextBridge
 // =============================================================================
 
@@ -271,4 +367,30 @@ export interface LeaderAPI {
    * overlay no operador.
    */
   cancelSprint: (request: CancelSprintRequest) => Promise<IpcResult<CancelSprintResponse>>;
+
+  /**
+   * Lista as sprints arquivadas (`<shared_path>/arquivo/`), enriquecidas
+   * com metadados + estado de ack, para a tela de Histórico (BL-C2-010).
+   * Read-only. `filter.date` é aplicado na fonte (C4); operador/líder são
+   * filtrados client-side. Erro (compartilhamento inacessível) vira
+   * `IpcResult{ ok: false }`.
+   */
+  listArchive: (filter: ArchiveFilter) => Promise<IpcResult<ListArchiveResponse>>;
+
+  /**
+   * Lê os detalhes completos (payload + ack) de uma sprint arquivada
+   * específica — usado pelo detalhe do Histórico para exibir o corpo do
+   * aviso (BL-C2-010). Read-only.
+   */
+  readArchivedSprint: (
+    request: ReadArchivedSprintRequest,
+  ) => Promise<IpcResult<ReadArchivedSprintResponse>>;
+
+  /**
+   * Verifica se o usuário Windows logado tem permissão de escrita em
+   * `<shared_path>/pending/` (probe write+unlink — BL-C2-012, ADR-007).
+   * Dirige o gate do botão "Disparar" na Nova Rodada. `CONFIG_REQUIRED`
+   * quando a config ainda não carregou.
+   */
+  canDispatch: () => Promise<IpcResult<CanDispatchResponse>>;
 }
