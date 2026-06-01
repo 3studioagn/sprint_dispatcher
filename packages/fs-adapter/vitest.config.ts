@@ -15,6 +15,10 @@ export default defineConfig({
         'src/__tests__/helpers.ts',
         'src/__helpers__/**',
         'src/index.ts',
+        // CLI entry point: glue de process.*/node:fs (não-testável em
+        // unit). A lógica pura vive em src/cleanup.ts e é coberta.
+        // Validado por smoke run (--dry-run + execução real) e via E2E (W3).
+        'src/bin/**',
       ],
       thresholds: {
         lines: 95,

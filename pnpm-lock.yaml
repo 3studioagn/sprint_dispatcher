@@ -238,6 +238,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: ^1.6.0
         version: 1.6.1(vitest@1.6.1(@types/node@20.19.41)(jsdom@28.1.0))
+      esbuild:
+        specifier: ^0.21.5
+        version: 0.21.5
       fast-check:
         specifier: ^3.20.0
         version: 3.23.2

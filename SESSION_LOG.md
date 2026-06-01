@@ -66,6 +66,81 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 46 — 2026-06-01 — Wave 3 · Componente C4 (fs-adapter) CONCLUÍDO — BL-C4-005 + BL-C4-008
+
+**Wave atual:** W3 (Production Readiness) **Itens:** [BL-C4-005, BL-C4-008]
+**Branch:** `feature/C4-wave3-archive-cleanup` **Status:** ✅ Concluído (DoD
+atendido) — **C4 100% concluído** (sem itens em W4).
+
+### Objetivo
+
+Concluir o componente `@sprint/fs-adapter` (C4) entregando seus 2 itens
+restantes: BL-C4-005 (arquivo histórico compartilhado: move + leitura) e
+BL-C4-008 (job de limpeza automática). Padrão EXECUTAR → AUDITAR → REMEDIAR.
+
+### O que foi feito
+
+- **BL-C4-005 — `ArchiveStore`** (substitui o stub `NotImplementedError`):
+  `archiveSprint` (move sprint+ack p/ `arquivo/<data-origem>/`; data do ULID via
+  `decodeUlidTime`+`formatArchiveDate`; `rename`+fallback `EXDEV`; mkdir;
+  anti-overwrite `already-archived`; `source-missing`/ENOENT benigno),
+  `archiveAck` (acks órfãos), `listArchive`/`readArchivedSprint` (leitura com
+  filtros — **destrava BL-C2-010**). Novos tipos no barrel.
+- **BL-C4-008 — job de limpeza:** `cleanup.ts` puro (`planCleanup`/`runCleanup`
+  - `parseCleanupArgs`/`formatCleanupLogLine`/`CLEANUP_USAGE`), política
+    `age|deadline|both` (default `both`, retenção 7d), logging por DI
+    (`onEvent`). CLI `bin/sprint-archive-cleanup.ts`
+    (`--share/--retention-days/--mode/--dry-run`), log em
+    `arquivo/log-limpeza.txt` (append) + stdout, exit codes 0/1/2. Bundled p/
+    `.mjs` via esbuild (`build:cli`, no `prepare`).
+- **C1 (patch):** `decodeUlidTime`, `formatArchiveDate`, `isArchiveDateFolder`,
+  `DEFAULT_RETENTION_DAYS`, `CLEANUP_LOG_FILENAME` (+ testes).
+- **Docs:** `docs/guides/cleanup-job.md` (runbook + Task Scheduler);
+  **ADR-025**; 2 changesets (fs-adapter minor + contracts patch); README +
+  CLAUDE atualizados; **G-028** (aviso cosmético de bin shim no clone frio).
+
+### Validação
+
+- Gates verdes: `format:check` · `type-check` (9/9 — apps consumidores compilam,
+  mudança aditiva) · `lint` (7/7) · `test` (10/10, **1434 testes**; **fs-adapter
+  308→382**, contracts 317→335) · `build` (6/6).
+- **Cobertura código novo ≥ 90%:** `cleanup.ts` 100/94.94/100/100,
+  `archive-store.ts` 100/97.29/100/100 (linhas/funcs/stmts 100%).
+- **Smoke real do CLI:** `--help`, `--dry-run` (inerte), execução real
+  (sprint+ack → `arquivo/2016-07-30/`, log gravado), idempotência (2ª rodada
+  arquiva 0, log appendado), exit 1 (share inacessível), exit 2 (args
+  inválidos).
+
+### Decisões
+
+- **ADR-025**: foldering por data de origem (ULID/UTC); retenção `both` default;
+  move atômico + fallback `EXDEV`; logging por DI (C4 dependency-pure: só Node +
+  `@sprint/contracts`); CLI agendável via Task Scheduler.
+- **Desvios do prompt (repo é fonte de verdade):** (1) ADR **025**, não 006 (006
+  = naming ULID, já existente); (2) operações de arquivo no `ArchiveStore`
+  (domain), não na `IFilesystemAdapter` (port primitivo, ADR-013) → mock sem
+  métodos novos; (3) CLI runnable via esbuild bundle (escolha do Renan nesta
+  sessão) — `tsx` ausente e Node nativo não resolve imports sem extensão.
+
+### Bloqueios encontrados
+
+Nenhum. Aviso cosmético de bin shim em clone frio documentado (G-028, benigno).
+
+### Próximo passo
+
+**C2 (Leader) — agora EXECUTÁVEL:** BL-C2-010 (tela de histórico, consome
+`listArchive`/`readArchivedSprint`) + BL-C2-012 (validação de líder). BL-C0-009
+segue bloqueado por BL-C5-005.
+
+### Observações para a próxima sessão
+
+- Empacotar/agendar o CLI (EXE + Scheduled Task) é **C5/deploy** — fora do C4.
+- **Questões abertas p/ Renan:** confirmar modo de retenção default (`both`?) e
+  onde agendar a limpeza (servidor de arquivos vs estação dedicada). Cancels
+  (`cancel-*.json`) não são arquivados por este job — revisitar se acumularem.
+
+---
+
 ## Sessão 45 — 2026-06-01 — Wave 3 · BL-C0-008 — Code Signing
 
 **Wave atual:** W3 (Production Readiness) — **iniciada** **Itens:** [BL-C0-008]

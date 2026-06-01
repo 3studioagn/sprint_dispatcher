@@ -390,16 +390,19 @@ packages/fs-adapter/src/
 ├── node-adapter.ts              # adapter de produção (W0)
 ├── memory-adapter.ts            # adapter de teste (W0)
 ├── index.ts                     # barrel — public API
+├── cleanup.ts                   # job de limpeza: planCleanup/runCleanup/parseCleanupArgs (BL-C4-008 W3)
+├── bin/
+│   └── sprint-archive-cleanup.ts # CLI standalone (process.*/node:fs) — bundled p/ .mjs via esbuild
 ├── __tests__/
 │   ├── contract.test.ts         # paridade Node↔Memory (W0)
 │   ├── barrel.test.ts           # sanity check do public API
 │   └── helpers.ts
-└── domain/                      # camada de domínio (W1)
+└── domain/                      # camada de domínio (W1+W3)
     ├── read-and-parse.ts        # utility read + JSON + Zod safeParse
     ├── pending-store.ts         # writePendingSprint, listPending, deletePending
     ├── ack-store.ts             # writeAck, listAcks
     ├── cancel-store.ts          # writeCancel (BL-C4-004 W2) + remoção de originais
-    └── archive-store.ts         # moveToArchive — stub W3 (BL-C4-005)
+    └── archive-store.ts         # archiveSprint/archiveAck/listArchive/readArchivedSprint (BL-C4-005 W3)
 ```
 
 **Convenções específicas do fs-adapter (W1):**
@@ -439,12 +442,71 @@ packages/fs-adapter/src/
   `<sprintId>-<userId>.json` da sprint cancelada como parte do writeCancel
   (race-safe — `FileNotFoundError` silenciado).
   `WriteCancelResult.removedOriginals` reporta filenames limpos.
-- **`ArchiveStore.moveToArchive` continua stub W3** com `NotImplementedError`
-  (estende `FilesystemError`). Assinatura final preservada. **Remover stub em
-  BL-C4-005 (W3).**
+- **`ArchiveStore` implementado (BL-C4-005 W3)** — stub `moveToArchive`
+  removido. Ver a subseção W3 abaixo. (`NotImplementedError` permanece na API
+  pública, reutilizável em stubs futuros.)
 - **MemoryFilesystemAdapter é o mock de fato** — não há classe paralela.
   Paridade Node↔Memory garantida pela contract suite W0; testes do domain layer
   usam Memory direto (sem tmpdir, sem flakiness).
+
+> **Atualização W3 — BL-C4-005 + BL-C4-008 (C4 CONCLUÍDO):**
+>
+> Fecha o componente C4 (`@sprint/fs-adapter`) — sem itens em W4. Entrega o
+> histórico compartilhado + o job de limpeza. Decisões em **ADR-025**.
+>
+> **`ArchiveStore` (BL-C4-005)** — 4 métodos (substituem o stub):
+>
+> - `archiveSprint(sprintFilename)` — move sprint de `pending/` **+ ack
+>   pareado** de `acks/` para `arquivo/<YYYY-MM-DD>/`. Data derivada do **ULID**
+>   do `sprint_id` (`decodeUlidTime`+`formatArchiveDate`, UTC — não lê o
+>   arquivo, robusto a JSON corrompido). `mkdir` recursivo; move atômico
+>   (`rename`) com fallback **copy+unlink** em `EXDEV` (helper
+>   `isCrossDeviceError` inspeciona `cause.code`); anti-overwrite (destino
+>   existente → `already-archived`, remove original redundante);
+>   `source-missing`/`ENOENT` benigno.
+> - `archiveAck(ackFilename)` — arquiva acks **órfãos** (sprint já fora de
+>   `pending/`) na pasta de data da sua sprint.
+> - `listArchive(filter?)` / `readArchivedSprint(ref)` — leitura do histórico
+>   (filtros data/userId; pareia sprint↔ack). Ignora `log-limpeza.txt` e
+>   entradas não-data (`isArchiveDateFolder`). `arquivo/` inexistente → `[]`.
+>   **Destrava BL-C2-010.**
+> - Tipos: `ArchiveOutcome`, `ArchiveSprintResult`, `ArchiveAckResult`,
+>   `ArchivedSprintRef`, `ArchivedSprint`, `ListArchiveFilter` (no barrel).
+>
+> **Job de limpeza (BL-C4-008)** — `cleanup.ts` (lógica pura) + bin CLI:
+>
+> - `planCleanup(pending, acks, opts)` decide; `runCleanup(opts, deps)` executa
+>   via `ArchiveStore`. Política `age|deadline|both` (default `both`;
+>   `retentionDays` default 7, RN-08). Acks órfãos por idade; cancelamentos
+>   ignorados (lifecycle do Agent); inválidos → aviso + arquiva por idade.
+> - **Logging por injeção** (`onEvent?`): o C4 **não** importa `@sprint/logger`.
+>   Helpers puros `parseCleanupArgs` + `formatCleanupLogLine` + `CLEANUP_USAGE`.
+> - CLI `bin/sprint-archive-cleanup.ts` (único arquivo com
+>   `process.*`/`node:fs`): args
+>   `--share/--retention-days/--mode/--dry-run/--help`; log em
+>   `arquivo/log-limpeza.txt` (append) + stdout; exit codes 0/1/2; guarda de
+>   share inacessível. Bundled p/ `.mjs` via `build:cli` (esbuild), regenerado
+>   no `prepare`. Excluído do coverage (`src/bin/**`).
+>
+> **Invariantes a NÃO violar** (futuras sessões):
+>
+> - **Pureza de dependências do C4**: só Node built-ins + `@sprint/contracts`.
+>   Zero deps de runtime novas (sem `date-fns`, sem `@sprint/logger`). Datas via
+>   `Date` puro + helpers C1; log via DI. `esbuild` é dev-only (build do CLI),
+>   não entra no runtime da lib.
+> - **`arquivo/` (compartilhado, servidor) ≠ `historico/` (local, Agent —
+>   BL-C3-008/009).** Este componente mexe SÓ no `arquivo/` compartilhado. Não
+>   confundir.
+> - **Operações de arquivo vivem no `ArchiveStore` (domain), não na
+>   `IFilesystemAdapter`** (port primitivo, ADR-013). O
+>   `MemoryFilesystemAdapter` não ganhou métodos novos.
+>
+> **C1 (patch):** `decodeUlidTime`, `formatArchiveDate`, `isArchiveDateFolder`,
+> `DEFAULT_RETENTION_DAYS`, `CLEANUP_LOG_FILENAME`.
+>
+> **Agendamento:** `docs/guides/cleanup-job.md` (Task Scheduler; empacotar EXE é
+> C5). **Testes fs-adapter: 308 → 382** (3 skipped Windows-EPERM); contracts 317
+> → 335.
 
 ### Estrutura interna do Operator Agent (W1.C3 — Sessão 16)
 
@@ -1962,6 +2024,28 @@ Descobertas durante o desenvolvimento que economizam tempo da próxima sessão.
   `node -e "console.log(require('electron-builder/package.json').version)"`.
 - **Descoberto em:** Sessão 45 (2026-06-01), BL-C0-008 — o comentário stale nos
   `electron-builder.yml` citava `signtoolOptions`; a versão real é 24.x.
+
+### G-028: `pnpm install` em clone frio avisa "Failed to create bin" do `sprint-archive-cleanup` (cosmético)
+
+- **Sintoma:** num clone sem build prévio, `pnpm install` emite 4×
+  `WARN  Failed to create bin at ...\.bin\sprint-archive-cleanup. ENOENT ... dist\sprint-archive-cleanup.mjs.EXE`
+  (root + leader + operator-agent, que consomem `@sprint/fs-adapter`). O install
+  conclui com **sucesso** (exit 0).
+- **Causa:** o `bin` do `@sprint/fs-adapter` aponta para
+  `dist/sprint-archive-cleanup.mjs` (gerado por `build:cli`/esbuild), mas
+  `dist/` é **gitignored**. pnpm cria os shims de bin durante o linking,
+  **antes** de rodar o script `prepare` do pacote (que constrói o `.mjs`). Logo,
+  no primeiro install o arquivo ainda não existe → aviso; o `prepare` então o
+  gera. Installs subsequentes (dist presente) são limpos.
+- **Por que é benigno:** após o install, o `prepare` deixou o `.mjs` no lugar e
+  o bin funciona; `dist/` gitignored mantém a árvore limpa. CI não invoca esse
+  bin (lint/type-check/test/build não dependem dele).
+- **Por que não foi "resolvido":** as alternativas são piores — (a) commitar o
+  artefato bundlado quebra a convenção `dist/` gitignored e arrisca bundle stale
+  vs. fonte; (b) não registrar `bin` contraria o item. Mantido `bin` + `prepare`
+  (sempre reconstrói → nunca stale) e aceito o aviso cosmético. **C5** produz o
+  EXE empacotado definitivo (o `bin` de dev deixa de ser o caminho de produção).
+- **Descoberto em:** Sessão 46 (2026-06-01), BL-C4-008.
 
 ### Débitos técnicos pendentes
 

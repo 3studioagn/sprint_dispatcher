@@ -13,11 +13,17 @@
     }
   },
   "sideEffects": false,
+  "bin": {
+    "sprint-archive-cleanup": "./dist/sprint-archive-cleanup.mjs"
+  },
   "files": [
-    "src"
+    "src",
+    "dist"
   ],
   "scripts": {
     "build": "tsc --noEmit -p tsconfig.json",
+    "build:cli": "esbuild src/bin/sprint-archive-cleanup.ts --bundle --platform=node --format=esm --target=node20 --outfile=dist/sprint-archive-cleanup.mjs --external:zod --external:ulid --external:isomorphic-dompurify",
+    "prepare": "pnpm run build:cli",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -30,6 +36,7 @@
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@vitest/coverage-v8": "^1.6.0",
+    "esbuild": "^0.21.5",
     "fast-check": "^3.20.0",
     "vitest": "^1.6.0"
   }

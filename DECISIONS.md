@@ -2816,3 +2816,106 @@ independentemente da origem do certificado:
 - Backlog v1.1 BL-C0-008 (este item), BL-C0-009 (próximo, bloqueado por
   BL-C5-005), §5 (Pipeline DevOps); Requisitos RI-01, RNF-15/16, US-04.02, Anexo
   G.8.
+
+---
+
+## ADR-025: Política de arquivamento e retenção do histórico compartilhado
+
+- **Status:** Accepted
+- **Data:** 2026-06-01
+- **Decisores:** Renan (3Studio), Claude Opus 4.8
+
+> Escrito junto da entrega de **BL-C4-005** (arquivo histórico) + **BL-C4-008**
+> (job de limpeza), que **concluem o componente C4** (`@sprint/fs-adapter`).
+> **Nota de numeração:** o prompt do item pedia "ADR-006", mas esse número já
+> pertence à convenção de naming de arquivos com ULID (registrado na W0). O
+> repositório é a fonte de verdade — esta decisão entra como **ADR-025**, o
+> próximo sequencial após ADR-024 (mesmo precedente da nota em ADR-024).
+
+### Contexto
+
+UC-07 (consultar histórico) e UC-08 (limpar sprints expiradas) exigem que
+sprints/acks antigos saiam de `pending/`/`acks/` e fiquem disponíveis para
+auditoria, sem acumular indefinidamente no servidor (RI-07). RN-08 fixa **>7
+dias** como horizonte de arquivamento. O Anexo A define a estrutura
+`arquivo/<YYYY-MM-DD>/` com sprint + ack juntos e um `log-limpeza.txt` na raiz.
+O C4 deve permanecer **dependency-pure** (Anexo B/D): apenas Node built-ins +
+`@sprint/contracts` — nada de `date-fns`, `@sprint/logger` ou outras libs.
+
+### Decisão
+
+1. **Foldering por data de origem da sprint.** `arquivo/<YYYY-MM-DD>/` é
+   derivado do **timestamp embutido no ULID** do `sprint_id` (helper
+   `decodeUlidTime` + `formatArchiveDate` em C1, **UTC**). Como o Leader gera o
+   ULID e serializa `criado_em` (`toISOString()`, UTC) no mesmo instante, a data
+   decodificada coincide com a de `criado_em` — e arquivar não precisa **ler** o
+   arquivo (robusto contra JSON corrompido). Para o horário comercial da fábrica
+   (firing longe da meia-noite), a data UTC coincide com a local.
+2. **Operações no `ArchiveStore` (domain layer), não na `IFilesystemAdapter`.**
+   O port permanece primitivo (ADR-013); arquivar/listar/ler são
+   `archiveSprint`/`archiveAck`/`listArchive`/`readArchivedSprint`. O mock
+   (`MemoryFilesystemAdapter`) já provê todos os primitivos — **não** ganhou
+   métodos novos (diverge do texto literal do BL, que assumia métodos na
+   interface).
+3. **Move atômico com fallback `EXDEV`.** Tenta `rename`; se `arquivo/` estiver
+   em outro volume (cross-device), faz copy (read + `writeFileAtomic` com fsync)
+   - unlink. **Nunca sobrescreve** destino existente (idempotente: remove o
+     original redundante e reporta `already-archived`).
+     `source-missing`/`ENOENT` no meio é benigno.
+4. **Política de retenção configurável `age | deadline | both` (default
+   `both`).** Arquiva se idade (mtime) ≥ `retentionDays` (default 7, RN-08)
+   **OU** `deadline_at` passou (UC-08). JSON inválido → não dá pra checar
+   deadline; a regra de idade decide e registra aviso. Acks órfãos (sprint já
+   fora de `pending/`) são arquivados por idade.
+5. **Logging por injeção (DI), não dependência.** A lógica pura (`planCleanup`,
+   `runCleanup`) recebe `onEvent?`; o C4 **não** importa `@sprint/logger`. O CLI
+   (`bin/sprint-archive-cleanup.ts`, único arquivo com `process.*`/`node:fs`)
+   monta um `onEvent` que escreve em `arquivo/log-limpeza.txt` (append) +
+   stdout.
+6. **CLI standalone agendável via Task Scheduler.** Bundled p/ `.mjs` via
+   esbuild (dev-only build tool; runtime do C4 segue só `@sprint/contracts`).
+   `--dry-run` inerte; exit codes 0/1/2. **Empacotar em EXE e agendar via
+   instalador é C5.**
+
+### Alternativas consideradas
+
+| Alternativa                                                     | Veredito                                                                                                                                                 |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Foldering por data de execução do job**                       | Rejeitada — diverge do Anexo A (data de origem) e dispersaria a mesma sprint/ack se o job rodasse em dias diferentes.                                    |
+| **`chokidar`/`fs.watch` para detectar expiração**               | Rejeitada — SMB trata eventos de FS de forma errática (ADR-004, P-04). Varredura sob demanda (cron) é a escolha correta.                                 |
+| **Adicionar `date-fns` (datas) / `@sprint/logger` (log) ao C4** | Rejeitada — quebra a pureza de dependências (Anexo B/D). Datas via `Date` puro + helper C1; log via DI.                                                  |
+| **Métodos de arquivo na `IFilesystemAdapter`**                  | Rejeitada — o port é primitivo (ADR-013); domínio fica em stores. (O texto do BL assumia métodos na interface; o repo prevalece.)                        |
+| **`tsx`/runtime TS p/ rodar o CLI** ou **Node nativo**          | Rejeitada — `tsx` = dep nova; Node nativo não resolve imports sem extensão (monorepo `moduleResolution: Bundler`). esbuild bundla um `.mjs` autocontido. |
+
+### Consequências
+
+- **Leitura do histórico** (`listArchive`/`readArchivedSprint`) foi adicionada
+  além do texto literal do BL-C4-005 — necessária para **destravar o BL-C2-010**
+  (tela de histórico no Leader) e completar o componente.
+- **C4 concluído** (sem itens em W4). Stub `moveToArchive`/`NotImplementedError`
+  removido do `ArchiveStore`; `NotImplementedError` mantido na API pública
+  (reutilizável em stubs futuros).
+- **`bin` aponta para `dist/sprint-archive-cleanup.mjs`** (gitignored); um
+  script `prepare` o reconstrói no `pnpm install`, mantendo-o sempre
+  sincronizado com a fonte. Em clones frios, o `pnpm install` emite um aviso
+  cosmético "Failed to create bin" (artefato ainda não construído) antes do
+  `prepare` gerá-lo — ver G-028. **Empacotamento/EXE final é C5.**
+- **Cancelamentos não são arquivados** por este job (lifecycle é do Agent) —
+  débito conhecido se acumularem; reavaliar em wave futura.
+- **Limitação UTC vs. local**: sprints disparadas após ~21h BRT cairiam na pasta
+  do dia UTC seguinte. Aceitável (firing real é em horário comercial); revisitar
+  só se necessário.
+
+### Referências
+
+- `packages/fs-adapter/src/domain/archive-store.ts`,
+  `packages/fs-adapter/src/cleanup.ts`,
+  `packages/fs-adapter/src/bin/sprint-archive-cleanup.ts`.
+- `packages/contracts/src/{constants.ts,ids.ts,dates.ts}`
+  (`DEFAULT_RETENTION_DAYS`, `CLEANUP_LOG_FILENAME`, `decodeUlidTime`,
+  `formatArchiveDate`, `isArchiveDateFolder`).
+- `docs/guides/cleanup-job.md` — runbook + agendamento via Task Scheduler.
+- ADR-013 (port-and-adapter), ADR-016 (domain layer do fs-adapter), ADR-004
+  (polling, não watch), ADR-006 (naming de arquivos com ULID).
+- Backlog v1.1 BL-C4-005, BL-C4-008; BL-C2-010 (destravado); Requisitos UC-07,
+  UC-08, RN-08, RI-07, Anexo A.

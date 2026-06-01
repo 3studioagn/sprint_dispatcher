@@ -87,17 +87,17 @@ do repositório**, gerenciados externamente por Renan.
 
 ## Componentes
 
-| ID  | Nome                                       | Tipo          | Status W0                  |
-| --- | ------------------------------------------ | ------------- | -------------------------- |
-| C0  | Foundation & Infrastructure                | Infra         | ✅ Wave 0                  |
-| C1  | Shared Contracts (`@sprint/contracts`)     | Library       | ✅ Wave 0                  |
-| C2  | Leader Application                         | Desktop App   | ✅ W1 MVP + redesign       |
-| C3  | Operator Agent                             | Desktop App   | ✅ W1 MVP (Sessão 16)      |
-| C4  | Filesystem Adapter (`@sprint/fs-adapter`)  | Library       | ✅ Domain W1 (Pending+Ack) |
-| C5  | Installer & Deployment                     | Package       | ✅ Config validada         |
-| C6  | Observability & Logging (`@sprint/logger`) | Library       | ✅ W1 (Sessão 17)          |
-| C7  | Documentation                              | Docs          | 🔄 Em fechamento da Wave 0 |
-| C8  | Quality Assurance                          | Cross-cutting | ✅ W1 (Sessão 18)          |
+| ID  | Nome                                       | Tipo          | Status W0                             |
+| --- | ------------------------------------------ | ------------- | ------------------------------------- |
+| C0  | Foundation & Infrastructure                | Infra         | ✅ Wave 0                             |
+| C1  | Shared Contracts (`@sprint/contracts`)     | Library       | ✅ Wave 0                             |
+| C2  | Leader Application                         | Desktop App   | ✅ W1 MVP + redesign                  |
+| C3  | Operator Agent                             | Desktop App   | ✅ W1 MVP (Sessão 16)                 |
+| C4  | Filesystem Adapter (`@sprint/fs-adapter`)  | Library       | ✅ Concluído (W3 — arquivo + limpeza) |
+| C5  | Installer & Deployment                     | Package       | ✅ Config validada                    |
+| C6  | Observability & Logging (`@sprint/logger`) | Library       | ✅ W1 (Sessão 17)                     |
+| C7  | Documentation                              | Docs          | 🔄 Em fechamento da Wave 0            |
+| C8  | Quality Assurance                          | Cross-cutting | ✅ W1 (Sessão 18)                     |
 
 Detalhes operacionais de cada componente: ver os `README.md` em
 [`apps/leader`](./apps/leader/README.md),
@@ -140,6 +140,22 @@ Estratégia: cert auto-assinado da ARTFLEXÍVEIS + distribuição via GPO
 
 > A assinatura real roda só no `release.yml` (tag `v*.*.*`, `windows-latest`);
 > PR/branch builds não assinam. O `.pfx`/senha nunca entram no Git.
+
+### Limpeza do histórico compartilhado (W3 · BL-C4-008)
+
+CLI `sprint-archive-cleanup` (`@sprint/fs-adapter`) que arquiva sprints/acks
+expirados de `pending/`/`acks/` em `arquivo/<YYYY-MM-DD>/` e registra
+`arquivo/log-limpeza.txt`. Runbook + agendamento via Task Scheduler:
+[`docs/guides/cleanup-job.md`](./docs/guides/cleanup-job.md)
+([ADR-025](./DECISIONS.md)).
+
+```powershell
+# valida sem mover nada
+node packages\fs-adapter\dist\sprint-archive-cleanup.mjs --share "\\srv-alpha\TEMP\Metas_3Studio" --dry-run
+```
+
+> O `.mjs` é gerado por `pnpm --filter @sprint/fs-adapter build:cli` (roda no
+> `prepare` do `pnpm install`). Empacotar em EXE e agendar via instalador é C5.
 
 ## Padrões obrigatórios
 

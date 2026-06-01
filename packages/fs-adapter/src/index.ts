@@ -43,3 +43,20 @@ export {
   type ArchiveSprintResult,
   type ListArchiveFilter,
 } from './domain/archive-store';
+
+// === Domain — Cleanup job (BL-C4-008 — W3) ===
+export {
+  planCleanup,
+  runCleanup,
+  parseCleanupArgs,
+  formatCleanupLogLine,
+  CLEANUP_USAGE,
+  type CleanupArgs,
+  type CleanupDeps,
+  type CleanupEvent,
+  type CleanupEventHandler,
+  type CleanupOptions,
+  type CleanupPlan,
+  type CleanupSummary,
+  type RetentionMode,
+} from './cleanup';

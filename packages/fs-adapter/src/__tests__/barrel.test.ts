@@ -19,14 +19,22 @@ import {
   NotImplementedError,
   PendingStore,
 } from '..';
+import { CLEANUP_USAGE, formatCleanupLogLine, parseCleanupArgs, planCleanup, runCleanup } from '..';
 import type {
   AckEntry,
+  ArchiveAckResult,
+  ArchivedSprint,
+  ArchivedSprintRef,
+  ArchiveSprintResult,
+  CleanupPlan,
+  CleanupSummary,
   FileStat,
   IFilesystemAdapter,
   ListAcksFilter,
+  ListArchiveFilter,
   ListPendingFilter,
-  MoveToArchiveResult,
   PendingEntry,
+  RetentionMode,
   WriteAckResult,
   WriteCancelResult,
   WritePendingResult,
@@ -61,6 +69,14 @@ describe('@sprint/fs-adapter — barrel', () => {
     expect(() => new ArchiveStore(adapter, '/shared')).not.toThrow();
   });
 
+  it('exporta a API do job de limpeza (BL-C4-008)', () => {
+    expect(planCleanup).toBeDefined();
+    expect(runCleanup).toBeDefined();
+    expect(parseCleanupArgs).toBeDefined();
+    expect(formatCleanupLogLine).toBeDefined();
+    expect(typeof CLEANUP_USAGE).toBe('string');
+  });
+
   it('tipos públicos podem ser usados em assinaturas (type-only check)', () => {
     // Este teste compila se os tipos estão exportados; corpo é
     // intencionalmente trivial — o valor vem do type-check passar.
@@ -72,7 +88,14 @@ describe('@sprint/fs-adapter — barrel', () => {
     const _writeResult: WritePendingResult | undefined = undefined;
     const _ackResult: WriteAckResult | undefined = undefined;
     const _cancelResult: WriteCancelResult | undefined = undefined;
-    const _archiveResult: MoveToArchiveResult | undefined = undefined;
+    const _archiveSprint: ArchiveSprintResult | undefined = undefined;
+    const _archiveAck: ArchiveAckResult | undefined = undefined;
+    const _archiveRef: ArchivedSprintRef | undefined = undefined;
+    const _archived: ArchivedSprint | undefined = undefined;
+    const _archiveFilter: ListArchiveFilter = {};
+    const _cleanupPlan: CleanupPlan | undefined = undefined;
+    const _cleanupSummary: CleanupSummary | undefined = undefined;
+    const _retentionMode: RetentionMode = 'both';
     const _adapter: IFilesystemAdapter | undefined = undefined;
     expect(_stat).toBeUndefined();
     expect(_entry).toBeUndefined();
@@ -82,7 +105,14 @@ describe('@sprint/fs-adapter — barrel', () => {
     expect(_writeResult).toBeUndefined();
     expect(_ackResult).toBeUndefined();
     expect(_cancelResult).toBeUndefined();
-    expect(_archiveResult).toBeUndefined();
+    expect(_archiveSprint).toBeUndefined();
+    expect(_archiveAck).toBeUndefined();
+    expect(_archiveRef).toBeUndefined();
+    expect(_archived).toBeUndefined();
+    expect(_archiveFilter).toEqual({});
+    expect(_cleanupPlan).toBeUndefined();
+    expect(_cleanupSummary).toBeUndefined();
+    expect(_retentionMode).toBe('both');
     expect(_adapter).toBeUndefined();
   });
 });
