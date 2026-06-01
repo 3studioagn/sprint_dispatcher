@@ -3120,3 +3120,126 @@ C4). O `FilesystemError` do C4 já preserva o `NodeJS.ErrnoException` original e
   ADR-020 (`@sprint/logger`), G-020 (externalizar pino).
 - Backlog v1.1 BL-C3-013, BL-C3-014; Requisitos RNF-07, RNF-06, RI-03,
   RNF-03/04, RF-14, US-02.01.
+
+---
+
+## ADR-028: Auto-start, wizard de first-run, data root em ProgramData e rename do produto
+
+- **Status:** Accepted
+- **Data:** 2026-06-01
+- **Decisores:** Renan (3Studio)
+- **Endereça:** BL-C5-003 (auto-start), BL-C5-005 (nomeação de artefatos),
+  BL-C5-006 (wizard de first-run) — escopo de W3 do componente C5
+
+> **Nota de numeração:** o prompt da sessão pediu "ADR-009", mas esse número já
+> está ocupado (IPC contract-first). Seguindo a regra de numeração sequencial e
+> única, esta decisão é **ADR-028**.
+>
+> **Nota sobre as fontes:** o `.docx` de Requisitos v1.2 anexado é um documento
+> com template misturado — seu sumário descreve o Sprint Dispatcher, mas
+> RF-017..021 / RN-001..011 / RNF pertencem a OUTRO sistema (workflow de "prova
+> digital" com QR Code). Para o C5, a fonte de verdade foi o **Backlog v1.1**
+> (que tem os BL-C5-003/005/006 reais + `C:\ProgramData\SprintAgent\config.json`
+> em BL-C3-002), a **Stack §15.3** e o repositório. As referências a "Anexo
+> G/RF-19" do prompt foram lidas via Backlog/Stack, não via o `.docx` de
+> Requisitos.
+
+### Contexto
+
+Auto-start é obrigatório (RF-19/RN-11) e exclusivo do Agent — o Leader é aberto
+manualmente (RN-12). O MVP (Anexo G.5 / Backlog) usa **HKCU Run**. A Stack §15.3
+e o Backlog (BL-C3-002) sempre previram binários em `C:\Program Files\...` e
+**dados em `C:\ProgramData\...` criados no first-run**; o W1, porém, implementou
+o `config.json` em `app.getPath('userData')` (ADR-012) por pragmatismo. UC-06
+pede uma forma do operador configurar a estação. Havia ainda uma **pegadinha
+Program Files × HKCU**: num install per-machine (admin), o `HKCU` escrito pelo
+instalador é o do admin, não o do operador.
+
+Em paralelo, Renan decidiu **renomear o produto**: o Leader passa a se chamar
+**"Metas - Liderança"** e o Agent **"Metas - Desenhistas"**, com tudo coerente
+(exe, pasta, Start Menu, artefatos, pasta de dados).
+
+### Decisão
+
+1. **Auto-start = hook NSIS (HKCU Run) + auto-registro defensivo no Agent.** O
+   hook (`apps/operator-agent/build/installer.nsh`, macros `customInstall`/
+   `customUnInstall`) escreve/remove o valor em
+   `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` apontando para
+   `"$INSTDIR\${APP_EXECUTABLE_FILENAME}"`. O auto-registro
+   (`main/services/autoStart.ts`) roda **uma vez no boot** (idempotente, logado,
+   só em `app.isPackaged`), comparando/reescrevendo a entrada no HKCU do
+   **usuário logado** via `reg.exe` (acessor injetável p/ teste). Isso cobre o
+   caso per-machine/admin (resolve a pegadinha). **HKCU, nunca HKLM** (R-03). Só
+   o Agent — o Leader não tem hook nem auto-registro (RN-12).
+2. **Wizard = janela de first-run (não diálogo NSIS).** `SetupWizardService`
+   abre uma `BrowserWindow` `?setup` (React + CSS Modules/ui-kit) quando o
+   `config.json` está ausente/inválido (e via tray "Configurar…"). Coleta
+   `user_id`/`shared_path` (+ display name opcional); a escrita e a validação
+   ocorrem no **MAIN** (`setup:save` → `buildAgentConfigFromInput` com Zod do C1
+   → `writeConfigAtomic`), **sem `fs` no renderer**. "Testar conexão"
+   (`setup:probe`) reaproveita `isConnectivityError` (BL-C3-013) + `listPending`
+   (C4), com a mesma desambiguação de `pending/` ausente do `PollingService`.
+3. **Data root em `C:\ProgramData\Metas - Desenhistas\`** (config.json +
+   historico/ + logs/), resolvido por `main/paths.ts#getAgentDataDir` —
+   **supersede o `app.getPath('userData')` do W1 (ADR-012)**. Criado pelo
+   próprio Agent no first-run (como o usuário logado → vira dono, **sem exigir
+   elevação** no caso comum). Fora de Windows (CI/dev) cai para `userData`;
+   override de teste via env `SPRINT_AGENT_DATA_DIR`.
+4. **Rename do produto** (decisão Renan): `productName`, `appId`,
+   `artifactName`, título de janela, tray, diálogos e a pasta de dados seguem os
+   novos nomes. O **nome de exibição** carrega acentos/espaços
+   (`Metas - Liderança` / `Metas - Desenhistas`); o **artefato** é normalizado
+   p/ ASCII sem espaços (`Metas-Lideranca-Setup-${version}.exe` /
+   `Metas-Desenhistas-Setup-...`), release/CI-safe — atendendo BL-C5-005 e
+   destravando BL-C0-009. Identificadores **internos** (nomes de pacote npm
+   `sprint-leader`/`sprint-operator-agent`, pastas do repo) **permanecem** para
+   evitar um refactor destabilizante.
+
+### Alternativas consideradas
+
+| Alternativa                                    | Por que rejeitada                                                                                              |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| **Só hook NSIS (sem auto-registro)**           | Em install per-machine/admin o HKCU escrito é o do admin → operador não ganha auto-start (a pegadinha).        |
+| **HKLM Run / Startup folder / Scheduled Task** | HKLM/Startup exigem admin ou são frágeis; Scheduled Task com watchdog é mais robusto mas é **W4 (BL-C5-004)**. |
+| **Diálogos de config em NSIS (nsDialogs)**     | Frágil, não testável, sem sondagem de conexão. First-run window é testável (RTL) e valida via Zod.             |
+| **Manter `config.json` em `%APPDATA%`**        | Diverge do Backlog/Stack (ProgramData) e do modelo de deploy; o W1 era um atalho pragmático.                   |
+| **Renomear também identificadores internos**   | Alto risco/scope (CI, turbo, changesets, scripts, workspace refs) sem ganho para o usuário final.              |
+| **`app.setLoginItemSettings`**                 | O Electron escolhe o nome do valor de Run → divergiria do hook NSIS, criando DUAS entradas de auto-start.      |
+
+### Consequências
+
+- **`config.ts` muda de localização** (userData → ProgramData via
+  `getAgentDataDir`); `historico/` e `logs/` migram junto (data root único).
+  Testes ajustados (`config.test.ts` usa o override de env).
+- **ProgramData e ACL:** se o `C:\ProgramData\Metas - Desenhistas\` for
+  pré-criado por um admin com ACL restritiva, um operador comum pode não
+  escrever — **ação de runbook do TI** (criar com herança/Modify para Users, ou
+  deixar o Agent criar no first-run). Sinalizado nas docs.
+- **Antivírus (Anexo G.8):** escrever no Run key + "always on top" podem
+  disparar heurísticas — esperado, mitigado por whitelist do hash pelo TI. Não é
+  bug.
+- **Desbloqueios:** BL-C0-009 (pipeline de release — nomes determinísticos) e
+  BL-C7-002 (guia de TI — agora há wizard + paths definidos).
+- **Escopo de wave:** **BL-C5-004** (Scheduled Task/watchdog) e **BL-C5-007**
+  (instalador silencioso `/SILENT` p/ GPO) permanecem **W4** — não tocados.
+  Auto-start (HKCU Run) **≠** watchdog (ressuscitar processo).
+- **Assinatura (C0-008) preservada** (chaves top-level `win:` intactas); guardas
+  de packaging afirmam isso e a ausência de auto-start no Leader.
+- **`@sprint/logger`** ganhou um 2º uso no Agent (logger `auto-start`); a
+  integração ampla dos `console.*` restantes segue **BL-C6-002**.
+- **SETUP.md** dos apps tem referências stale (nome antigo + `%APPDATA%`) — a
+  atualização completa da doc de TI é **C7** (BL-C7-002, agora desbloqueado).
+
+### Referências
+
+- `apps/operator-agent/`: `build/installer.nsh`, `src/shared/branding.ts`,
+  `src/main/paths.ts`, `src/main/services/autoStart.ts`, `setupService.ts`,
+  `setupWizardService.ts`, `src/renderer/SetupApp.tsx` +
+  `components/SetupWizard/`, `electron-builder.yml`, `src/main/index.ts`.
+- `apps/leader/electron-builder.yml` (rename + artifactName).
+- ADR-012 (loader fail-fast → superseded p/ a localização), ADR-024
+  (assinatura), ADR-027 (`isConnectivityError`, reusado na sondagem), G-022
+  (productName vs app.getName), G-023 (assets no asar).
+- Backlog v1.1 BL-C5-003/005/006 (+ fronteiras BL-C5-004/007, BL-C0-009,
+  BL-C7-002); Stack §15.1–15.3; Requisitos RF-19/RN-11/RN-12, UC-06, Anexo G.5/
+  G.6.2/G.8, Anexo B, Anexo F.

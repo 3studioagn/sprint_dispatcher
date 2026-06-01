@@ -94,7 +94,7 @@ do repositório**, gerenciados externamente por Renan.
 | C2  | Leader Application                         | Desktop App   | ✅ Concluído (W3 — histórico + gate)  |
 | C3  | Operator Agent                             | Desktop App   | ✅ Concluído (W3 — reconexão + som)   |
 | C4  | Filesystem Adapter (`@sprint/fs-adapter`)  | Library       | ✅ Concluído (W3 — arquivo + limpeza) |
-| C5  | Installer & Deployment                     | Package       | ✅ Config validada                    |
+| C5  | Installer & Deployment                     | Package       | 🔄 W3 OK (auto-start + wizard); W4    |
 | C6  | Observability & Logging (`@sprint/logger`) | Library       | ✅ W1 (Sessão 17)                     |
 | C7  | Documentation                              | Docs          | 🔄 Em fechamento da Wave 0            |
 | C8  | Quality Assurance                          | Cross-cutting | ✅ W1 (Sessão 18)                     |
@@ -140,6 +140,25 @@ Estratégia: cert auto-assinado da ARTFLEXÍVEIS + distribuição via GPO
 
 > A assinatura real roda só no `release.yml` (tag `v*.*.*`, `windows-latest`);
 > PR/branch builds não assinam. O `.pfx`/senha nunca entram no Git.
+
+### Instalador, auto-start e first-run do Agent (W3 · BL-C5-003/005/006)
+
+Os apps foram renomeados — **Leader → "Metas - Liderança"**, **Agent → "Metas -
+Desenhistas"** ([ADR-028](./DECISIONS.md)). Os instaladores NSIS saem com nomes
+determinísticos (versão do `package.json`):
+`Metas-Lideranca-Setup-${version}.exe` e
+`Metas-Desenhistas-Setup-${version}.exe`.
+
+- **Auto-start (só o Agent):** entrada em `HKCU\…\Run` via hook NSIS +
+  auto-registro idempotente no boot (cobre install per-machine/admin). O
+  **Leader é aberto manualmente** (RN-12).
+- **First-run:** sem `config.json`, o Agent abre um **wizard** (janela) que
+  coleta `user_id` + pasta compartilhada (com "Testar conexão"), valida e grava
+  `config.json` em **`C:\ProgramData\Metas - Desenhistas\`** (+ `historico/`,
+  `logs/`). Reabrível via tray "Configurar…".
+
+> **Escopo:** BL-C5-004 (Scheduled Task/watchdog) e BL-C5-007 (instalador
+> silencioso `/SILENT` p/ GPO) ficam para W4.
 
 ### Limpeza do histórico compartilhado (W3 · BL-C4-008)
 

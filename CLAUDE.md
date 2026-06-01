@@ -1229,6 +1229,12 @@ Backlog (perguntar a Renan se necessário).
 > **W3 iniciada (2026-06-01)** — primeiro item: **BL-C0-008 (code signing)**.
 > Gate W2→W3 = GO (Sessão 44). Infra de assinatura: §8.5 +
 > `docs/guides/code-signing.md` (ADR-024).
+>
+> **C5 — escopo de W3 concluído (Sessão 49):** BL-C5-003 (auto-start HKCU Run),
+> BL-C5-005 (artifactName determinístico) e BL-C5-006 (wizard de first-run) —
+> ver §8.6 + ADR-028. **Rename do produto:** Leader → "Metas - Liderança", Agent
+> → "Metas - Desenhistas". **BL-C5-004 (Scheduled Task) e BL-C5-007 (instalador
+> silencioso) ficam para W4.** Desbloqueou BL-C0-009 e BL-C7-002.
 
 ### Wave 0 — Foundation (atual)
 
@@ -1487,9 +1493,72 @@ completo: `docs/guides/code-signing.md`.
   unit-testado 100%) + `prepare-signing-cert.mjs` (glue do release.yml). Coberto
   por Turborepo (test/lint); cobertura mede só `pfx-secret.mjs`.
 - **Pendência (BL-C0-009, próximo):** publish/version/notify no `release.yml`
-  (marcado `# TODO(BL-C0-009)`) — **bloqueado por BL-C5-005** (nomeação de
-  artefatos). **Ação operacional do TI:** gerar cert, distribuir `.cer` via GPO,
-  cadastrar os 2 Secrets.
+  (marcado `# TODO(BL-C0-009)`) — **DESBLOQUEADO** pela conclusão de BL-C5-005
+  (Sessão 49): os artefatos agora têm nomes determinísticos
+  (`Metas-Lideranca-Setup-${version}.exe` /
+  `Metas-Desenhistas-Setup-${version}.exe`). **Ação operacional do TI:** gerar
+  cert, distribuir `.cer` via GPO, cadastrar os 2 Secrets.
+
+### 8.6. Auto-start, first-run e empacotamento do Agent (W3 · BL-C5-003/005/006 · ADR-028)
+
+Escopo de W3 do **C5 (Installer & Deployment)**. **Rename do produto (decisão
+Renan):** Leader → **"Metas - Liderança"**, Agent → **"Metas - Desenhistas"** —
+`productName`/`appId`/`artifactName`/títulos/tray/diálogos/pasta de dados seguem
+o novo nome; **identificadores internos** (pacotes npm `sprint-leader`/
+`sprint-operator-agent`, pastas do repo) **permanecem**.
+
+- **Nomeação de artefatos (BL-C5-005):** instaladores determinísticos
+  `Metas-Lideranca-Setup-${version}.${ext}` e
+  `Metas-Desenhistas-Setup-${version}.${ext}` (versão do `package.json`,
+  **ASCII-safe** sem espaços/acentos — release/CI). O nome de **exibição**
+  (Start Menu, exe, pasta, janelas) carrega acentos/espaços. Habilita BL-C0-009.
+- **Auto-start (BL-C5-003) — só o Agent, HKCU (nunca HKLM):**
+  - **Hook NSIS** `apps/operator-agent/build/installer.nsh` (auto-incluído pelo
+    electron-builder; também explícito em `nsis.include`): macros
+    `customInstall`/`customUnInstall` escrevem/removem o valor em
+    `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` →
+    `"$INSTDIR\${APP_EXECUTABLE_FILENAME}"`.
+  - **Auto-registro defensivo** `main/services/autoStart.ts`
+    (`ensureAutoStartRegistered`): roda **uma vez no boot** (só em
+    `app.isPackaged`), idempotente, logado (`@sprint/logger`, logger
+    `auto-start`). Lê/compara/reescreve a entrada via `reg.exe`
+    (`WindowsRegistryRunAccessor`; acessor injetável p/ teste). Cobre a
+    **pegadinha Program Files × HKCU** (em install per-machine/admin, o HKCU do
+    instalador é o do admin; o auto-registro escreve no HKCU do usuário logado).
+  - **Invariante:** o nome do valor de Run no NSH **DEVE** casar com
+    `AUTO_START_REGISTRY_VALUE` em `src/shared/branding.ts` — divergir cria DUAS
+    entradas. Guarda em `src/main/packaging.test.ts`. **Leader NÃO tem
+    auto-start** (RN-12; guarda no `packaging.test.ts` do Leader).
+- **Wizard de first-run (BL-C5-006) — janela `?setup`, não NSIS:**
+  - `SetupWizardService` (janela comum, focável, opaca) abre quando o
+    `config.json` está ausente/inválido (no boot) e via tray **"Configurar…"**
+    (estado `config_error`). `runAfterFinish: true` lança o Agent pós-instalação
+    → wizard.
+  - Renderer: `SetupApp` + `components/SetupWizard/` (CSS Modules/tokens
+    ui-kit); `main.tsx` roteia `?setup`. Coleta `user_id`/`shared_path` (+
+    display name opcional).
+  - **IPC** (`setup:probe`/`setup:save`): inputs validados no **MAIN** (Zod via
+    `buildAgentConfigFromInput` → `AgentConfig` do C1), **sem `fs` no
+    renderer**. `setup:save` deriva `hostname` (`os.hostname()`), aplica
+    defaults do Anexo F, grava atômico, `rebuildDeps()` e fecha a janela.
+    `setup:probe` reaproveita `isConnectivityError` (BL-C3-013) +
+    `listPending`/`exists` (C4) — **sem duplicar lógica de conectividade**; a
+    desambiguação de `pending/` ausente espelha o `PollingService`.
+- **Data root em `C:\ProgramData\Metas - Desenhistas\`** (config.json +
+  `historico/` + `logs/`) — `main/paths.ts#getAgentDataDir`, criado no first-run
+  pelo Agent (vira dono → sem elevação no caso comum). **Supersede o
+  `app.getPath('userData')` do W1 (ADR-012).** Fora de Windows (CI/dev) cai para
+  `userData`; override de teste via env `SPRINT_AGENT_DATA_DIR`.
+
+**Invariantes a NÃO violar:** auto-start só do Agent (HKCU, remove na
+desinstalação, idempotente, 1×/boot); wizard via first-run window com config no
+MAIN/Zod (sem `fs` no renderer); assinatura **C0-008 preservada** (chaves
+top-level `win:`); **BL-C5-004 (Scheduled Task/watchdog) e BL-C5-007 (instalador
+silencioso) são W4** — não confundir auto-start (HKCU Run) com watchdog. Sem
+deps novas (`reg.exe` é built-in).
+
+> **Pendência conhecida:** os `SETUP.md` de ambos os apps têm refs stale (nome
+> antigo + `%APPDATA%`) — atualizar na doc de TI (**BL-C7-002**, desbloqueado).
 
 ---
 

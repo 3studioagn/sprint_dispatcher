@@ -9,6 +9,47 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Added — Sessão 49 (2026-06-01) — W3 · C5 (Installer & Deployment) — escopo W3 — BL-C5-003 + BL-C5-005 + BL-C5-006
+
+Escopo de W3 do componente C5. Decisões em [ADR-028](DECISIONS.md). **BL-C5-004
+(Scheduled Task) e BL-C5-007 (instalador silencioso) ficam para W4.**
+
+**Rename do produto (decisão Renan):** Leader → **"Metas - Liderança"**, Agent →
+**"Metas - Desenhistas"**. `productName`/`appId`/`artifactName`/títulos/tray/
+diálogos/pasta de dados seguem o novo nome; identificadores internos (pacotes
+npm, pastas do repo) permanecem.
+
+**BL-C5-005 — Nomeação versionada dos artefatos (ambos apps):**
+
+- Instaladores determinísticos `Metas-Lideranca-Setup-${version}.exe` e
+  `Metas-Desenhistas-Setup-${version}.exe` (versão do `package.json`, ASCII-safe
+  para release/CI). Destrava BL-C0-009.
+
+**BL-C5-003 — Auto-start do Agent (HKCU Run):**
+
+- Hook NSIS (`build/installer.nsh`, `customInstall`/`customUnInstall`) escreve/
+  remove a entrada em `HKCU\...\Run`; **auto-registro defensivo** idempotente no
+  boot (`reg.exe`, acessor injetável) cobre o caso per-machine/admin (pegadinha
+  Program Files × HKCU). HKCU (nunca HKLM); **só o Agent** (Leader é manual —
+  RN-12).
+
+**BL-C5-006 — Wizard de configuração inicial (first-run, `apps/operator-agent`):**
+
+- Janela `?setup` que aparece quando o `config.json` está ausente/inválido (e via
+  tray "Configurar…"). Coleta `user_id`/`shared_path` (+ display name opcional),
+  deriva `hostname`, aplica defaults do Anexo F, valida via Zod (`AgentConfig`) no
+  MAIN e grava o `config.json`. "Testar conexão" reaproveita `isConnectivityError`
+  (BL-C3-013) + `listPending` (C4). Sem `fs` no renderer.
+- **Config em `C:\ProgramData\Metas - Desenhistas\`** (config + historico + logs),
+  criado no first-run — supersede o `app.getPath('userData')` do W1 (ADR-012).
+
+**Infra:** assinatura C0-008 preservada; guardas de packaging
+(`packaging.test.ts`) afirmam artifactName + assinatura + ausência de auto-start
+no Leader. Desbloqueia BL-C0-009 e BL-C7-002.
+
+**Testes:** Agent 354 → **409**, Leader 348 → **352**. Gates verdes
+(format/type-check/lint/test/build). Changeset criado.
+
 ### Added — Sessão 48 (2026-06-01) — W3 · C3 (Operator Agent) CONCLUÍDO — BL-C3-013 + BL-C3-014
 
 Fecha o componente C3 (Operator Agent) — seus 2 itens restantes da Wave 3. C3
