@@ -2274,6 +2274,33 @@ Descobertas durante o desenvolvimento que economizam tempo da próxima sessão.
   EXE empacotado definitivo (o `bin` de dev deixa de ser o caminho de produção).
 - **Descoberto em:** Sessão 46 (2026-06-01), BL-C4-008.
 
+### G-029: testes do Leader que consultam `role="alert"` genérico flopam após as 18h (DeadlineInput) — Leader não fixa relógio/TZ
+
+- **Sintoma:** os testes de regressão **F-025** em `NovaSprint.test.tsx`
+  (`findByRole('alert')` / `queryByRole('alert')`) passam localmente de
+  dia/tarde mas **falham no CI quando o runner roda depois das 18:00** (ex.:
+  18:17 UTC) — a query encontra o aviso `Atenção: o horário 18:00 já passou…`
+  (que é `<p role="alert">`) do `DeadlineInput` em vez do `ErrorBanner`.
+- **Causa:** `DeadlineInput.isDeadlineInPast(deadline)` usa `new Date()` real e
+  o deadline padrão do composer é **18:00**; o aviso anti-passado (F-024) é
+  `role="alert"`. O `vitest.config.ts` do **Leader NÃO fixa `process.env.TZ`**
+  (o do Agent fixa `America/Sao_Paulo`) **nem o relógio** — então qualquer teste
+  do NovaSprint que consulte `role="alert"` genérico colide com esse aviso
+  quando `agora > 18:00`. É um flake **dependente da hora do relógio** (latente
+  desde que o teste existe; só aparece em CI vespertino).
+- **Solução (Sessão 49):** fixar **só o `Date`** no `beforeEach` do describe:
+  `vi.useFakeTimers({ toFake: ['Date'] })` + `vi.setSystemTime(<manhã>)` +
+  `afterEach(() => vi.useRealTimers())`. `toFake: ['Date']` mantém
+  `setTimeout`/microtasks **reais** → `findBy`/`userEvent` continuam funcionando
+  (evita o conflito clássico do fake-timers com userEvent v14, G-015/ui-kit).
+  Alternativa igualmente robusta: consultar o `ErrorBanner` pelo **texto
+  específico** (ex.: `/Não foi possível carregar os dados/i`) em vez de
+  `role="alert"` genérico — imune ao aviso de deadline. **Débito futuro
+  (C8/qualidade):** fixar TZ + relógio globalmente nos testes do Leader, ou
+  injetar `now` no `DeadlineInput`.
+- **Verificação:** pin às 18:30 reproduz a falha do CI; às 08:00 passa.
+- **Descoberto em:** Sessão 49 (2026-06-01), CI do PR do C5 rodou às 18:17 UTC.
+
 ### Débitos técnicos pendentes
 
 Itens conhecidos que **deveriam** existir mas dependem de pré-requisito ainda
