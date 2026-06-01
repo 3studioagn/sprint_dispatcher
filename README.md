@@ -91,7 +91,7 @@ do repositório**, gerenciados externamente por Renan.
 | --- | ------------------------------------------ | ------------- | ------------------------------------- |
 | C0  | Foundation & Infrastructure                | Infra         | ✅ Wave 0                             |
 | C1  | Shared Contracts (`@sprint/contracts`)     | Library       | ✅ Wave 0                             |
-| C2  | Leader Application                         | Desktop App   | ✅ W1 MVP + redesign                  |
+| C2  | Leader Application                         | Desktop App   | ✅ Concluído (W3 — histórico + gate)  |
 | C3  | Operator Agent                             | Desktop App   | ✅ W1 MVP (Sessão 16)                 |
 | C4  | Filesystem Adapter (`@sprint/fs-adapter`)  | Library       | ✅ Concluído (W3 — arquivo + limpeza) |
 | C5  | Installer & Deployment                     | Package       | ✅ Config validada                    |
@@ -206,8 +206,9 @@ iniciada** (2026-06-01) com **BL-C0-008 (code signing)** — ver
 - ✅ `@sprint/contracts` (W1.C1) — schemas Zod, sanitizer, IDs, filenames
 - ✅ `@sprint/fs-adapter` (W1.C4) — port-and-adapter + Pending/Ack domain stores
 - ✅ `@sprint/logger` (W1.C6) — Pino wrapper (pretty em dev, JSON em prod)
-- ✅ Leader (W1.C2) — composer + dispatch real + redesign visual + ErrorBanner
-  UX
+- ✅ Leader (C2 **concluído**) — composer + dispatch + acompanhamento de acks +
+  cancelamento + **histórico compartilhado** (filtros/detalhe) + **gate de
+  permissão** do líder antes do dispatch (probe NTFS via adapter C4)
 - ✅ Operator Agent (W1.C3) — polling + overlay TOPMOST + tray + ack
 - ✅ Testes ampliados (W1.C8) — production-grade (**1069 testes** no monorepo)
 - ✅ Auditoria pré-W2 + correções (Sessão 19): 5 findings RESOLVED, 20 DEFERRED

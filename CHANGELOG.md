@@ -9,6 +9,41 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Added — Sessão 47 (2026-06-01) — W3 · C2 (Leader) CONCLUÍDO — BL-C2-010 + BL-C2-012
+
+Fecha o componente C2 (Leader) — seus 2 itens restantes da Wave 3. C2 100%
+concluído (sem itens em W4). Decisão em [ADR-026](DECISIONS.md).
+
+**BL-C2-010 — Tela de Histórico (`apps/leader`):**
+
+- Rota `/historico` funcional: filtros (data na fonte; operador/líder
+  client-side), lista de **rodadas agrupadas por `sprint_id`** com resumo de
+  status, e **detalhe read-only** (modal) com metadados + corpo do aviso
+  (`body_html` re-sanitizado, §7.9) + lista de targets reaproveitando o
+  componente de status do Acompanhamento (`<TargetStatusList>`, extraído).
+- Novos handlers IPC tipados `listArchive`/`readArchivedSprint` (fs só no MAIN,
+  inputs validados com Zod) → `ArchiveService` que consome
+  `ArchiveStore.listArchive/readArchivedSprint` (C4). Store `useArchiveStore`
+  (filtros/lista/seleção + derivações puras). `date-fns`/`ptBR` +
+  `lucide-react` adicionados ao Leader.
+
+**BL-C2-012 — Gate de permissão do líder (`apps/leader`):**
+
+- Botão "Disparar" desabilitado + mensagem clara + "Verificar novamente" quando
+  o usuário Windows não tem escrita em `pending/`. Handler IPC `canDispatch` →
+  `PermissionService` (probe via adapter C4) + log do resultado com o usuário
+  Windows via `@sprint/logger` (primeiro uso no Leader). Store
+  `usePermissionStore`.
+
+**`@sprint/fs-adapter` (toque aditivo, BL-C2-012):**
+
+- `probeWritePermission(dirpath)` na `IFilesystemAdapter` — probe write+unlink
+  (real no `NodeFilesystemAdapter` com cleanup garantido; configurável no
+  `MemoryFilesystemAdapter`). Aditivo, não quebra consumidores.
+
+**Testes:** Leader 280 → **348**; fs-adapter 382 → **394**. Gates verdes
+(format/type-check/lint/test/build). Changeset criado.
+
 ### Added — Sessão 45 (2026-06-01) — W3 · BL-C0-008 Code Signing
 
 Primeiro item da Wave 3 (Production Readiness): infraestrutura de assinatura

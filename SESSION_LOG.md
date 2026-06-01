@@ -66,6 +66,96 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 47 — 2026-06-01 — Wave 3 · Componente C2 (Leader) CONCLUÍDO — BL-C2-010 + BL-C2-012
+
+**Wave atual:** W3 (Production Readiness) **Itens:** [BL-C2-010, BL-C2-012]
+**Branch:** `feature/C2-wave3-history-leadercheck` **Status:** ✅ Concluído (DoD
+atendido) — **C2 100% concluído** (sem itens em W4).
+
+### Objetivo
+
+Concluir o componente Leader (`apps/leader`, C2) entregando seus 2 itens
+restantes: BL-C2-010 (tela de histórico) + BL-C2-012 (gate de permissão do líder
+antes do dispatch). Padrão EXECUTAR → AUDITAR → REMEDIAR.
+
+### O que foi feito
+
+- **BL-C2-010 — Histórico:** rota `/historico` funcional. Filtros
+  data/operador/líder (data na fonte via C4; operador/líder client-side), lista
+  de **rodadas agrupadas por `sprint_id`** com resumo de status, detalhe
+  read-only (modal) com metadados + corpo (`body_html` re-sanitizado §7.9) +
+  `<TargetStatusList>`. Novos IPC `listArchive`/`readArchivedSprint` (Zod no
+  main) → `ArchiveService` (consome `ArchiveStore` C4). Store `useArchiveStore`
+  - derivações puras (`filterAndGroupSprints`, `collectOperatorOptions`, etc.,
+    consumidas via `useMemo` — evita pitfall de selector Zustand com nova ref).
+- **BL-C2-012 — Gate de permissão:** IPC `canDispatch` → `PermissionService`
+  (probe write em `pending/` via adapter C4) + log do resultado com o usuário
+  Windows via `@sprint/logger` (1º uso no Leader). Store `usePermissionStore`;
+  botão "Disparar" desabilitado + banner + "Verificar novamente" na NovaSprint.
+- **Toque aditivo no C4:** `probeWritePermission(dirpath)` na
+  `IFilesystemAdapter` (real no Node com cleanup garantido; configurável no
+  Memory via `setProbeWritePermission`). Aditivo — não quebra consumidores.
+- **Refactor de reuso:** linhas de status/target inline do Acompanhamento
+  extraídas para `components/TargetStatusList/` (reuso no Histórico, sem
+  duplicar UI).
+- **Docs/infra:** ADR-026; changeset (`@sprint/fs-adapter` minor +
+  `sprint-leader` minor); CHANGELOG/CLAUDE/README atualizados; `date-fns` +
+  `lucide-react` adicionados ao Leader (decisão Renan via AskUserQuestion).
+
+### Validação
+
+- Gates verdes: `format:check` · `type-check` (10/10) · `lint` (7/7) · `test`
+  (11/11 — Leader **280 → 348**, fs-adapter **382 → 394**) · `build` (6/6).
+- Cobertura código novo: `archiveService`/`permissionService`/`ipc-schemas`
+  100%; thresholds globais do Leader (95/90/90/95) e fs-adapter (95/95/95/95)
+  atendidos (EXIT=0). fs-adapter all-files 99.7/97.35/100/99.7.
+
+### Decisões
+
+- **ADR-026** (não "007" do prompt — já ocupado; mesma situação da S46 com
+  ADR-025): probe write+unlink no adapter C4, exposto via IPC, dirige o gate.
+- **Desvios do prompt (repo é fonte de verdade):** (1) **ADR-026**, não 007; (2)
+  IPC sem prefixo `scope:` — `listArchive`/`readArchivedSprint`/`canDispatch`
+  (convenção ADR-009 do repo, não `archive:list`/`leader:can-dispatch`); (3)
+  `probeWritePermission(**dirpath**)` com argumento (port primitivo não conhece
+  `sharedPath`); (4) refina a invariante C4 "sem métodos novos no port" —
+  capability primitiva ≠ operação de domínio (registrado no ADR-026 e CLAUDE).
+- **Logger sem worker:**
+  `createLogger('permission-service', { destination: process.stdout })` (JSON
+  síncrono) + `pino`/`pino-pretty`/`thread-stream` externalizados no main build
+  — evita o worker do pino-pretty quebrar sob asar/vite-plugin-electron (padrão
+  G-020).
+- **`details: ZodError` removido do IPC** (auto-auditoria) — só `code`+`message`
+  (string) cruzam o IPC; ZodError instance não é structured-clonável confiável.
+
+### Bloqueios encontrados
+
+Nenhum. `read-and-parse.test.ts` tinha 1 stub inline de `IFilesystemAdapter` que
+precisou do novo método (esperado em mudança aditiva de interface).
+
+### Próximo passo
+
+C3 (BL-C3-013 reconexão/backoff + BL-C3-014 som) **OU** C6 (BL-C6-002/003
+logging) — ambos sem deps externas pendentes. C5 (003/005/006) destrava C7-002 e
+o BL-C0-009. **C2 não tem mais itens** (W4 incluído).
+
+### Observações para a próxima sessão
+
+- C2 **ainda não usa `@sprint/ui-kit`** (migração é wave futura) — Histórico usa
+  CSS Modules + tokens locais. fs só no MAIN via IPC (hardening Electron
+  intacto). E2E do fluxo (BL-C8-004) é item futuro do C8.
+- **Questão aberta p/ Renan:** a verificação de permissão re-checa **só na
+  entrada da tela** (mount) + botão manual "Verificar novamente"; **não**
+  re-checa automaticamente antes de cada dispatch (o dispatch já é resiliente a
+  falha de escrita por operador). Confirmar se quer recheck pré-dispatch.
+- Validação manual do GUI Electron (`pnpm --filter sprint-leader dev`) fica para
+  o Renan — verificado aqui via build + 348 testes (o renderer depende de
+  `window.api`/preload, não roda em browser puro).
+- Órfão raríssimo `.permcheck-*.tmp` em `pending/` se o probe crashar entre
+  create e unlink (o Agent ignora; cleanup job não o remove). Negligenciável.
+
+---
+
 ## Sessão 46 — 2026-06-01 — Wave 3 · Componente C4 (fs-adapter) CONCLUÍDO — BL-C4-005 + BL-C4-008
 
 **Wave atual:** W3 (Production Readiness) **Itens:** [BL-C4-005, BL-C4-008]

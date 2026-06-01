@@ -87,8 +87,8 @@ compartilhada SMB é o único canal de comunicação.
 | Styling              | CSS Modules + PostCSS                        | nativo Vite — em uso em `sprint-leader`                                   |
 | Forms                | react-hook-form                              | 7.51+ — _pendente (avaliar em BL-C2-006, W2)_                             |
 | Validation           | Zod                                          | 3.23+ — instalada **3.25.x** (`@sprint/contracts`, `sprint-leader`)       |
-| Icons                | lucide-react                                 | 0.380+ — _pendente (avaliar em W2)_                                       |
-| Date/Time            | date-fns                                     | 3.6+ — _pendente_                                                         |
+| Icons                | lucide-react                                 | 0.380+ — instalada **0.460.0** (`sprint-leader`, W3.C2 — Histórico)       |
+| Date/Time            | date-fns                                     | 3.6+ — instalada **3.6.0** (`sprint-leader`, W3.C2 — Histórico)           |
 | IDs                  | ulid                                         | 2.3+ — instalada **2.4.x** (`@sprint/contracts`)                          |
 | HTML Sanitization    | isomorphic-dompurify                         | 2.10+ — instalada **2.36.0** (`@sprint/contracts`)                        |
 | Logging              | Pino + pino-roll                             | 9.x / 1.1+ — _pendente (C6)_                                              |
@@ -378,6 +378,77 @@ apps/leader/src/
 > alegavam 332); fs-adapter **308**; Agent **298** (chegou a 298 nas Sessões
 > 21-42 do C3, não 240); ui-kit **60**.
 
+> **Atualização W3 — BL-C2-010 + BL-C2-012 (Sessão 47) — C2 CONCLUÍDO:**
+>
+> Fecha o componente C2 (Leader) — sem itens em W4. Decisão em **ADR-026**. **C2
+> ainda NÃO usa `@sprint/ui-kit`** (migração é wave futura); Histórico usa CSS
+> Modules + tokens locais. **fs só no MAIN via IPC** (hardening intacto).
+>
+> **Novos services no main process:**
+>
+> - `ArchiveService` (BL-C2-010) — leitura read-only do histórico
+>   **compartilhado** (`arquivo/`, ≠ `historico/` local do Agent).
+>   `list(filter)` enriquece cada `ArchivedSprintRef` (C4) com payload + estado
+>   de ack + nome de exibição (best-effort via `OperatorsService`);
+>   `read(request)` devolve payload completo (com `body_html`). Pula sprints
+>   corrompidas (RN-09).
+> - `PermissionService` (BL-C2-012) — `canDispatch()` faz probe write em
+>   `pending/` via `adapter.probeWritePermission` + loga o resultado com o
+>   usuário Windows (`@sprint/logger`, **1º uso no Leader**; `getUsername`
+>   injetável). Mensagem de bloqueio em `PERMISSION_DENIED_REASON`.
+>
+> **Novos handlers IPC** (`main/ipc.ts`; convenção ADR-009 sem prefixo
+> `scope:`):
+>
+> - `listArchive(filter)` → `IpcResult<ListArchiveResponse>`.
+> - `readArchivedSprint(request)` → `IpcResult<ReadArchivedSprintResponse>`.
+> - `canDispatch()` → `IpcResult<CanDispatchResponse>`.
+> - Inputs validados via Zod em **`main/ipc-schemas.ts`** (módulo testável; o
+>   `ipc.ts` segue excluído do coverage). Só `code`+`message` (string) cruzam o
+>   IPC no erro — **nunca** o `ZodError` instance (não é structured-clonável).
+> - `rebuildDeps()` estende: instancia `ArchiveStore` + `ArchiveService` +
+>   `PermissionService` (com `permissionLogger` criado no module-scope).
+>
+> **Renderer:**
+>
+> - `routes/Historico/` funcional: filtros (data na fonte; operador/líder
+>   client-side), lista de **rodadas agrupadas por `sprint_id`**, detalhe
+>   (modal) com `body_html` re-sanitizado (§7.9) + `<TargetStatusList>`.
+>   `date-fns`/`ptBR`
+>   - `lucide-react`.
+> - `components/TargetStatusList/` (novo) — linhas de status/target extraídas do
+>   Acompanhamento (reuso, **sem duplicar UI**). `Acompanhamento` agora consome.
+> - Stores: `useArchiveStore` (filtros/lista/seleção + derivações **puras de
+>   args explícitos** —
+>   `filterAndGroupSprints`/`collect*Options`/`findGroupBySprintId` — consumidas
+>   via `useMemo`, não como selector reativo Zustand, para evitar o pitfall de
+>   nova-referência-a-cada-render); `usePermissionStore`
+>   (allowed/checking/reason + `check`).
+> - `NovaSprint`: gate integrado — botão "Disparar" desabilitado +
+>   `permissionBanner` + "Verificar novamente" quando `allowed === false`; check
+>   no mount. Demais telas acessíveis.
+> - `LeaderAPI`/preload/`services/api.ts`/test-setup alinhados (+3 métodos).
+>
+> **Logger sem worker:**
+> `createLogger('permission-service', { destination: process.stdout })` (JSON
+> síncrono) + `pino`/`pino-pretty`/`thread-stream` externalizados no main build
+> do Leader (`vite.config.ts`) — evita o worker do pino-pretty quebrar sob
+> asar/vite-plugin-electron (padrão G-020).
+>
+> **Toque aditivo no C4:** `probeWritePermission(dirpath)` na
+> `IFilesystemAdapter` — ver a subseção do fs-adapter abaixo.
+>
+> **Convenções/invariantes a NÃO violar** (futuras sessões):
+>
+> - C2 importa só de C1/C4/C6. **Proibido `@sprint/ui-kit` (C9) e C3** nesta
+>   wave.
+> - Histórico é **read-only** — nenhuma escrita/exclusão no `arquivo/`.
+> - Reuso do `<TargetStatusList>` em Acompanhamento + Histórico — não duplicar.
+>
+> **Testes:** Leader **280 → 348** (+68: ArchiveService, PermissionService,
+> ipc-schemas, useArchiveStore, usePermissionStore, TargetStatusList, Historico,
+> gate da NovaSprint); fs-adapter **382 → 394**.
+
 ### Estrutura interna de `@sprint/fs-adapter` (W1 domain layer)
 
 O package segue port-and-adapter hexagonal (ADR-013). Após W1.C4
@@ -448,6 +519,16 @@ packages/fs-adapter/src/
 - **MemoryFilesystemAdapter é o mock de fato** — não há classe paralela.
   Paridade Node↔Memory garantida pela contract suite W0; testes do domain layer
   usam Memory direto (sem tmpdir, sem flakiness).
+- **`probeWritePermission(dirpath)` no port (BL-C2-012 W3, ADR-026)** — única
+  capability **primitiva** adicionada ao port + ambos os adapters depois do W0.
+  Probe write+unlink: `NodeFilesystemAdapter` cria `.permcheck-<rand>.tmp` (flag
+  `wx`, cleanup garantido no `finally`, nome que **não** casa com o padrão de
+  sprint); `MemoryFilesystemAdapter` tem override `setProbeWritePermission` para
+  testes. **NÃO confundir com a invariante W3 abaixo** ("operações de arquivo
+  vivem no `ArchiveStore`, não no port"): aquela é sobre **operações de
+  domínio** (arquivamento compõe primitivos + regras de ULID/data). `probeWrite`
+  é **primitiva** (como `exists`/`stat`) — comportamento que **precisa diferir
+  por adapter** (FS real vs. stub), exatamente o que justifica viver no port.
 
 > **Atualização W3 — BL-C4-005 + BL-C4-008 (C4 CONCLUÍDO):**
 >

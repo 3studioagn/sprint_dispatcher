@@ -104,6 +104,10 @@ entradas em ordem cronológica crescente — mais recente no fim.
   na v1.0
 - [ADR-024](#adr-024-estrategia-de-assinatura-e-confianca-de-codigo-cert-auto-assinado--gpo)
   — Estratégia de assinatura e confiança de código (cert auto-assinado + GPO)
+- [ADR-025](#adr-025-politica-de-arquivamento-e-retencao-do-historico-compartilhado)
+  — Política de arquivamento e retenção do histórico compartilhado
+- [ADR-026](#adr-026-verificacao-de-permissao-do-lider-via-probe-de-escrita) —
+  Verificação de permissão do líder via probe de escrita
 
 ---
 
@@ -2919,3 +2923,86 @@ O C4 deve permanecer **dependency-pure** (Anexo B/D): apenas Node built-ins +
   (polling, não watch), ADR-006 (naming de arquivos com ULID).
 - Backlog v1.1 BL-C4-005, BL-C4-008; BL-C2-010 (destravado); Requisitos UC-07,
   UC-08, RN-08, RI-07, Anexo A.
+
+---
+
+## ADR-026: Verificação de permissão do líder via probe de escrita
+
+- **Status:** Accepted
+- **Data:** 2026-06-01
+- **Decisores:** Renan (3Studio)
+- **Endereça:** BL-C2-012 (gate de permissão antes do dispatch)
+
+> **Nota de numeração:** o prompt da sessão pediu "ADR-007", mas esse número já
+> está ocupado (ratificação do baseline de versões). Seguindo a regra "numeração
+> sequencial e única", esta decisão é **ADR-026** — mesma situação da Sessão 46
+> (prompt pedia ADR-006, usou-se ADR-025).
+
+### Contexto
+
+Apenas líderes (grupo "Sprint Leaders" no AD) podem escrever em
+`<shared_path>/pending/`, controle feito por **permissões NTFS** da pasta
+(RN-01, US-04.02, RNF-19). Antes de habilitar o botão "Disparar" na tela Nova
+Rodada, o Leader precisa saber se o **usuário Windows logado** realmente tem
+acesso de escrita — caso contrário o dispatch falha silenciosamente arquivo a
+arquivo, e o líder não entende por quê. Faltava um gate de UI com mensagem
+clara.
+
+A questão: como descobrir a permissão **efetiva** de escrita?
+
+### Decisão
+
+Testar a permissão com um **probe write + unlink** em `pending/`, exposto como
+capability primitiva `probeWritePermission(dirpath)` na `IFilesystemAdapter`
+(C4) e consumido pelo `PermissionService` do main do Leader via IPC
+`canDispatch`. O resultado dirige o gate do botão "Disparar" (desabilita +
+mensagem + "Verificar novamente"). **Não consultamos o AD.**
+
+- **Probe primitivo no adapter:** `NodeFilesystemAdapter` cria um arquivo
+  temporário (`.permcheck-<rand>.tmp`, nome que **não casa** com o padrão de
+  sprint, para o Agent não o confundir) com flag `wx`, fecha e remove (cleanup
+  garantido em `finally`); retorna `true`/`false` sem lançar.
+  `MemoryFilesystemAdapter` tem override configurável
+  (`setProbeWritePermission`) para testes do gate.
+- **Logging do resultado** via `@sprint/logger` (primeiro uso no Leader) com o
+  usuário Windows (`os.userInfo().username`) — `info` quando permitido, `warn`
+  quando negado.
+
+### Alternativas consideradas
+
+| Alternativa                               | Por que rejeitada                                                                                                                      |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| **`fs.access(W_OK)`**                     | Pouco confiável em shares SMB/NTFS — reflete o modo do arquivo, não a ACL efetiva; frequentemente diverge da realidade do `writeFile`. |
+| **Consulta direta ao AD**                 | Dependência extra (LDAP), não reflete a permissão **efetiva** de FS, e acopla a uma topologia de diretório específica.                 |
+| **Probe no MAIN do Leader sem o adapter** | Burla a abstração C4 (`fs` cru no main) que viabiliza a futura migração HTTP — toda I/O deve passar pelo adapter.                      |
+
+### Consequências
+
+- **Método aditivo no C4** (`probeWritePermission` no port + 2 adapters): refina
+  a invariante "sem métodos novos no port" da Sessão 46 — ali a regra era sobre
+  **operações de domínio** (arquivamento). Aqui é uma **capability primitiva**
+  (como `exists`/`stat`) cujo comportamento **precisa diferir por adapter** (FS
+  real vs. stub) — exatamente o que justifica viver no port. Aditivo: não quebra
+  consumidores (Agent/Leader).
+- **Desvio do prompt (assinatura):** o prompt sugeria `probeWritePermission()`
+  sem argumento; usamos `probeWritePermission(dirpath)` porque o port é
+  primitivo e **não conhece** `sharedPath`/`SHARED_DIRS` — quem resolve o
+  `pending/` é o `PermissionService` (domínio).
+- Pós-migração HTTP, o probe vira uma checagem de autorização no backend; a
+  superfície (`canDispatch`) permanece.
+- O gate é **defensivo na UI** — não substitui a permissão NTFS real (a fonte de
+  verdade continua sendo o filesystem). Um líder sem permissão vê o botão
+  desabilitado; quem tem, dispara normalmente.
+- Logging só de eventos de permissão (não é a integração ampla — essa é
+  BL-C6-002).
+
+### Referências
+
+- `packages/fs-adapter/src/interface.ts` (`probeWritePermission`),
+  `node-adapter.ts`, `memory-adapter.ts`.
+- `apps/leader/src/main/services/permissionService.ts`,
+  `apps/leader/src/renderer/stores/usePermissionStore.ts`,
+  `apps/leader/src/renderer/routes/NovaSprint/NovaSprint.tsx`.
+- ADR-013 (port-and-adapter), ADR-009 (IPC contract-first), ADR-020
+  (`@sprint/logger`).
+- Backlog v1.1 BL-C2-012; Requisitos RN-01, US-04.02, RNF-19.
