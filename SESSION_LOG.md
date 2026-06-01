@@ -146,6 +146,20 @@ e à prova de futuro. Padrão EXECUTAR → AUDITAR → REMEDIAR.
   quem guarda o `.pfx`. Cadastrar Secrets `WINDOWS_CERT_PFX_BASE64` +
   `WINDOWS_CERT_PASSWORD`.
 
+### Encerramento
+
+- **Merge via push direto em `develop`** (decisão de Renan; fluxo de deploy
+  estabelecido, espelha a Sessão 44), sem PR — supersede o passo "abrir PR" da
+  §9.3 do CLAUDE.md para este deploy. FF de `develop` (a50a319) → commit do
+  BL-C0-008.
+- O push em `develop` dispara **`ci.yml`** (ubuntu) + **`build-leader.yml`** +
+  **`build-agent.yml`** (windows, por path filter em `apps/*` + `pnpm-lock`). Os
+  build-\* fazem `make` **sem** assinar (`CSC_IDENTITY_AUTO_DISCOVERY=false`,
+  sem cert) — esperado verde. **`release.yml` NÃO dispara** (só em tag
+  `v*.*.*`).
+- Decisão do changeset (bump dos apps × ADR-001 `ignore`) segue **em aberto para
+  Renan** — registrada no `.changeset/c0-008-code-signing.md`.
+
 ## Sessão 44 — 2026-05-29 — Remediação pós-auditoria W2 · R1+R2+R3
 
 **Tipo:** Remediação (correção de findings; sem novas features) **Auditoria de
