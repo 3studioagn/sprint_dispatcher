@@ -23,6 +23,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import type { AckStateView } from '../../../shared/ipc-types';
 import { CancelSprintButton } from '../../components/CancelSprintButton';
+import { formatAckTime, TargetStatusList } from '../../components/TargetStatusList';
 import { api } from '../../services/api';
 import {
   selectHasCurrentSprint,
@@ -40,31 +41,6 @@ type LoadState =
   | { status: 'loading' }
   | { status: 'ok'; targets: readonly AckStateView[]; checked_at: string }
   | { status: 'error'; message: string };
-
-const STATE_LABEL: Record<AckStateView['state'], string> = {
-  nao_visto: 'Não visto',
-  visto: 'Visto',
-  confirmado: 'Confirmado',
-};
-
-const STATE_CLASS: Record<AckStateView['state'], string> = {
-  nao_visto: styles.stateNaoVisto ?? '',
-  visto: styles.stateVisto ?? '',
-  confirmado: styles.stateConfirmado ?? '',
-};
-
-function formatTime(iso: string | undefined): string | null {
-  if (iso === undefined) return null;
-  try {
-    return new Date(iso).toLocaleTimeString('pt-BR', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    });
-  } catch {
-    return null;
-  }
-}
 
 export function Acompanhamento() {
   const current = useTrackedSprintStore((s) => s.current);
@@ -177,7 +153,7 @@ export function Acompanhamento() {
           {load.status === 'ok' && (
             <div className={styles.summaryItem}>
               <dt className={styles.summaryLabel}>Atualizado</dt>
-              <dd className={styles.summaryValue}>{formatTime(load.checked_at) ?? '—'}</dd>
+              <dd className={styles.summaryValue}>{formatAckTime(load.checked_at) ?? '—'}</dd>
             </div>
           )}
         </dl>
@@ -190,41 +166,13 @@ export function Acompanhamento() {
       )}
 
       <section className={styles.targets} aria-label="Status por operador">
-        {load.status === 'loading' ? (
+        {load.status === 'loading' && (
           <p className={styles.loading} role="status">
             Consultando acks…
           </p>
-        ) : (
-          <ul className={styles.list}>
-            {(load.status === 'ok' ? load.targets : []).map((target) => {
-              const displayTime =
-                target.state === 'confirmado'
-                  ? formatTime(target.acknowledged_at)
-                  : target.state === 'visto'
-                    ? formatTime(target.displayed_at)
-                    : null;
-              const stateClass = STATE_CLASS[target.state];
-              return (
-                <li
-                  key={target.user_id}
-                  className={`${styles.targetRow} ${stateClass}`}
-                  data-state={target.state}
-                >
-                  <span className={styles.targetName}>{target.user_nome_exibicao}</span>
-                  <span className={styles.targetStatus}>
-                    <span className={styles.stateDot} aria-hidden="true" />
-                    <span className={styles.stateLabel}>{STATE_LABEL[target.state]}</span>
-                    {displayTime !== null && (
-                      <span className={styles.stateTime}>às {displayTime}</span>
-                    )}
-                  </span>
-                </li>
-              );
-            })}
-            {load.status === 'ok' && load.targets.length === 0 && (
-              <li className={styles.emptyTargets}>Nenhum operador nesta rodada.</li>
-            )}
-          </ul>
+        )}
+        {load.status === 'ok' && (
+          <TargetStatusList targets={load.targets} emptyLabel="Nenhum operador nesta rodada." />
         )}
       </section>
 
