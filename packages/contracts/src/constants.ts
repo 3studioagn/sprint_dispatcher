@@ -53,6 +53,31 @@ export const SHARED_DIRS = {
 } as const;
 
 /**
+ * Dias de retenção padrão antes de uma sprint/ack ser arquivada de
+ * `pending/`/`acks/` para `arquivo/<YYYY-MM-DD>/`.
+ *
+ * RN-08: arquivos com mais de 7 dias são movidos para o histórico.
+ * Sobrescrevível pelo job de limpeza (BL-C4-008) via `--retention-days`.
+ *
+ * @see Requisitos RN-08, UC-08
+ * @see DECISIONS.md ADR-025 (política de arquivamento e retenção)
+ */
+export const DEFAULT_RETENTION_DAYS = 7;
+
+/**
+ * Nome do arquivo de log do job de limpeza, gravado na raiz de
+ * `arquivo/` (não dentro de uma pasta de data).
+ *
+ * Anexo A: `<shared_path>/arquivo/log-limpeza.txt`. Consumidores que
+ * listam `arquivo/` (ex.: `ArchiveStore.listArchive`) devem ignorar
+ * este nome — não é uma pasta de data.
+ *
+ * @see Requisitos Anexo A
+ * @see DECISIONS.md ADR-025
+ */
+export const CLEANUP_LOG_FILENAME = 'log-limpeza.txt';
+
+/**
  * Diretórios locais da estação do operador.
  *
  * Caminhos absolutos finais (com `ProgramData/...`) são compostos por C3

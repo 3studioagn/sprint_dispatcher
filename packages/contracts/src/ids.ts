@@ -1,4 +1,4 @@
-import { ulid } from 'ulid';
+import { decodeTime, ulid } from 'ulid';
 
 /**
  * Regex Crockford Base32 (RFC ULID).
@@ -42,4 +42,27 @@ export function generateSprintId(): string {
  */
 export function isValidUlid(value: string): boolean {
   return typeof value === 'string' && ULID_REGEX.test(value);
+}
+
+/**
+ * Decodifica o timestamp (milissegundos desde a epoch Unix, UTC)
+ * embutido nos 10 primeiros caracteres de um ULID.
+ *
+ * Usado pelo histórico compartilhado (BL-C4-005) para derivar a pasta
+ * de data de origem (`arquivo/<YYYY-MM-DD>/`) diretamente do `sprint_id`
+ * — sem precisar ler o conteúdo do arquivo. Como o Leader gera o ULID e
+ * serializa `criado_em` (UTC) no mesmo instante, a data UTC decodificada
+ * aqui coincide com a de `criado_em`.
+ *
+ * @param value - ULID de 26 chars (Crockford Base32).
+ * @returns Timestamp em ms (UTC).
+ * @throws Error se `value` não for um ULID válido.
+ *
+ * @see DECISIONS.md ADR-025 (política de arquivamento)
+ */
+export function decodeUlidTime(value: string): number {
+  if (!isValidUlid(value)) {
+    throw new Error(`ULID inválido: "${value}" — não é possível decodificar o timestamp`);
+  }
+  return decodeTime(value);
 }

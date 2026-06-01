@@ -11,7 +11,9 @@
 // === Constantes ===
 export {
   ALLOWED_HTML_TAGS,
+  CLEANUP_LOG_FILENAME,
   DEFAULT_POLLING_INTERVAL_MS,
+  DEFAULT_RETENTION_DAYS,
   DEFAULT_SHOW_DURATION_SECONDS,
   DEFAULT_SPRINT_TITLE,
   LOCAL_DIRS,
@@ -21,7 +23,10 @@ export {
 } from './constants';
 
 // === IDs ===
-export { generateSprintId, isValidUlid, ULID_REGEX } from './ids';
+export { decodeUlidTime, generateSprintId, isValidUlid, ULID_REGEX } from './ids';
+
+// === Datas (histórico compartilhado) ===
+export { ARCHIVE_DATE_REGEX, formatArchiveDate, isArchiveDateFolder } from './dates';
 
 // === Errors ===
 export { ContractValidationError } from './errors';

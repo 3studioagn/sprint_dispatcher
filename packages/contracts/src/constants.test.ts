@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 
 import {
   ALLOWED_HTML_TAGS,
+  CLEANUP_LOG_FILENAME,
   DEFAULT_POLLING_INTERVAL_MS,
+  DEFAULT_RETENTION_DAYS,
   DEFAULT_SHOW_DURATION_SECONDS,
   DEFAULT_SPRINT_TITLE,
   LOCAL_DIRS,
@@ -58,5 +60,18 @@ describe('constants', () => {
   it('MAX_DEADLINE_HORIZON_HOURS é positivo e razoável', () => {
     expect(MAX_DEADLINE_HORIZON_HOURS).toBeGreaterThan(0);
     expect(MAX_DEADLINE_HORIZON_HOURS).toBeLessThanOrEqual(72);
+  });
+
+  it('DEFAULT_RETENTION_DAYS reflete RN-08 (7 dias)', () => {
+    expect(DEFAULT_RETENTION_DAYS).toBe(7);
+    expect(Number.isInteger(DEFAULT_RETENTION_DAYS)).toBe(true);
+    expect(DEFAULT_RETENTION_DAYS).toBeGreaterThan(0);
+  });
+
+  it('CLEANUP_LOG_FILENAME é um nome de arquivo simples (sem separadores)', () => {
+    expect(CLEANUP_LOG_FILENAME).toBe('log-limpeza.txt');
+    expect(CLEANUP_LOG_FILENAME).not.toContain('/');
+    expect(CLEANUP_LOG_FILENAME).not.toContain('\\');
+    expect(CLEANUP_LOG_FILENAME).not.toContain('..');
   });
 });

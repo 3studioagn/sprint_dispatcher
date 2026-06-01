@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { generateSprintId, isValidUlid, ULID_REGEX } from './ids';
+import { decodeUlidTime, generateSprintId, isValidUlid, ULID_REGEX } from './ids';
 
 describe('generateSprintId', () => {
   it('retorna string de exatamente 26 caracteres', () => {
@@ -80,5 +80,30 @@ describe('isValidUlid', () => {
     expect(isValidUlid(12345)).toBe(false);
     // @ts-expect-error - testando defesa de runtime contra objeto
     expect(isValidUlid({})).toBe(false);
+  });
+});
+
+describe('decodeUlidTime', () => {
+  it('decodifica o timestamp canônico da spec do ULID', () => {
+    // Vetor da spec ULID: 01ARYZ6S41TSV4RRFFQ69G5FAV → 1469918176385.
+    expect(decodeUlidTime('01ARYZ6S41TSV4RRFFQ69G5FAV')).toBe(1469918176385);
+  });
+
+  it('round-trip: o timestamp decodificado bate com o instante de geração', () => {
+    const before = Date.now();
+    const id = generateSprintId();
+    const after = Date.now();
+    const decoded = decodeUlidTime(id);
+    // ULID tem resolução de 1 ms; o instante decodificado fica no intervalo.
+    expect(decoded).toBeGreaterThanOrEqual(before);
+    expect(decoded).toBeLessThanOrEqual(after);
+  });
+
+  it('lança para ULID inválido (tamanho errado)', () => {
+    expect(() => decodeUlidTime('01HX9K2M')).toThrow(/ULID inválido/);
+  });
+
+  it('lança para caracteres inválidos (I/L/O/U)', () => {
+    expect(() => decodeUlidTime('01HX9K2M4F8N7P2Q5R3S6T7U8W')).toThrow(/ULID inválido/);
   });
 });

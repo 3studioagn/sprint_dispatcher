@@ -75,8 +75,11 @@ export class FilesystemIOError extends FilesystemError {
 /**
  * Operação de domain layer ainda não implementada.
  *
- * Stubs de módulos de domínio (`cancel-store`, `archive-store`) lançam
- * esta exceção até que BL-C4-004 (W2) e BL-C4-005 (W3) sejam entregues.
+ * Erro de propósito geral para stubs de operações futuras. Foi usado
+ * pelos stubs de `cancel-store` (BL-C4-004, W2) e `archive-store`
+ * (BL-C4-005, W3) — **ambos agora implementados**, então nenhum store o
+ * lança atualmente. Mantido na API pública por ser reutilizável em
+ * stubs futuros (W4+) sem reabrir o pacote de erros.
  *
  * Subclasse de {@link FilesystemError} para preservar `instanceof
  * FilesystemError` único nos consumers — tratamento de erros do

@@ -30,8 +30,16 @@ export {
   type WriteAckResult,
 } from './domain/ack-store';
 
-// === Domain — Cancel (BL-C4-004 — stub W2) ===
+// === Domain — Cancel (BL-C4-004 — W2) ===
 export { CancelStore, type WriteCancelResult } from './domain/cancel-store';
 
-// === Domain — Archive (BL-C4-005 — stub W3) ===
-export { ArchiveStore, type MoveToArchiveResult } from './domain/archive-store';
+// === Domain — Archive (BL-C4-005 — W3) ===
+export {
+  ArchiveStore,
+  type ArchiveAckResult,
+  type ArchivedSprint,
+  type ArchivedSprintRef,
+  type ArchiveOutcome,
+  type ArchiveSprintResult,
+  type ListArchiveFilter,
+} from './domain/archive-store';

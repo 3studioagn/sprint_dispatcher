@@ -12,6 +12,9 @@
  * vazio) são tratadas com `try/catch` aceitando ambos os outcomes.
  */
 import {
+  buildPendingFilename,
+  decodeUlidTime,
+  formatArchiveDate,
   generateSprintId,
   parseSprintAck,
   parseSprintCancel,
@@ -22,7 +25,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { setupTmpShared } from '../__helpers__/tmpFixtures';
-import { DirectoryNotFoundError, NotImplementedError } from '../errors';
+import { DirectoryNotFoundError } from '../errors';
 import { AckStore, ArchiveStore, CancelStore, PendingStore } from '../index';
 import type { IFilesystemAdapter } from '../interface';
 import { MemoryFilesystemAdapter } from '../memory-adapter';
@@ -250,23 +253,68 @@ function describeParity(label: string, factory: AdapterFactory): void {
     });
 
     // ===================================================================
-    // Stubs (ArchiveStore W3)
+    // ArchiveStore (BL-C4-005)
     // ===================================================================
 
-    describe('Stubs — NotImplementedError com mesma mensagem em ambos adapters', () => {
-      it('ArchiveStore.moveToArchive lança NotImplementedError com operationName "moveToArchive"', async () => {
-        const store = new ArchiveStore(ctx.adapter, ctx.sharedPath);
+    describe('ArchiveStore', () => {
+      it('archiveSprint move sprint + ack para arquivo/<data>/ em ambos adapters', async () => {
+        const sprintId = generateSprintId();
+        const userId = 'joao';
+        const expectedDate = formatArchiveDate(decodeUlidTime(sprintId));
+        const pendingStore = new PendingStore(ctx.adapter, ctx.sharedPath);
+        const ackStore = new AckStore(ctx.adapter, ctx.sharedPath);
+        const archiveStore = new ArchiveStore(ctx.adapter, ctx.sharedPath);
 
-        try {
-          await store.moveToArchive('foo.json');
-          expect.fail('moveToArchive deveria ter lançado');
-        } catch (err) {
-          expect(err).toBeInstanceOf(NotImplementedError);
-          if (err instanceof NotImplementedError) {
-            expect(err.operationName).toBe('moveToArchive');
-            expect(err.message).toContain('moveToArchive');
-          }
+        const { filename: sprintFilename } = await pendingStore.writePendingSprint(
+          buildPayload({ sprint_id: sprintId, user_id: userId }),
+        );
+        const { filename: ackFilename } = await ackStore.writeAck(
+          buildAck({ sprint_id: sprintId, user_id: userId }),
+        );
+
+        const result = await archiveStore.archiveSprint(sprintFilename);
+
+        expect(result.outcome).toBe('archived');
+        expect(result.date).toBe(expectedDate);
+        expect(result.ackFilename).toBe(ackFilename);
+
+        // Originais saíram de pending/ e acks/, destino populado.
+        await expect(ctx.adapter.exists(result.sprintArchivedTo!)).resolves.toBe(true);
+        await expect(ctx.adapter.exists(result.ackArchivedTo!)).resolves.toBe(true);
+        const sprintFrom = `${ctx.sharedPath}/pending/${sprintFilename}`.replace(/\/+/g, '/');
+        await expect(ctx.adapter.exists(sprintFrom)).resolves.toBe(false);
+      });
+
+      it('listArchive + readArchivedSprint round-trip em ambos adapters', async () => {
+        const sprintId = generateSprintId();
+        const userId = 'maria';
+        const pendingStore = new PendingStore(ctx.adapter, ctx.sharedPath);
+        const ackStore = new AckStore(ctx.adapter, ctx.sharedPath);
+        const archiveStore = new ArchiveStore(ctx.adapter, ctx.sharedPath);
+
+        await pendingStore.writePendingSprint(
+          buildPayload({ sprint_id: sprintId, user_id: userId }),
+        );
+        await ackStore.writeAck(buildAck({ sprint_id: sprintId, user_id: userId }));
+        await archiveStore.archiveSprint(buildPendingFilename(sprintId, userId));
+
+        const refs = await archiveStore.listArchive();
+        expect(refs).toHaveLength(1);
+        const [ref] = refs;
+        expect(ref?.sprintId).toBe(sprintId);
+        expect(ref?.userId).toBe(userId);
+        expect(ref?.hasAck).toBe(true);
+
+        if (ref !== undefined) {
+          const detail = await archiveStore.readArchivedSprint(ref);
+          expect(detail.payload.sprint_id).toBe(sprintId);
+          expect(detail.ack?.sprint_id).toBe(sprintId);
         }
+      });
+
+      it('listArchive retorna [] quando arquivo/ não existe (ambos adapters)', async () => {
+        const archiveStore = new ArchiveStore(ctx.adapter, ctx.sharedPath);
+        await expect(archiveStore.listArchive()).resolves.toEqual([]);
       });
     });
   });
