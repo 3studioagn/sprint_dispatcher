@@ -9,6 +9,7 @@ import '@sprint/ui-kit/styles.css';
 
 import App from './App';
 import PillApp from './PillApp';
+import SetupApp from './SetupApp';
 import './styles/global.css';
 
 const rootElement = document.getElementById('root');
@@ -17,22 +18,30 @@ if (!rootElement) {
   throw new Error('Elemento #root não encontrado no DOM');
 }
 
-// BL-C3-017: o main process carrega esta mesma index.html em DUAS
-// BrowserWindows distintas (overlay fullscreen + pill). O pill window
-// recebe `?pill` na query — usamos isso para escolher o root a montar.
-// Mesma surface IPC (preload é compartilhado), mas roots diferentes.
-const isPillWindow = new URLSearchParams(window.location.search).has('pill');
+// O main process carrega esta mesma index.html em janelas distintas, escolhidas
+// pela query string (mesma surface IPC, roots diferentes):
+//   - `?pill`  → overlay minimizado (BL-C3-017)
+//   - `?setup` → wizard de configuração inicial (BL-C5-006)
+//   - (sem query) → overlay fullscreen
+const params = new URLSearchParams(window.location.search);
+const isPillWindow = params.has('pill');
+const isSetupWindow = params.has('setup');
 
-// Sessão 26 fix: ambos windows precisam de body transparente para que
-// transparent BrowserWindows funcionem visualmente — sem isso, o body
-// dark (var(--sprint-color-background)) bloqueia toda a transparência.
-// pill-mode existe desde BL-C3-017; overlay-mode é novo.
+// Pill e overlay precisam de body transparente (BrowserWindow transparent —
+// Sessão 26). O wizard é uma janela OPACA comum → `setup-mode` mantém o
+// background do tema (não transparenta).
 if (isPillWindow) {
   document.body.classList.add('pill-mode');
+} else if (isSetupWindow) {
+  document.body.classList.add('setup-mode');
 } else {
   document.body.classList.add('overlay-mode');
 }
 
-ReactDOM.createRoot(rootElement).render(
-  <React.StrictMode>{isPillWindow ? <PillApp /> : <App />}</React.StrictMode>,
-);
+function selectRoot(): JSX.Element {
+  if (isPillWindow) return <PillApp />;
+  if (isSetupWindow) return <SetupApp />;
+  return <App />;
+}
+
+ReactDOM.createRoot(rootElement).render(<React.StrictMode>{selectRoot()}</React.StrictMode>);

@@ -1,11 +1,12 @@
 /**
  * Testes do loader de config do Agent (W1).
  *
- * Mocka `app.getPath('userData')` para um tmp dir único da run. Cada
- * teste cria/destrói o config dentro desse tmp. O `shared_path` aponta
- * para outro tmp dir por conveniência, mas a partir de ADR-027 o loader
- * NÃO valida mais a acessibilidade do `shared_path` (virou condição de
- * runtime da máquina de reconexão — ver `boot resiliente` abaixo).
+ * Aponta o data root (ADR-028) para um tmp dir único da run via a env
+ * `SPRINT_AGENT_DATA_DIR` — `getConfigPath()` resolve `<tmp>/config.json`
+ * independente da plataforma. Cada teste cria/destrói o config dentro desse
+ * tmp. O `shared_path` aponta para outro tmp dir por conveniência, mas a
+ * partir de ADR-027 o loader NÃO valida mais a acessibilidade do `shared_path`
+ * (virou condição de runtime da máquina de reconexão).
  *
  * Cobertura alvo: 100% lines/branches/funcs em `config.ts`.
  */
@@ -14,7 +15,7 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   ConfigError,
@@ -55,8 +56,17 @@ const VALID_CONFIG: Record<string, unknown> = {
 };
 
 beforeAll(async () => {
-  // shared_path real (diretório) — necessário pela validação fs.stat
+  // ADR-028: o data root resolve via getAgentDataDir(); o override de env
+  // aponta para o tmp da run — determinístico, sem tocar o ProgramData real
+  // nem depender da plataforma do runner (win32 vs CI Linux).
+  process.env.SPRINT_AGENT_DATA_DIR = mockUserDataDir;
+  // shared_path real (diretório). A partir de ADR-027 o loader NÃO valida mais
+  // a acessibilidade do shared_path; mantido por conveniência das fixtures.
   await fs.mkdir(mockSharedDir, { recursive: true });
+});
+
+afterAll(() => {
+  delete process.env.SPRINT_AGENT_DATA_DIR;
 });
 
 beforeEach(async () => {

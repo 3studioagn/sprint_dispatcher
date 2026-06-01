@@ -46,7 +46,7 @@ export function ConfigErrorScreen({ error }: ConfigErrorScreenProps) {
         <header className={styles.header}>
           <h1 className={styles.title}>{TITLE_BY_CODE[error.code]}</h1>
           <p className={styles.subtitle}>
-            Sprint Leader precisa de um <code>config.json</code> válido para iniciar.
+            Metas - Liderança precisa de um <code>config.json</code> válido para iniciar.
           </p>
         </header>
 

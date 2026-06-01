@@ -1,6 +1,6 @@
 name: Build Leader
 
-# Builda o .exe do Sprint Leader num runner Windows limpo do GitHub.
+# Builda o .exe do Leader "Metas - Liderança" num runner Windows limpo do GitHub.
 # Necessário porque o ESET na máquina local trava o app.asar e impede o
 # electron-builder de gerar o instalador (ver CLAUDE.md §12 G-009).
 on:

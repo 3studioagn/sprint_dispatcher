@@ -119,12 +119,29 @@ describe('computeTrayMenu', () => {
     }
   });
 
-  it('todos os estados: header "Sprint Operator Agent" sempre presente e desabilitado', () => {
+  it('todos os estados: header da marca sempre presente em menu[0] e desabilitado', () => {
     for (const state of [LOADING, IDLE, SPRINT_1, CONFIG_ERROR]) {
       const menu = computeTrayMenu(state);
-      expect(menu[0]?.label).toBe('Sprint Operator Agent');
+      expect(menu[0]?.label).toBe('Metas - Desenhistas');
       expect(menu[0]?.enabled).toBe(false);
     }
+  });
+
+  describe('BL-C5-006 — item "Configurar…"', () => {
+    it('config_error: presente e habilitado com action open-setup', () => {
+      const menu = computeTrayMenu(CONFIG_ERROR);
+      const setup = menu.find((i) => i.label === 'Configurar…');
+      expect(setup).toBeDefined();
+      expect(setup?.enabled).toBe(true);
+      expect(setup?.action).toBe('open-setup');
+    });
+
+    it('não aparece fora de config_error', () => {
+      for (const state of [LOADING, IDLE, SPRINT_1]) {
+        const menu = computeTrayMenu(state);
+        expect(menu.find((i) => i.label === 'Configurar…')).toBeUndefined();
+      }
+    });
   });
 
   it('nenhum estado expõe item "Sair" — RN-04 W1', () => {
@@ -260,7 +277,7 @@ describe('computeTrayMenu — item "Status da conexão" (BL-C3-013)', () => {
 
   it('header continua em menu[0] (item de status vem depois)', () => {
     const menu = computeTrayMenu(IDLE, ONLINE);
-    expect(menu[0]?.label).toBe('Sprint Operator Agent');
+    expect(menu[0]?.label).toBe('Metas - Desenhistas');
     expect(menu[1]?.label).toBe('Conexão: conectado');
   });
 });

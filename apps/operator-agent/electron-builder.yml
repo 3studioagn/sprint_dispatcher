@@ -1,8 +1,10 @@
-appId: br.com.artflexiveis.sprintoperatoragent
-productName: Sprint Operator Agent
+appId: br.com.artflexiveis.metas.desenhistas
+productName: Metas - Desenhistas
 
-# Versão lida do package.json automaticamente
-artifactName: SprintOperatorAgent-${version}-${arch}.${ext}
+# Versão lida do package.json automaticamente. Nome de artefato (instalador)
+# normalizado p/ ASCII sem espaços (URL/CI/release-safe); o productName acima
+# carrega o nome de exibição com acentos/espaços (Start Menu, exe, pasta).
+artifactName: Metas-Desenhistas-${version}-${arch}.${ext}
 
 # Diretórios
 directories:
@@ -70,19 +72,23 @@ nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
-  artifactName: SprintOperatorAgent-Setup-${version}.${ext}
+  artifactName: Metas-Desenhistas-Setup-${version}.${ext}
   installerLanguages:
     - pt_BR
   language: '1046' # pt-BR
-  shortcutName: Sprint Operator Agent
+  shortcutName: Metas - Desenhistas
   createDesktopShortcut: false # agent vive na tray — atalho no desktop é poluição
   createStartMenuShortcut: true
-  runAfterFinish: true # inicia o agent logo após instalar
-  deleteAppDataOnUninstall: false # preserva o config.json na desinstalação
+  runAfterFinish: true # inicia o agent logo após instalar → first-run wizard (BL-C5-006)
+  deleteAppDataOnUninstall: false # preserva config/historico (ficam em ProgramData; ADR-028)
+  # Auto-start em HKCU\...\Run (BL-C5-003, ADR-028). electron-builder inclui
+  # `build/installer.nsh` por padrão; explicitado aqui para auditabilidade.
+  # As macros customInstall/customUnInstall escrevem/removem a entrada de Run.
+  include: build/installer.nsh
 
 # Portable
 portable:
-  artifactName: SprintOperatorAgent-${version}-portable.${ext}
+  artifactName: Metas-Desenhistas-${version}-portable.${ext}
   requestExecutionLevel: user # NÃO admin — operação no contexto do usuário (R-03)
 
 # Metadata

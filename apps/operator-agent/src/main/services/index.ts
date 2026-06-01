@@ -49,3 +49,24 @@ export {
 
 // Pill — BL-C3-017 (W2) — badge minimizado pós-ack
 export { PillService } from './pillService';
+
+// Auto-start — BL-C5-003 (W3) — registro defensivo no HKCU Run
+export {
+  ensureAutoStartRegistered,
+  normalizeRunValue,
+  parseRegQueryValue,
+  WindowsRegistryRunAccessor,
+  type AutoStartLogger,
+  type AutoStartOutcome,
+  type EnsureAutoStartDeps,
+  type RegistryRunAccessor,
+} from './autoStart';
+
+// Wizard de first-run — BL-C5-006 (W3)
+export {
+  buildAgentConfigFromInput,
+  probeSharedPathConnection,
+  writeConfigAtomic,
+  type ProbeDeps,
+} from './setupService';
+export { SetupWizardService } from './setupWizardService';

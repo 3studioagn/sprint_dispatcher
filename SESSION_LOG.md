@@ -66,6 +66,84 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 49 — 2026-06-01 — Wave 3 · C5 (Installer & Deployment) — escopo W3 concluído — BL-C5-003 + BL-C5-005 + BL-C5-006
+
+**Wave atual:** W3 (Production Readiness) **Itens:** [BL-C5-003, BL-C5-005,
+BL-C5-006] **Branch:** `feature/C5-wave3-installer` **Status:** ✅ Escopo de W3
+do C5 concluído. Pendentes p/ W4: BL-C5-004 (Scheduled Task) e BL-C5-007
+(instalador silencioso).
+
+### Objetivo
+
+Entregar o escopo de W3 do C5: auto-start do Agent (HKCU Run), nomeação
+versionada dos artefatos e wizard de configuração inicial (first-run). Padrão
+EXECUTAR → AUDITAR → REMEDIAR.
+
+### O que foi feito
+
+- **Rename do produto (decisão Renan, via AskUserQuestion):** Leader →
+  **"Metas - Liderança"**, Agent → **"Metas - Desenhistas"**.
+  `productName`/`appId`/`artifactName`/títulos de janela/tray/diálogos/pasta de
+  dados seguem o novo nome; nomes de pacote npm e pastas do repo permanecem.
+  `src/shared/branding.ts` centraliza o nome (Agent).
+- **BL-C5-005 — artifactName determinístico:**
+  `Metas-Lideranca-Setup-${version}.exe` e
+  `Metas-Desenhistas-Setup-${version}.exe` (ASCII-safe). Destrava BL-C0-009.
+- **BL-C5-003 — auto-start:** hook NSIS `build/installer.nsh`
+  (customInstall/customUnInstall → HKCU Run) + auto-registro defensivo
+  idempotente no boot (`main/services/autoStart.ts` via `reg.exe`, acessor
+  injetável). Cobre a pegadinha Program Files × HKCU (per-machine/admin). HKCU,
+  nunca HKLM; só o Agent (Leader manual — RN-12).
+- **BL-C5-006 — wizard first-run:** janela `?setup` (`SetupWizardService` +
+  `SetupApp`/`SetupWizard`). Coleta `user_id`/`shared_path` (+ display name
+  opcional), deriva `hostname`, defaults Anexo F, valida via Zod no MAIN
+  (`setup:save`), grava `config.json`. "Testar conexão" (`setup:probe`)
+  reaproveita `isConnectivityError` (BL-C3-013) + `listPending` (C4). Sem `fs`
+  no renderer. Tray ganhou "Configurar…" em `config_error`.
+- **Data root em `C:\ProgramData\Metas - Desenhistas\`** (config + historico +
+  logs), via `main/paths.ts`, criado no first-run — supersede o `userData` do W1
+  (ADR-012). Fallback userData fora de Windows; override `SPRINT_AGENT_DATA_DIR`
+  em testes.
+- **Docs/infra:** ADR-028; changeset (agent minor, leader patch).
+
+### Estado atual
+
+- BL-C5-003: ✅ concluído. BL-C5-005: ✅. BL-C5-006: ✅. (escopo W3 do C5)
+- BL-C5-004 / BL-C5-007: ⏸️ W4.
+- Gates locais verdes: `format:check` · `type-check` · `lint` (7/7) · `test`
+  (11/11 — Agent **354 → 409**, Leader **348 → 352**) · `build` (6/6). Coverage
+  do Agent 96/89/93/96 (threshold 70/70/65/70). Build do `.exe` segue no CI
+  windows (ESET local — G-009).
+
+### Decisões tomadas
+
+- **ADR-028** — auto-start (NSIS + auto-registro), wizard first-run, data root
+  ProgramData, rename. Numeração: prompt pediu "ADR-009" (ocupado) → ADR-028.
+- O `.docx` de Requisitos v1.2 é **template misturado** (RF/RN de outro sistema
+  — "prova digital"); fonte real do C5 = Backlog v1.1 + Stack §15.3 + repo.
+
+### Bloqueios encontrados
+
+- Nenhum bloqueante. **Questão aberta p/ Renan:** confirmar com o TI se o
+  `C:\ProgramData\Metas - Desenhistas\` precisa de ACL/elevação quando
+  pré-criado (no first-run pelo Agent não precisa — o usuário vira dono).
+
+### Próximo passo
+
+- BL-C0-009 (fechar o C0 — pipeline de release, agora com nomes determinísticos)
+  OU C6 (BL-C6-002/003 logging) OU C7 (docs — BL-C7-002 desbloqueado).
+
+### Observações para a próxima sessão
+
+- `installer.nsh` é auto-incluído pelo electron-builder (default
+  `nsis.include = build/installer.nsh`); explicitado no yml. O **nome do valor
+  de Run** no NSH DEVE casar com `AUTO_START_REGISTRY_VALUE` (branding.ts) —
+  guarda em `packaging.test.ts`.
+- O **SETUP.md** de ambos os apps tem refs stale (nome antigo + `%APPDATA%`) —
+  atualizar na doc de TI (BL-C7-002).
+- Auto-registro só roda em `app.isPackaged` (em dev `app.getPath('exe')` é o
+  electron.exe).
+
 ## Sessão 48 — 2026-06-01 — Wave 3 · Componente C3 (Operator Agent) CONCLUÍDO — BL-C3-013 + BL-C3-014
 
 **Wave atual:** W3 (Production Readiness) **Itens:** [BL-C3-013, BL-C3-014]

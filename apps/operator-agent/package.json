@@ -26,6 +26,8 @@
     "@sprint/ui-kit": "workspace:*",
     "date-fns": "^3.6.0",
     "lucide-react": "^0.380.0",
+    "pino": "^9.0.0",
+    "pino-pretty": "^11.0.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "zod": "^3.25.0",

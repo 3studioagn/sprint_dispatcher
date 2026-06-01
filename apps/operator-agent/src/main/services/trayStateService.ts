@@ -22,6 +22,8 @@
  * @see DECISIONS.md ADR-027 (reconexão com backoff + sinalização vermelho/verde)
  */
 
+import { APP_DISPLAY_NAME } from '../../shared/branding';
+
 import type { ConnectionStatus } from './connectivity';
 
 /**
@@ -60,10 +62,18 @@ export type TrayIconColor = 'gray' | 'yellow' | 'red' | 'green';
  *
  * - `show-current`: restaura overlay minimizado (sprint atual).
  * - `reopen-last`: reabre último aviso do histórico local (BL-C3-009).
- * - `open-history`: abre `<userData>/historico/` no Explorer.
+ * - `open-history`: abre `<dataDir>/historico/` no Explorer.
+ * - `open-setup`: abre o wizard de configuração inicial (BL-C5-006) — usado no
+ *   estado `config_error` para o operador (re)configurar a estação.
  * - `about`: dialog "Sobre".
  */
-export type TrayMenuAction = 'show-current' | 'reopen-last' | 'open-history' | 'about' | null;
+export type TrayMenuAction =
+  | 'show-current'
+  | 'reopen-last'
+  | 'open-history'
+  | 'open-setup'
+  | 'about'
+  | null;
 
 /**
  * Item de menu. `enabled: false` cria itens visíveis mas inativos
@@ -146,24 +156,24 @@ export function computeTrayTooltip(
   connection: ConnectionStatus | null = null,
 ): string {
   if (state.kind === 'config_error') {
-    return `Sprint Operator Agent — ${state.reason}`;
+    return `${APP_DISPLAY_NAME} — ${state.reason}`;
   }
   if (connection !== null && !connection.online) {
     const last = connection.lastConnectedAt;
     const suffix = last !== null ? ` (última conexão ${formatHhMm(last)})` : '';
-    return `Sprint Operator Agent — sem conexão com a pasta compartilhada${suffix}`;
+    return `${APP_DISPLAY_NAME} — sem conexão com a pasta compartilhada${suffix}`;
   }
   switch (state.kind) {
     case 'loading':
-      return 'Sprint Operator Agent — iniciando…';
+      return `${APP_DISPLAY_NAME} — iniciando…`;
     case 'idle': {
       const prefix = connection?.online ? 'conectado · ' : '';
-      return `Sprint Operator Agent — ${prefix}aguardando sprints`;
+      return `${APP_DISPLAY_NAME} — ${prefix}aguardando sprints`;
     }
     case 'sprint_active': {
       const n = state.queueLength;
-      if (n === 1) return 'Sprint Operator Agent — 1 sprint na fila';
-      return `Sprint Operator Agent — ${n} sprints na fila`;
+      if (n === 1) return `${APP_DISPLAY_NAME} — 1 sprint na fila`;
+      return `${APP_DISPLAY_NAME} — ${n} sprints na fila`;
     }
   }
 }
@@ -174,6 +184,8 @@ export function computeTrayTooltip(
  * Estrutura constante (item visível em todo estado), mas `enabled` e
  * `label` mudam por estado/conexão:
  *
+ * - "Configurar…" (BL-C5-006): aparece SÓ em `config_error` (habilitado) —
+ *   reabre o wizard de first-run se o operador fechou a janela.
  * - "Status da conexão" (BL-C3-013): item informativo (desabilitado) que
  *   reflete `connection` — conectado / sem conexão (última: HH:MM).
  * - "Mostrar sprint atual": habilitado só em `sprint_active`.
@@ -190,12 +202,17 @@ export function computeTrayMenu(
 ): readonly TrayMenuItem[] {
   const hasSprint = state.kind === 'sprint_active';
   const canReopen = state.kind === 'idle';
-  return [
-    {
-      label: 'Sprint Operator Agent',
-      enabled: false,
-      action: null,
-    },
+  const isConfigError = state.kind === 'config_error';
+
+  const items: TrayMenuItem[] = [{ label: APP_DISPLAY_NAME, enabled: false, action: null }];
+
+  // Em config_error o operador precisa de uma forma de (re)abrir o wizard
+  // caso tenha fechado a janela de first-run (BL-C5-006).
+  if (isConfigError) {
+    items.push({ label: 'Configurar…', enabled: true, action: 'open-setup' });
+  }
+
+  items.push(
     {
       label: formatConnectionStatusLabel(connection),
       enabled: false,
@@ -213,13 +230,15 @@ export function computeTrayMenu(
     },
     {
       label: 'Histórico local',
-      enabled: state.kind !== 'config_error',
-      action: state.kind !== 'config_error' ? 'open-history' : null,
+      enabled: !isConfigError,
+      action: !isConfigError ? 'open-history' : null,
     },
     {
       label: 'Sobre',
       enabled: true,
       action: 'about',
     },
-  ] as const;
+  );
+
+  return items;
 }

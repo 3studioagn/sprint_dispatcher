@@ -58,6 +58,19 @@ body.overlay-mode #root {
 }
 
 /*
+ * Wizard de first-run (BL-C5-006): janela OPACA comum (não transparent). Mantém
+ * o background do tema e permite rolagem interna do formulário se necessário.
+ */
+body.setup-mode,
+body.setup-mode #root {
+  background: var(--sprint-color-background);
+}
+
+body.setup-mode {
+  overflow: auto;
+}
+
+/*
  * Sessão 25 — override do background do <ThemeProvider> do ui-kit nas
  * janelas onde transparência é necessária. ThemeProvider.module.css do
  * ui-kit aplica `background: var(--sprint-color-background)` (dark)

@@ -23,22 +23,28 @@
  * @see CLAUDE.md §8.1 — segurança obrigatória Electron
  */
 
-import path from 'node:path';
+import os from 'node:os';
 
 import { NodeFilesystemAdapter, AckStore, PendingStore } from '@sprint/fs-adapter';
 import { createLogger } from '@sprint/logger';
 import { app, dialog, ipcMain, shell } from 'electron';
 
+import { APP_DISPLAY_NAME, AUTO_START_REGISTRY_VALUE } from '../shared/branding';
 import type {
   AcknowledgeSprintRequest,
   AcknowledgeSprintResponse,
   ConfigStatusResponse,
   IncomingSprintEvent,
   IpcResult,
+  SetupProbeRequest,
+  SetupProbeResult,
+  SetupSaveInput,
+  SetupSaveResult,
 } from '../shared/ipc-types';
 
-import { ConfigError, loadConfig, type RuntimeConfig } from './config';
+import { ConfigError, getConfigPath, loadConfig, type RuntimeConfig } from './config';
 import { handleAck as handleAckOrchestration } from './handlers/handleAck';
+import { ensureAgentDataDirs, getAgentDataDir, getHistoryDir } from './paths';
 import {
   AckService,
   HistoryService,
@@ -46,7 +52,14 @@ import {
   PillService,
   PollingService,
   QueueService,
+  SetupWizardService,
   TrayService,
+  WindowsRegistryRunAccessor,
+  buildAgentConfigFromInput,
+  ensureAutoStartRegistered,
+  probeSharedPathConnection,
+  writeConfigAtomic,
+  type AutoStartLogger,
   type PollingLogger,
   type TrayActionHandler,
 } from './services';
@@ -81,6 +94,20 @@ const pollLog: PollingLogger = {
   },
 };
 
+// BL-C5-003 — logger do auto-registro de auto-start (HKCU Run).
+const autoStartLogger = createLogger('auto-start', { destination: process.stdout });
+const autoStartLog: AutoStartLogger = {
+  debug: (msg, ctx) => {
+    autoStartLogger.debug(ctx ?? {}, msg);
+  },
+  info: (msg, ctx) => {
+    autoStartLogger.info(ctx ?? {}, msg);
+  },
+  warn: (msg, ctx) => {
+    autoStartLogger.warn(ctx ?? {}, msg);
+  },
+};
+
 // =============================================================================
 // Crash visibility — uncaughtException global (G-023)
 // =============================================================================
@@ -99,7 +126,7 @@ process.on('uncaughtException', (err: Error) => {
   const message = `${err.message}\n\n${err.stack ?? '(sem stack)'}`;
   // showErrorBox não exige whenReady; é seguro em qualquer momento do boot.
   try {
-    dialog.showErrorBox('Sprint Operator Agent — Erro fatal', message);
+    dialog.showErrorBox(`${APP_DISPLAY_NAME} — Erro fatal`, message);
   } catch {
     // Última linha de defesa: console.error ao menos persiste em log do
     // electron-builder quando inicia o app via "Run from console".
@@ -112,7 +139,7 @@ process.on('unhandledRejection', (reason: unknown) => {
   const err = reason instanceof Error ? reason : new Error(String(reason));
   const message = `Promise rejeitada sem catch: ${err.message}\n\n${err.stack ?? '(sem stack)'}`;
   try {
-    dialog.showErrorBox('Sprint Operator Agent — Erro fatal', message);
+    dialog.showErrorBox(`${APP_DISPLAY_NAME} — Erro fatal`, message);
   } catch {
     console.error('[fatal] unhandledRejection', err);
   }
@@ -124,6 +151,10 @@ process.on('unhandledRejection', (reason: unknown) => {
 // =============================================================================
 
 const trayService = new TrayService();
+
+// BL-C5-006 — janela do wizard de first-run. Instanciada eager (sem custo até
+// `show()`); aberta no boot quando há ConfigError e via tray "Configurar…".
+const setupWizardService = new SetupWizardService();
 
 let currentConfig: RuntimeConfig | null = null;
 
@@ -152,7 +183,7 @@ const handleTrayAction: TrayActionHandler = (action) => {
       trayService.showAboutDialog();
       return;
     case 'open-history': {
-      void shell.openPath(path.join(app.getPath('userData'), 'historico'));
+      void shell.openPath(getHistoryDir());
       return;
     }
     case 'show-current':
@@ -160,6 +191,10 @@ const handleTrayAction: TrayActionHandler = (action) => {
       return;
     case 'reopen-last':
       void handleReopenLast();
+      return;
+    case 'open-setup':
+      // BL-C5-006 — reabre o wizard se o operador fechou a janela em config_error.
+      setupWizardService.show();
       return;
   }
 };
@@ -267,7 +302,9 @@ async function rebuildDeps(): Promise<RuntimeConfig> {
     const ackStoreLocal = new AckStore(adapter, config.sharedPath);
 
     const queueLocal = new QueueService();
-    const historyLocal = new HistoryService(app.getPath('userData'));
+    // ADR-028: data root migrou de app.getPath('userData') para
+    // C:\ProgramData\<APP_DATA_DIR_NAME> (Windows) via getAgentDataDir().
+    const historyLocal = new HistoryService(getAgentDataDir());
     const overlayLocal = new OverlayService({
       minimizeAfterMs: config.minimizeAfterMs,
       // BL-C3-014: som ao exibir overlay (exibição inicial), configurável.
@@ -334,8 +371,11 @@ async function rebuildDeps(): Promise<RuntimeConfig> {
     ackService = ackLocal;
     pollingService = pollingLocal;
 
-    // Garante <userData>/historico/ + popula cache do historyService
-    // a partir de arquivos pré-existentes (dedup pós-restart).
+    // ADR-028: garante o data root + historico/ + logs/ em ProgramData
+    // (estrutura do Anexo B / Stack §15.3 criada no first-run). Em seguida,
+    // popula o cache do historyService a partir de arquivos pré-existentes
+    // (dedup pós-restart).
+    await ensureAgentDataDirs();
     await historyLocal.ensureFolder();
     await historyLocal.initializeFromDisk();
 
@@ -442,6 +482,53 @@ function registerIpcHandlers(): void {
   ipcMain.handle('pill:end-drag', (): void => {
     pillService?.endDrag();
   });
+
+  // setup:probe / setup:save — BL-C5-006 — wizard de first-run. Inputs validados
+  // no MAIN (Zod via buildAgentConfigFromInput); o renderer não toca em `fs`.
+  ipcMain.handle('setup:probe', (_e, req: SetupProbeRequest): Promise<SetupProbeResult> => {
+    const sharedPath = req.shared_path;
+    // Adapter/store efêmeros só para a sondagem — não persistem estado.
+    const adapter = new NodeFilesystemAdapter();
+    const pendingStore = new PendingStore(adapter, sharedPath);
+    return probeSharedPathConnection({
+      listPending: () => pendingStore.listPending(),
+      existsRoot: () => adapter.exists(sharedPath),
+    });
+  });
+
+  ipcMain.handle('setup:save', async (_e, input: SetupSaveInput): Promise<SetupSaveResult> => {
+    const built = buildAgentConfigFromInput(input, os.hostname());
+    if (!built.ok) {
+      return { ok: false, code: 'VALIDATION', message: built.message };
+    }
+    const configPath = getConfigPath();
+    try {
+      await writeConfigAtomic(configPath, built.config);
+      await ensureAgentDataDirs();
+    } catch (err) {
+      return {
+        ok: false,
+        code: 'WRITE',
+        message: err instanceof Error ? err.message : String(err),
+      };
+    }
+    // Destrava a operação normal: rebuildDeps carrega o config recém-escrito,
+    // instancia os services e inicia o polling. Em seguida fecha o wizard após
+    // um instante (deixa o renderer exibir "salvo" antes da janela sumir).
+    try {
+      await rebuildDeps();
+    } catch (err) {
+      return {
+        ok: false,
+        code: 'UNKNOWN',
+        message: err instanceof Error ? err.message : String(err),
+      };
+    }
+    setTimeout(() => {
+      setupWizardService.close();
+    }, 800);
+    return { ok: true, configPath };
+  });
 }
 
 // =============================================================================
@@ -459,6 +546,23 @@ async function bootstrap(): Promise<void> {
 
   trayService.boot({ kind: 'loading' }, handleTrayAction);
 
+  // BL-C5-003 — auto-registro defensivo do auto-start (HKCU Run). Só em produção
+  // empacotada — em dev `app.getPath('exe')` é o electron.exe (não faz sentido
+  // registrar). Não-fatal e não bloqueante (o hook NSIS cobre o caminho feliz).
+  if (app.isPackaged) {
+    void ensureAutoStartRegistered({
+      accessor: new WindowsRegistryRunAccessor(),
+      valueName: AUTO_START_REGISTRY_VALUE,
+      exePath: app.getPath('exe'),
+      log: autoStartLog,
+    });
+  }
+
+  // Registra handlers IPC ANTES de eventualmente abrir o wizard — o renderer do
+  // wizard chama setup:probe/save no mount (handlers são lazy: só disparam
+  // quando o renderer invoca, então registrar antes de rebuildDeps é seguro).
+  registerIpcHandlers();
+
   try {
     await rebuildDeps();
   } catch (err) {
@@ -467,9 +571,10 @@ async function bootstrap(): Promise<void> {
     }
     trayService.setState({ kind: 'config_error', reason: err.message });
     trayService.displayConfigErrorBalloon(err.message);
+    // BL-C5-006 — first-run / config inválida: abre o wizard para o operador
+    // configurar a estação (em vez de só sinalizar no tray).
+    setupWizardService.show();
   }
-
-  registerIpcHandlers();
 }
 
 void bootstrap();
