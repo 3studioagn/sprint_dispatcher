@@ -1,0 +1,72 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+out/
+build/
+.vite/
+.turbo/
+
+# Exceto: buildResources do electron-builder (icones, assets do instalador)
+!apps/*/build/
+
+# Test outputs
+coverage/
+*.lcov
+.nyc_output/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# IDE / editor — ignore tudo exceto configs compartilhadas
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+
+# Claude Code / Claude Preview — config local por dev
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Electron
+release/
+app-builds/
+*.exe
+*.msi
+*.app
+*.dmg
+
+# Code signing (BL-C0-008) — a chave privada NUNCA entra no Git.
+# `.certs/` é a saída de cert:gen; `*.pfx` em qualquer lugar fica de fora.
+# O `.cer` (chave pública) pode ser versionado se conveniente — não é ignorado.
+.certs/
+*.pfx
+
+# Misc
+.cache/
+.tmp/
+*.tmp
+
+# Artefatos temporarios de auditorias (extrações markdown de .docx + outputs
+# de comandos baseline). Resumos consolidados ficam em AUDIT_*_pre_*.md +
+# TECH_DEBT.md — `.audit-tmp/` em si é working storage, não historico.
+.audit-tmp/

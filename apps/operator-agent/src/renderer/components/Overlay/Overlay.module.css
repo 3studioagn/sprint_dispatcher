@@ -1,0 +1,187 @@
+/*
+ * Overlay (host wrapper) — CSS Module aplicado ao body slot do
+ * `<Overlay>` do `@sprint/ui-kit`. Chrome (card, header, botão) vem do
+ * próprio ui-kit; aqui ficam só os estilos do conteúdo específico do
+ * Agent.
+ *
+ * Sessão 31 — refactor para matchar design 'Hora do Rush!' enviado
+ * pelo Renan. Layout: metricRow (value+unit baseline + deadline coluna)
+ * + footerRow (✓ + label + data badge). Mesma estrutura visual da
+ * `<Pill>` expanded do ui-kit, escalada para overlay fullscreen.
+ *
+ * Magnitudes EXCLUSIVAMENTE via tokens `--sprint-*`. Card do ui-kit já
+ * limita largura via max-width: 720px — não precisa duplicar
+ * constraint aqui.
+ */
+
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  color: var(--sprint-color-text-muted);
+  font-size: var(--sprint-font-size-xl);
+  background: var(--sprint-color-background);
+}
+
+/* ============================================================
+ * Body slot — duas linhas estruturadas matching imagem-alvo
+ * ============================================================ */
+
+.sprintBody {
+  /* Sessão 41 — Renan: "diminua o gap dos elementos dentro dela, pra
+   * eles ficarem mais juntos". space-5 (20) → space-3 (12). */
+  display: flex;
+  flex-direction: column;
+  gap: var(--sprint-space-3);
+}
+
+/* ----- Row 1: métrica gigante + deadline coluna ----- */
+
+.metricRow {
+  /* Sessão 39 — Renan: "ficou desalinhado, o bloco do horário ficou
+   * mais para baixo do que o de Artes". Causa: `flex-end` alinha pelo
+   * BOTTOM da box do flex child, mas a baseline visual do texto fica
+   * acima do bottom (depende de line-height e font metrics — o
+   * line-height tight 1.2 do `.valueBig` (4xl) cria gap entre
+   * baseline e bottom).
+   *
+   * Fix: `align-items: last baseline`. Alinha pela baseline do ÚLTIMO
+   * item baseline-participating de cada flex child:
+   * - metricGroup (row baseline): baseline única ("4 Artes").
+   * - deadlineGroup (column): baseline do ÚLTIMO item = "18:00h".
+   *
+   * Resultado: "Artes" e "18:00h" compartilham a MESMA linha de
+   * baseline visual, harmonia que `flex-end` não consegue. */
+  display: flex;
+  justify-content: space-between;
+  align-items: last baseline;
+  gap: var(--sprint-space-6);
+}
+
+.metricGroup {
+  /* Row + baseline alignment — "20" grande + "Artes" pequeno em linha,
+   * ancorados pela base do número. Mesmo padrão da `<Pill>` expanded do
+   * ui-kit (Sessão 29).
+   * Sessão 34: gap space-3 → space-4 — mais respiração entre o número
+   * gigante e a unidade, matching espaçamento do design alvo. */
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: var(--sprint-space-4);
+}
+
+.valueBig {
+  /* 4xl (120px) para "20" gigante matching design — operador de longe
+   * deve ler a meta sem esforço. */
+  font-size: var(--sprint-font-size-4xl);
+  font-weight: var(--sprint-font-weight-bold);
+  line-height: var(--sprint-line-height-tight);
+  color: var(--sprint-color-text);
+  font-feature-settings: 'tnum';
+}
+
+.unit {
+  /* Sessão 41 — Renan: "padronizar Artes/Suas metas/Até em 300".
+   * regular (400) → light (300). */
+  font-size: var(--sprint-font-size-xl);
+  color: var(--sprint-color-text-muted);
+  font-weight: var(--sprint-font-weight-light);
+}
+
+.deadlineGroup {
+  /* Sessão 37 — Renan comparou screenshot vs design alvo: "Até fica
+   * alinhado a esquerda, e não a direita". Empilhado em coluna (como
+   * Sessão 36), mas align-items flex-end → flex-start: "Até" e
+   * "18:00h" alinhados pela ESQUERDA do bloco do deadline. */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sprint-space-1);
+}
+
+.deadlineLabel {
+  /* Sessão 38: base (16px) → lg (18px). Renan: "aumente o Até um
+   * pouco". Mantém hierarquia abaixo do "18:00h".
+   * Sessão 41: weight light (300) explícito — padronização com
+   * Artes/Suas metas/Até. */
+  font-size: var(--sprint-font-size-lg);
+  color: var(--sprint-color-text-muted);
+  font-weight: var(--sprint-font-weight-light);
+}
+
+.deadlineValue {
+  /* Sessão 38 — Renan: "diminua o horario um pouco" + "diminua um
+   * pouco o font weight do horario". Tipografia mais leve, harmoniza
+   * com o "20 Artes" ao lado sem dominar visualmente.
+   * - font-size: 3xl (48px) → 2xl (32px).
+   * - font-weight: bold (700) → medium (500). (Evita o token
+   *   `--sprint-font-weight-semibold` que está alterado para 300
+   *   em tokens.css; medium fica firme sem ser pesado.) */
+  font-size: var(--sprint-font-size-2xl);
+  font-weight: var(--sprint-font-weight-medium);
+  color: var(--sprint-color-text);
+  line-height: var(--sprint-line-height-tight);
+  font-feature-settings: 'tnum';
+}
+
+/* ----- Row 2: ✓ label + data badge ----- */
+
+.footerRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--sprint-space-4);
+}
+
+.labelGroup {
+  display: flex;
+  align-items: center;
+  gap: var(--sprint-space-3);
+}
+
+.icon {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  color: var(--sprint-color-primary);
+}
+
+.label {
+  /* Sessão 40 — Renan: "diminua o font weight de Suas metas". regular
+   * (400) → light (300). Token light + import do Inter 300 introduzidos
+   * em tokens.css na mesma sessão. */
+  font-size: var(--sprint-font-size-xl);
+  color: var(--sprint-color-text-muted);
+  font-weight: var(--sprint-font-weight-light);
+  white-space: nowrap;
+}
+
+.dateBadge {
+  /* Sessão 34: badge mais compacto matching design alvo.
+   * font base (16) → sm (14); padding space-2/space-4 → space-1/space-3.
+   * Sessão 41 — Renan: "padding um pouco maior nas laterais da data".
+   * Horizontal space-3 (12) → space-4 (16). */
+  font-size: var(--sprint-font-size-sm);
+  color: var(--sprint-color-text-muted);
+  background: var(--sprint-color-surface);
+  padding: var(--sprint-space-1) var(--sprint-space-4);
+  border-radius: var(--sprint-radius-pill);
+  font-feature-settings: 'tnum';
+}
+
+/* ----- Surfaces de erro/warning (preservadas do W1) ----- */
+
+.error {
+  font-size: var(--sprint-font-size-base);
+  color: var(--sprint-color-danger);
+  margin-top: var(--sprint-space-2);
+  text-align: center;
+}
+
+.warning {
+  font-size: var(--sprint-font-size-base);
+  color: var(--sprint-color-warning);
+  margin-top: var(--sprint-space-2);
+  text-align: center;
+}

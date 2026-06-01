@@ -1,0 +1,187 @@
+/**
+ * <Overlay> — styling
+ *
+ * Replica a estrutura visual do design 'Hora do Rush!' anexado na
+ * sessão. Card preto com cantos arredondados grandes; HEADER BAR com
+ * background distinto (surface-elevated) ocupa o topo do card e
+ * exibe o title; body slot preenchido pelo host; botão "Recebido"
+ * laranja com glow expressivo na base, com gap visível em volta.
+ *
+ * Magnitudes EXCLUSIVAMENTE via tokens --sprint-* (zero hex hardcoded).
+ *
+ * Layout (Sessão 31 refactor — antes header era inline ao card com
+ * border-bottom; agora é uma seção visual distinta com bg próprio):
+ *
+ * - .overlay: wrapper fullscreen com backdrop discreto
+ * - .card: container centralizado, preto puro, border-radius lg,
+ *   SEM padding interno (cada section controla o seu)
+ * - .header: bar com bg surface-elevated, cantos arredondados topo,
+ *   padding interno, title centralizado
+ * - .body: padding interno generoso, slot para conteúdo do consumidor
+ * - .acknowledgeButton: laranja com glow, margem nas laterais/bottom
+ *   para criar respiração visual entre body e botão
+ */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sprint-color-backdrop);
+  padding: var(--sprint-space-6);
+  z-index: 9999;
+}
+
+/* Placeholder para hardening visual futuro — variant 'urgent' não tem
+ * tratamento exclusivo no MVP (reservado para wave 4). */
+.overlay--urgent {
+  /* TODO: estilo mais agressivo quando o variant for ativado em
+   * sessão futura (ex: borda animada, pulse, cor mais saturada). */
+}
+
+.card {
+  background: var(--sprint-color-background-deep);
+  border-radius: var(--sprint-radius-lg);
+  box-shadow: var(--sprint-shadow-lg);
+  /* Sessão 31: padding REMOVIDO do .card — cada section controla o
+   * próprio para que o header possa ter bg distinto sem gap no topo. */
+  /* Sessão 32: max-width 720 → 520px. Renan reportou que o card
+   * estava largo demais comparado com a imagem-alvo.
+   * Sessão 40: 520 → 480px — "levemente menor na largura".
+   * Sessão 41: 480 → 560px — Renan: "no geral, a overlay esta hoje
+   * como um quadrado, preciso dela mais como um retângulo". Mais
+   * wide + body com padding lateral maior + vertical menor cria
+   * proporção horizontal pronunciada. */
+  max-width: 560px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  /* `overflow: hidden` garante que os cantos arredondados do card
+   * clipam o bg do header (que ocupa toda a largura no topo). */
+  overflow: hidden;
+  /* Entrance animation (Sessão 25) — fade + slide do topo + slight scale.
+   * cubic-bezier(0.16, 1, 0.3, 1) é o "ease-out expo" (snappy +
+   * decelerating) — sensação de "aterrissou de cima" sem bouncing. */
+  animation: overlay-card-enter 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes overlay-card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    animation: none;
+  }
+}
+
+.header {
+  /* Sessão 32: bg `surface-subtle` (#111) substitui `surface-elevated`
+   * (#2A) — Renan: "o fundo onde está escrito 'É hora de correr' deve
+   * ser um pouco mais escuro, apenas um tom acima do preto mesmo".
+   * Token novo introduzido em tokens.css na mesma sessão.
+   * Sessão 34: padding vertical space-5 → space-4 — header bar mais
+   * fina, matching proporção do design alvo. */
+  background: var(--sprint-color-surface-subtle);
+  text-align: center;
+  /* Sessão 40 — Renan: "aumente um pouco mais o padding do box que
+   * tem a frase 'É hora de correr'". Vertical space-4 (16) →
+   * space-5 (20); horizontal mantém space-6 (24). */
+  padding: var(--sprint-space-5) var(--sprint-space-6);
+}
+
+.title {
+  font-size: var(--sprint-font-size-2xl);
+  /* Sessão 34: regular → medium. Sessão 41 — Renan: "diminua o font
+   * weight da frase 'É hora de correr'". Padroniza com Artes/Suas
+   * metas/Até em light (300). */
+  font-weight: var(--sprint-font-weight-light);
+  line-height: var(--sprint-line-height-tight);
+  color: var(--sprint-color-text);
+  margin: 0;
+}
+
+.body {
+  /* Sessão 31: padding generoso para criar respiração entre header
+   * e conteúdo estruturado do host.
+   * Sessão 35: space-6 → space-7 (uniforme).
+   * Sessão 41: space-6 vertical / space-8 lateral (24/32) — retangular.
+   * Sessão 42 — Renan: "aumente o espaçamento interno pra
+   * consequentemente os elementos ficarem mais proximos um do outro".
+   * Vertical 24 → 28 (space-7); lateral 32 → 40 (space-10). Área útil
+   * reduzida + `justify-content: space-between` no metricRow/footerRow
+   * = grupos se aproximam horizontalmente. */
+  padding: var(--sprint-space-7) var(--sprint-space-10);
+  font-size: var(--sprint-font-size-lg);
+  line-height: var(--sprint-line-height-normal);
+  color: var(--sprint-color-text);
+}
+
+.acknowledgeButton {
+  /* Sessão 31: margin nas laterais e bottom (era width: 100% +
+   * sem margin) para criar gap visível entre body e botão, matching
+   * design alvo onde o botão "Recebido" tem respiração ao redor. */
+  margin: 0 var(--sprint-space-6) var(--sprint-space-6);
+  background: var(--sprint-color-primary);
+  color: var(--sprint-color-primary-on);
+  font-family: inherit;
+  /* Sessão 40 — Renan: "aumente levemente a font" do botão. lg (18)
+   * → xl (24). Mantém peso bold da Sessão 34. */
+  font-size: var(--sprint-font-size-xl);
+  /* Sessão 34: semibold → bold. Sessão 41 — Renan: "diminua o font
+   * weight do botão para 300". Bold (700) → light (300); peso fino
+   * padronizado com o resto do overlay. */
+  font-weight: var(--sprint-font-weight-light);
+  padding: var(--sprint-space-4) var(--sprint-space-6);
+  border-radius: var(--sprint-radius-pill);
+  border: none;
+  cursor: pointer;
+  box-shadow: var(--sprint-shadow-primary-glow);
+  transition:
+    background-color 120ms ease-in-out,
+    box-shadow 200ms ease-in-out;
+  /* Pulse sutil do glow (Sessão 25) — chama atenção do operador para a
+   * ação primária sem ser intrusivo. Loop infinito com pausa entre
+   * pulsos via timing function descontínua (60% no estado base). */
+  animation: ack-button-pulse 2400ms ease-in-out infinite;
+}
+
+@keyframes ack-button-pulse {
+  0%,
+  60%,
+  100% {
+    box-shadow: var(--sprint-shadow-primary-glow);
+  }
+  30% {
+    box-shadow:
+      var(--sprint-shadow-primary-glow),
+      0 0 32px var(--sprint-color-primary-glow);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .acknowledgeButton {
+    animation: none;
+  }
+}
+
+.acknowledgeButton:hover {
+  background: var(--sprint-color-primary-hover);
+}
+
+.acknowledgeButton:active {
+  background: var(--sprint-color-primary-active);
+}
+
+.acknowledgeButton:focus-visible {
+  outline: 2px solid var(--sprint-color-primary);
+  outline-offset: 4px;
+}

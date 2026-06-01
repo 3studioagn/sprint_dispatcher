@@ -1,0 +1,70 @@
+:root {
+  /* Cores — dark theme + accent amarelo (design Renan, Gate 7 W1.C2) */
+  --color-bg: #0a0a0a;
+  --color-bg-elevated: #1c1c1c;
+  --color-surface: #2a2a2a;
+  --color-accent: #f5a557;
+  --color-accent-hover: #e8943c;
+  --color-accent-text: #0a0a0a;
+  --color-success: #16a34a;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --color-text: #ffffff;
+  --color-text-muted: #909090;
+  --color-text-subtle: #606060;
+  --color-border: #2a2a2a;
+  --color-border-strong: #404040;
+
+  /* Surfaces light (para dropdowns/inputs com contraste deliberado, ex.: Horario) */
+  --color-input-bg: #f5f5f5;
+  --color-input-text: #0a0a0a;
+
+  /* Espaçamentos */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 50px;
+  --space-12: 60px;
+
+  /* Tipografia */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-size-xs: 12px;
+  --font-size-sm: 14px;
+  --font-size-base: 16px;
+  --font-size-lg: 18px;
+  --font-size-xl: 24px;
+  --font-size-2xl: 32px;
+  --font-size-3xl: 48px;
+
+  /* Bordas e sombras */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-button: 14px;
+  --radius-pill: 9999px;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.6);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
+  color: var(--color-text);
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+}

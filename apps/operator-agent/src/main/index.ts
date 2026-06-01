@@ -1,0 +1,603 @@
+/**
+ * Sprint Operator Agent — Main process entrypoint (W1, Gate 6).
+ *
+ * Responsabilidades:
+ *
+ * - Single instance lock (impede 2 agents na mesma estação).
+ * - Boot do `TrayService` com estado `loading`.
+ * - Tenta `rebuildDeps()` — carrega config + instancia services + start
+ *   polling. Em sucesso atualiza tray; em falha vira `config_error` +
+ *   balloon. Fail-soft.
+ * - Wire eventos:
+ *   - `queueService.onNextSprint` → `overlayService.showSprint` + grava
+ *     ack inicial (`displayed_at`) via `ackService.writeDisplayed`.
+ *   - `queueService.onQueueUpdated` → `overlayService.sendQueueUpdate` +
+ *     `refreshTrayState`.
+ * - Registra handlers IPC:
+ *   - `config:get`, `sprint:request-current` (Gate 4)
+ *   - `sprint:acknowledge` (Gate 6 — orquestra ack final + archive +
+ *     deletePending + dequeue + próxima sprint)
+ *
+ * @see DECISIONS.md ADR-011 — arquitetura tray-resident
+ * @see DECISIONS.md ADR-017 — rebuildDeps callback no Leader (precedent)
+ * @see CLAUDE.md §8.1 — segurança obrigatória Electron
+ */
+
+import os from 'node:os';
+
+import { NodeFilesystemAdapter, AckStore, PendingStore } from '@sprint/fs-adapter';
+import { createLogger } from '@sprint/logger';
+import { app, dialog, ipcMain, shell } from 'electron';
+
+import { APP_DISPLAY_NAME, AUTO_START_REGISTRY_VALUE } from '../shared/branding';
+import type {
+  AcknowledgeSprintRequest,
+  AcknowledgeSprintResponse,
+  ConfigStatusResponse,
+  IncomingSprintEvent,
+  IpcResult,
+  SetupProbeRequest,
+  SetupProbeResult,
+  SetupSaveInput,
+  SetupSaveResult,
+} from '../shared/ipc-types';
+
+import { ConfigError, getConfigPath, loadConfig, type RuntimeConfig } from './config';
+import { handleAck as handleAckOrchestration } from './handlers/handleAck';
+import { ensureAgentDataDirs, getAgentDataDir, getHistoryDir } from './paths';
+import {
+  AckService,
+  HistoryService,
+  OverlayService,
+  PillService,
+  PollingService,
+  QueueService,
+  SetupWizardService,
+  TrayService,
+  WindowsRegistryRunAccessor,
+  buildAgentConfigFromInput,
+  ensureAutoStartRegistered,
+  probeSharedPathConnection,
+  writeConfigAtomic,
+  type AutoStartLogger,
+  type PollingLogger,
+  type TrayActionHandler,
+} from './services';
+import { acquireSingleInstanceLock } from './single-instance';
+
+const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
+const IS_DEV = Boolean(DEV_SERVER_URL);
+
+// =============================================================================
+// Logger — BL-C3-013 (1º uso de @sprint/logger no Agent)
+// =============================================================================
+//
+// `destination: process.stdout` → JSON síncrono, sem worker do pino-pretty
+// (quebraria sob asar/vite-plugin-electron — padrão G-020 do Leader). Usado
+// para as transições de conexão do PollingService. A integração ampla
+// (substituir os console.* restantes) permanece BL-C6-002.
+const pollingLogger = createLogger('polling-service', { destination: process.stdout });
+
+/** Adapta o `Logger` (@sprint/logger, obj-first) à interface `PollingLogger` (msg-first). */
+const pollLog: PollingLogger = {
+  debug: (msg, ctx) => {
+    pollingLogger.debug(ctx ?? {}, msg);
+  },
+  info: (msg, ctx) => {
+    pollingLogger.info(ctx ?? {}, msg);
+  },
+  warn: (msg, ctx) => {
+    pollingLogger.warn(ctx ?? {}, msg);
+  },
+  error: (msg, ctx) => {
+    pollingLogger.error(ctx ?? {}, msg);
+  },
+};
+
+// BL-C5-003 — logger do auto-registro de auto-start (HKCU Run).
+const autoStartLogger = createLogger('auto-start', { destination: process.stdout });
+const autoStartLog: AutoStartLogger = {
+  debug: (msg, ctx) => {
+    autoStartLogger.debug(ctx ?? {}, msg);
+  },
+  info: (msg, ctx) => {
+    autoStartLogger.info(ctx ?? {}, msg);
+  },
+  warn: (msg, ctx) => {
+    autoStartLogger.warn(ctx ?? {}, msg);
+  },
+};
+
+// =============================================================================
+// Crash visibility — uncaughtException global (G-023)
+// =============================================================================
+//
+// Sem este handler, qualquer throw NÃO capturado durante boot (ex: Tray icon
+// ausente do asar, BrowserWindow falhando antes do tray, etc.) mata o processo
+// silenciosamente em prod — sem console visível, sem balloon, sem feedback.
+// O operador da fábrica abre o atalho e "nada acontece".
+//
+// dialog.showErrorBox é síncrono e funciona mesmo antes do app.whenReady em
+// muitas plataformas; é a única forma garantida de o usuário saber que houve
+// um erro fatal. Após exibir, encerramos com exit code 1 (não app.quit, que
+// passa pelo lifecycle window-all-closed que cancelaria o quit).
+
+process.on('uncaughtException', (err: Error) => {
+  const message = `${err.message}\n\n${err.stack ?? '(sem stack)'}`;
+  // showErrorBox não exige whenReady; é seguro em qualquer momento do boot.
+  try {
+    dialog.showErrorBox(`${APP_DISPLAY_NAME} — Erro fatal`, message);
+  } catch {
+    // Última linha de defesa: console.error ao menos persiste em log do
+    // electron-builder quando inicia o app via "Run from console".
+    console.error('[fatal]', err);
+  }
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason: unknown) => {
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  const message = `Promise rejeitada sem catch: ${err.message}\n\n${err.stack ?? '(sem stack)'}`;
+  try {
+    dialog.showErrorBox(`${APP_DISPLAY_NAME} — Erro fatal`, message);
+  } catch {
+    console.error('[fatal] unhandledRejection', err);
+  }
+  process.exit(1);
+});
+
+// =============================================================================
+// Estado do processo
+// =============================================================================
+
+const trayService = new TrayService();
+
+// BL-C5-006 — janela do wizard de first-run. Instanciada eager (sem custo até
+// `show()`); aberta no boot quando há ConfigError e via tray "Configurar…".
+const setupWizardService = new SetupWizardService();
+
+let currentConfig: RuntimeConfig | null = null;
+
+/**
+ * Services instanciados no PRIMEIRO `rebuildDeps()` bem-sucedido.
+ * Pattern instantiate-once — recovery de config re-valida mas não recria.
+ */
+let queueService: QueueService | null = null;
+let historyService: HistoryService | null = null;
+let overlayService: OverlayService | null = null;
+let pillService: PillService | null = null;
+let pendingStore: PendingStore | null = null;
+let ackService: AckService | null = null;
+// pollingService é wired em Gate 5+ (`stop()` no `before-quit` lifecycle).
+// O timer interno mantém o ciclo via setTimeout recursivo independente.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+let pollingService: PollingService | null = null;
+
+// =============================================================================
+// Tray action wiring
+// =============================================================================
+
+const handleTrayAction: TrayActionHandler = (action) => {
+  switch (action) {
+    case 'about':
+      trayService.showAboutDialog();
+      return;
+    case 'open-history': {
+      void shell.openPath(getHistoryDir());
+      return;
+    }
+    case 'show-current':
+      overlayService?.restoreCurrent();
+      return;
+    case 'reopen-last':
+      void handleReopenLast();
+      return;
+    case 'open-setup':
+      // BL-C5-006 — reabre o wizard se o operador fechou a janela em config_error.
+      setupWizardService.show();
+      return;
+  }
+};
+
+/**
+ * BL-C3-009 — orquestra reabertura do último aviso via tray:
+ * 1. Carrega último arquivo do histórico local via `historyService`.
+ * 2. Se houver: chama `overlayService.reopenFromHistory(payload)`.
+ * 3. Se não: dispara balloon "Nenhum aviso para reabrir" (UX —
+ *    operador clicou esperando algo; precisa de feedback).
+ *
+ * Falhas não-fatais. Tipicamente disparado quando state === 'idle'
+ * (tray menu desabilita em sprint_active/config_error), então
+ * `historyService` está inicializado.
+ */
+async function handleReopenLast(): Promise<void> {
+  if (historyService === null || overlayService === null) {
+    // Boot incompleto / config error — tray menu já deveria desabilitar,
+    // mas defesa em profundidade contra clique de fila pendurada.
+    return;
+  }
+  try {
+    const last = await historyService.loadLastArchived();
+    if (last === null) {
+      // Nenhum aviso arquivado — operador precisa saber que clicar não
+      // fez nada visível. Balloon é o canal estabelecido (G-023) para
+      // sinalizar eventos do agent ao operador.
+      trayService.displayInfoBalloon('Nenhum aviso para reabrir no histórico local.');
+      return;
+    }
+    overlayService.reopenFromHistory(last.payload);
+    // BL-C3-017 + Sessão 24: pill permanece visível atrás do overlay
+    // fullscreen reaberto (mesmo z-level screen-saver, pill window
+    // ocupa só topo da tela). Quando overlay fecha, pill já está ali.
+  } catch (err) {
+    console.error('[reopen-last] falha ao carregar último arquivado', err);
+    trayService.displayInfoBalloon(
+      'Falha ao carregar histórico. Veja "Histórico local" para inspeção manual.',
+    );
+  }
+}
+
+/**
+ * Resincroniza estado visual do tray baseado em `queueService.length()`.
+ * Chamado em todo update da queue + ao fim de `rebuildDeps`.
+ */
+function refreshTrayState(): void {
+  if (queueService === null) return;
+  const length = queueService.length();
+  if (length === 0) {
+    trayService.setState({ kind: 'idle' });
+  } else {
+    trayService.setState({ kind: 'sprint_active', queueLength: length });
+  }
+}
+
+// =============================================================================
+// handleAck — orquestração extraída em `handlers/handleAck.ts` para testabilidade
+// =============================================================================
+
+async function handleAck(sprintId: string, userId: string): Promise<AcknowledgeSprintResponse> {
+  if (
+    queueService === null ||
+    historyService === null ||
+    overlayService === null ||
+    pendingStore === null ||
+    ackService === null
+  ) {
+    throw new Error('Services não inicializados — config inválida ou boot incompleto');
+  }
+  return handleAckOrchestration(
+    {
+      queueService,
+      historyService,
+      overlayService,
+      pendingStore,
+      ackService,
+      // BL-C3-017: pill mostrado pós-ack quando fila esvazia;
+      // hide quando próxima sprint substitui. pillService pode ser
+      // null pré-rebuildDeps; spread conditional respeita
+      // exactOptionalPropertyTypes (não pode passar undefined explícito).
+      ...(pillService !== null ? { pillService } : {}),
+      log: {
+        warn: (msg, ctx) => {
+          console.warn(`[ack] ${msg}`, ctx ?? '');
+        },
+      },
+    },
+    sprintId,
+    userId,
+  );
+}
+
+// =============================================================================
+// rebuildDeps
+// =============================================================================
+
+async function rebuildDeps(): Promise<RuntimeConfig> {
+  const config = await loadConfig();
+  currentConfig = config;
+
+  if (queueService === null) {
+    const adapter = new NodeFilesystemAdapter();
+    const pendingStoreLocal = new PendingStore(adapter, config.sharedPath);
+    const ackStoreLocal = new AckStore(adapter, config.sharedPath);
+
+    const queueLocal = new QueueService();
+    // ADR-028: data root migrou de app.getPath('userData') para
+    // C:\ProgramData\<APP_DATA_DIR_NAME> (Windows) via getAgentDataDir().
+    const historyLocal = new HistoryService(getAgentDataDir());
+    const overlayLocal = new OverlayService({
+      minimizeAfterMs: config.minimizeAfterMs,
+      // BL-C3-014: som ao exibir overlay (exibição inicial), configurável.
+      somNotificacao: config.somNotificacao,
+    });
+    const pillLocal = new PillService();
+    const ackLocal = new AckService({
+      ackStore: ackStoreLocal,
+      hostname: config.hostname,
+      agentVersion: app.getVersion(),
+      log: {
+        warn: (msg, ctx) => {
+          console.warn(`[ack] ${msg}`, ctx ?? '');
+        },
+      },
+    });
+    const pollingLocal = new PollingService({
+      pendingStore: pendingStoreLocal,
+      // BL-C3-013: adapter + sharedPath para sondar a raiz do share e
+      // desambiguar DirectoryNotFound de `pending/` (share fora vs. pasta
+      // ainda não criada). Sem método novo no C4 (ADR-027).
+      adapter,
+      sharedPath: config.sharedPath,
+      queueService: queueLocal,
+      historyService: historyLocal,
+      // BL-C3-011: overlayService injetado para cancels poderem fechar
+      // overlay quando referenciam a sprint atualmente exibida.
+      overlayService: overlayLocal,
+      // AUD-W2-003: ackService injetado para gravar o displayed_at da sprint
+      // promovida quando um cancel fecha a exibida e promove a próxima da fila
+      // (espelha o writeDisplayed do wire onNextSprint abaixo).
+      ackService: ackLocal,
+      userId: config.userId,
+      pollingIntervalMs: config.pollingIntervalMs,
+      // BL-C3-013: transições de conexão pintam o tray (vermelho/verde) +
+      // atualizam tooltip e o item "Status da conexão".
+      onConnectionChange: (status) => {
+        trayService.setConnection(status);
+      },
+      log: pollLog,
+    });
+
+    // Wire queueService → overlayService + ack + tray refresh + pill hide.
+    queueLocal.onNextSprint((item) => {
+      overlayLocal.showSprint(item, queueLocal.length());
+      // Grava ack inicial (displayed_at) em paralelo — não bloqueia overlay.
+      // Não-fatal em erro (writeDisplayed retorna null + loga warn).
+      void ackLocal.writeDisplayed(item.payload);
+      // BL-C3-017: nova sprint eclipsa o pill — se o operador tinha um
+      // pill na tela da sprint anterior acked, ele some agora.
+      pillLocal.hide();
+    });
+    queueLocal.onQueueUpdated((length) => {
+      overlayLocal.sendQueueUpdate(length);
+      refreshTrayState();
+    });
+
+    // Promove para module-level (consumidos por IPC handlers + handleAck).
+    queueService = queueLocal;
+    historyService = historyLocal;
+    overlayService = overlayLocal;
+    pillService = pillLocal;
+    pendingStore = pendingStoreLocal;
+    ackService = ackLocal;
+    pollingService = pollingLocal;
+
+    // ADR-028: garante o data root + historico/ + logs/ em ProgramData
+    // (estrutura do Anexo B / Stack §15.3 criada no first-run). Em seguida,
+    // popula o cache do historyService a partir de arquivos pré-existentes
+    // (dedup pós-restart).
+    await ensureAgentDataDirs();
+    await historyLocal.ensureFolder();
+    await historyLocal.initializeFromDisk();
+
+    // Inicia polling — primeiro ciclo imediato.
+    await pollingLocal.start();
+  }
+
+  refreshTrayState();
+  return config;
+}
+
+// =============================================================================
+// IPC handlers
+// =============================================================================
+
+function registerIpcHandlers(): void {
+  // config:get — Gate 2 (discriminated union ConfigStatusResponse)
+  ipcMain.handle('config:get', async (): Promise<ConfigStatusResponse> => {
+    try {
+      const config = currentConfig ?? (await rebuildDeps());
+      return {
+        ok: true,
+        config: {
+          sharedPath: config.sharedPath,
+          userId: config.userId,
+          userNomeExibicao: config.userNomeExibicao,
+          hostname: config.hostname,
+          pollingIntervalMs: config.pollingIntervalMs,
+          minimizeAfterMs: config.minimizeAfterMs,
+        },
+      };
+    } catch (err) {
+      if (err instanceof ConfigError) {
+        return {
+          ok: false,
+          error: {
+            code: err.code,
+            message: err.message,
+            expectedPath: err.configPath,
+          },
+        };
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        ok: false,
+        error: {
+          code: 'INVALID',
+          message: `Erro inesperado: ${message}`,
+          expectedPath: '',
+        },
+      };
+    }
+  });
+
+  // sprint:request-current — Gate 4 — pull pattern do mount inicial do renderer
+  ipcMain.handle('sprint:request-current', (): IncomingSprintEvent | null => {
+    if (overlayService === null) return null;
+    return overlayService.getCurrentEvent();
+  });
+
+  // sprint:acknowledge — Gate 6 — orquestra ack final + archive + delete
+  ipcMain.handle(
+    'sprint:acknowledge',
+    async (
+      _event,
+      req: AcknowledgeSprintRequest,
+    ): Promise<IpcResult<AcknowledgeSprintResponse>> => {
+      try {
+        const data = await handleAck(req.sprint_id, req.user_id);
+        return { ok: true, data };
+      } catch (err) {
+        const code = err instanceof Error ? err.name : 'UNKNOWN';
+        const message = err instanceof Error ? err.message : String(err);
+        console.error('[ack] handleAck falhou', { sprint_id: req.sprint_id, code, message });
+        return { ok: false, error: { code, message } };
+      }
+    },
+  );
+
+  // overlay:close-reopened — BL-C3-009 — operador clica "Fechar" em
+  // overlay reaberto via tray. Sem ack adicional; apenas hide().
+  // Sessão 24: pill não tem mais relação com este handler (click no
+  // pill é state local do renderer, não chama IPC). Pill permanece
+  // visível atrás do overlay durante reopen via tray; quando overlay
+  // fecha, pill já está ali (não precisa re-show).
+  ipcMain.handle('overlay:close-reopened', (): void => {
+    overlayService?.closeReopened();
+  });
+
+  // pill:request-current — BL-C3-017 — janela do pill pulla info atual
+  // no mount (race-free vs push de pill:update).
+  ipcMain.handle('pill:request-current', () => pillService?.getCurrent() ?? null);
+
+  // pill:begin-drag / pill:drag-to / pill:end-drag — Sessão 26 —
+  // drag horizontal. Renderer envia `screenX` absoluto (e.screenX do
+  // PointerEvent) para evitar feedback loop quando o window se move.
+  // Main move BrowserWindow via setPosition; Y permanece fixo.
+  ipcMain.handle('pill:begin-drag', (_e, screenX: number): void => {
+    pillService?.beginDrag(screenX);
+  });
+  ipcMain.handle('pill:drag-to', (_e, screenX: number): void => {
+    pillService?.dragTo(screenX);
+  });
+  ipcMain.handle('pill:end-drag', (): void => {
+    pillService?.endDrag();
+  });
+
+  // setup:probe / setup:save — BL-C5-006 — wizard de first-run. Inputs validados
+  // no MAIN (Zod via buildAgentConfigFromInput); o renderer não toca em `fs`.
+  ipcMain.handle('setup:probe', (_e, req: SetupProbeRequest): Promise<SetupProbeResult> => {
+    const sharedPath = req.shared_path;
+    // Adapter/store efêmeros só para a sondagem — não persistem estado.
+    const adapter = new NodeFilesystemAdapter();
+    const pendingStore = new PendingStore(adapter, sharedPath);
+    return probeSharedPathConnection({
+      listPending: () => pendingStore.listPending(),
+      existsRoot: () => adapter.exists(sharedPath),
+    });
+  });
+
+  ipcMain.handle('setup:save', async (_e, input: SetupSaveInput): Promise<SetupSaveResult> => {
+    const built = buildAgentConfigFromInput(input, os.hostname());
+    if (!built.ok) {
+      return { ok: false, code: 'VALIDATION', message: built.message };
+    }
+    const configPath = getConfigPath();
+    try {
+      await writeConfigAtomic(configPath, built.config);
+      await ensureAgentDataDirs();
+    } catch (err) {
+      return {
+        ok: false,
+        code: 'WRITE',
+        message: err instanceof Error ? err.message : String(err),
+      };
+    }
+    // Destrava a operação normal: rebuildDeps carrega o config recém-escrito,
+    // instancia os services e inicia o polling. Em seguida fecha o wizard após
+    // um instante (deixa o renderer exibir "salvo" antes da janela sumir).
+    try {
+      await rebuildDeps();
+    } catch (err) {
+      return {
+        ok: false,
+        code: 'UNKNOWN',
+        message: err instanceof Error ? err.message : String(err),
+      };
+    }
+    setTimeout(() => {
+      setupWizardService.close();
+    }, 800);
+    return { ok: true, configPath };
+  });
+}
+
+// =============================================================================
+// Bootstrap
+// =============================================================================
+
+async function bootstrap(): Promise<void> {
+  const isPrimary = acquireSingleInstanceLock(app);
+  if (!isPrimary) {
+    app.quit();
+    return;
+  }
+
+  await app.whenReady();
+
+  trayService.boot({ kind: 'loading' }, handleTrayAction);
+
+  // BL-C5-003 — auto-registro defensivo do auto-start (HKCU Run). Só em produção
+  // empacotada — em dev `app.getPath('exe')` é o electron.exe (não faz sentido
+  // registrar). Não-fatal e não bloqueante (o hook NSIS cobre o caminho feliz).
+  if (app.isPackaged) {
+    void ensureAutoStartRegistered({
+      accessor: new WindowsRegistryRunAccessor(),
+      valueName: AUTO_START_REGISTRY_VALUE,
+      exePath: app.getPath('exe'),
+      log: autoStartLog,
+    });
+  }
+
+  // Registra handlers IPC ANTES de eventualmente abrir o wizard — o renderer do
+  // wizard chama setup:probe/save no mount (handlers são lazy: só disparam
+  // quando o renderer invoca, então registrar antes de rebuildDeps é seguro).
+  registerIpcHandlers();
+
+  try {
+    await rebuildDeps();
+  } catch (err) {
+    if (!(err instanceof ConfigError)) {
+      throw err;
+    }
+    trayService.setState({ kind: 'config_error', reason: err.message });
+    trayService.displayConfigErrorBalloon(err.message);
+    // BL-C5-006 — first-run / config inválida: abre o wizard para o operador
+    // configurar a estação (em vez de só sinalizar no tray).
+    setupWizardService.show();
+  }
+}
+
+void bootstrap();
+
+// =============================================================================
+// Lifecycle hooks (tray-resident)
+// =============================================================================
+
+app.on('window-all-closed', () => {
+  // Agent é tray-resident: NÃO encerra quando as janelas fecham.
+  // Subscrever cancela o quit automático. Ver ADR-011 e G-013.
+});
+
+app.on('web-contents-created', (_event, contents) => {
+  contents.on('will-navigate', (event, url) => {
+    if (IS_DEV && url.startsWith(DEV_SERVER_URL ?? '')) {
+      return;
+    }
+    event.preventDefault();
+  });
+  contents.setWindowOpenHandler(() => ({ action: 'deny' }));
+});
+
+app.on('second-instance', () => {
+  // Single instance lock garante primária única.
+});

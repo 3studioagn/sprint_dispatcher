@@ -1,0 +1,30 @@
+/*
+ * DeadlineBadge — pill com label "PRAZO" e horário HH:mm.
+ *
+ * Tokens via @sprint/ui-kit (BL-C3-016). Largura content-driven —
+ * sem min-width hardcoded.
+ */
+
+.badge {
+  display: flex;
+  flex-direction: column;
+  background: var(--sprint-color-surface-elevated);
+  padding: var(--sprint-space-3) var(--sprint-space-6);
+  border-radius: var(--sprint-radius-md);
+  border: 1px solid var(--sprint-color-border);
+}
+
+.label {
+  font-size: var(--sprint-font-size-xs);
+  color: var(--sprint-color-text-muted);
+  letter-spacing: 0.1em;
+  font-weight: var(--sprint-font-weight-semibold);
+}
+
+.time {
+  font-size: var(--sprint-font-size-2xl);
+  font-weight: var(--sprint-font-weight-bold);
+  color: var(--sprint-color-text);
+  font-feature-settings: 'tnum';
+  line-height: var(--sprint-line-height-tight);
+}

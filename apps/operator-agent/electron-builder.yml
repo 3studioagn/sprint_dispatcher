@@ -1,0 +1,99 @@
+appId: br.com.artflexiveis.metas.desenhistas
+productName: Metas - Desenhistas
+
+# Versão lida do package.json automaticamente. Nome de artefato (instalador)
+# normalizado p/ ASCII sem espaços (URL/CI/release-safe); o productName acima
+# carrega o nome de exibição com acentos/espaços (Start Menu, exe, pasta).
+artifactName: Metas-Desenhistas-${version}-${arch}.${ext}
+
+# Diretórios
+directories:
+  buildResources: build
+  output: release
+
+# O que entra no pacote final
+# node_modules/**/* é necessário porque jsdom/canvas são externalizados no
+# vite.config (G-020) — eles ficam em node_modules em runtime. Sem este pattern
+# o app crasha com "Cannot find module 'tough-cookie'" (subdep do jsdom).
+# Electron-builder aplica filtro automático de production deps via package.json.
+#
+# build/**/* é necessário porque trayService.ts resolve tray.ico via
+# `path.join(__dirname, '../../build/tray.ico')`. Em prod empacotada, isso
+# resolve para resources/app.asar/build/tray.ico — se build/ não estiver no
+# asar, new Tray() crasha silenciosamente e o boot inteiro morre (G-023).
+files:
+  - 'dist/**/*'
+  - 'dist-electron/**/*'
+  - 'build/**/*'
+  - 'package.json'
+  - 'node_modules/**/*'
+  - '!**/.{eslintrc,prettierrc}*'
+  - '!**/tsconfig*.json'
+  - '!**/vite.config.*'
+  - '!**/vitest.config.*'
+  - '!**/*.{ts,tsx,map}'
+  - '!**/*.test.*'
+  - '!**/*.md'
+  - '!**/CHANGELOG.md'
+  - '!**/LICENSE*'
+  - '!**/.bin'
+  - '!**/.cache'
+
+# Compilação do main process (e preload) já feita pelo Vite — não recompile
+asar: true
+asarUnpack: []
+
+# Plataforma Windows
+win:
+  target:
+    - target: portable
+      arch:
+        - x64
+    - target: nsis
+      arch:
+        - x64
+  # Ícone do app: TODO em sessão de polish (W3) — usar default do Electron por enquanto
+  # icon: build/icon.ico
+  publisherName: ARTFLEXÍVEIS
+  # Code signing (BL-C0-008, ADR-024). O .pfx e a senha vêm do AMBIENTE via
+  # CSC_LINK / CSC_KEY_PASSWORD (lidos nativamente pelo electron-builder) —
+  # NUNCA hardcoded aqui. A assinatura só ocorre quando há certificado:
+  #   - release.yml (tag v*): decodifica o Secret, seta CSC_LINK → assina.
+  #   - PR/branch/local sem cert (CSC_IDENTITY_AUTO_DISCOVERY=false): pula.
+  # Timestamping RFC 3161 mantém a assinatura válida após o cert expirar.
+  # electron-builder 24.x usa chaves top-level em `win` (não `signtoolOptions`,
+  # que é da linha 25.x). Runbook: docs/guides/code-signing.md.
+  rfc3161TimeStampServer: http://timestamp.digicert.com
+  signingHashAlgorithms:
+    - sha256
+
+# NSIS installer
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: Metas-Desenhistas-Setup-${version}.${ext}
+  installerLanguages:
+    - pt_BR
+  language: '1046' # pt-BR
+  shortcutName: Metas - Desenhistas
+  createDesktopShortcut: false # agent vive na tray — atalho no desktop é poluição
+  createStartMenuShortcut: true
+  runAfterFinish: true # inicia o agent logo após instalar → first-run wizard (BL-C5-006)
+  deleteAppDataOnUninstall: false # preserva config/historico (ficam em ProgramData; ADR-028)
+  # Auto-start em HKCU\...\Run (BL-C5-003, ADR-028). electron-builder inclui
+  # `build/installer.nsh` por padrão; explicitado aqui para auditabilidade.
+  # As macros customInstall/customUnInstall escrevem/removem a entrada de Run.
+  include: build/installer.nsh
+
+# Portable
+portable:
+  artifactName: Metas-Desenhistas-${version}-portable.${ext}
+  requestExecutionLevel: user # NÃO admin — operação no contexto do usuário (R-03)
+
+# Metadata
+extraMetadata:
+  homepage: https://artflexiveis.com.br
+  author:
+    name: 3Studio
+    email: contato@3studio.com.br

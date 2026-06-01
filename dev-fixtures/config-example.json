@@ -1,0 +1,5 @@
+{
+  "_comment": "Modelo do leader-config.json. Copie para %APPDATA%/sprint-leader/config.json (dev) ou %APPDATA%/Sprint Leader/config.json (build) e ajuste shared_path para apontar para dev-fixtures/shared/ neste repo ou para a pasta SMB de produção. Remova esta linha _comment antes de gravar.",
+  "shared_path": "C:\\Users\\mario.souza\\sprint-dispatcher\\dev-fixtures\\shared",
+  "criado_por": "Seu Nome"
+}

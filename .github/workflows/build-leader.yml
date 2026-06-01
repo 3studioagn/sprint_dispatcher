@@ -1,0 +1,58 @@
+name: Build Leader
+
+# Builda o .exe do Sprint Leader num runner Windows limpo do GitHub.
+# Necessário porque o ESET na máquina local trava o app.asar e impede o
+# electron-builder de gerar o instalador (ver CLAUDE.md §12 G-009).
+on:
+  workflow_dispatch:
+  push:
+    branches: [develop]
+    paths:
+      - 'apps/leader/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/build-leader.yml'
+
+concurrency:
+  group: build-leader-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Build de develop NÃO assina (assinatura só no release.yml). Garante que o
+  # electron-builder não tente assinar pelo store agora que o electron-builder.yml
+  # tem config de signing (BL-C0-008).
+  CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+jobs:
+  build:
+    name: Build Sprint Leader (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Leader (portable .exe + instalador NSIS)
+        run: pnpm --filter sprint-leader run make
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: sprint-leader-windows
+          path: apps/leader/release/*.exe
+          if-no-files-found: error
+          retention-days: 14

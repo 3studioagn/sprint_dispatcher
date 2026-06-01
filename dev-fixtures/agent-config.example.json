@@ -1,0 +1,12 @@
+{
+  "_comment": "Modelo do agent-config.json. Copie para %APPDATA%/sprint-operator-agent/config.json (dev) ou %APPDATA%/Sprint Operator Agent/config.json (build) e ajuste: user_id deve estar em <shared_path>/operators.json (joao/maria/carlos/beatriz para dev), shared_path aponta para dev-fixtures/shared/ neste repo OU para a pasta SMB de produção, hostname é o nome desta estação. Remova esta linha _comment antes de gravar (o schema é strict). minimize_after_seconds é opcional (default 30) — controla o timer de auto-minimize do overlay para o tray.",
+  "schema_version": "1.0",
+  "user_id": "joao",
+  "user_nome_exibicao": "João Silva",
+  "hostname": "ART-DESIGN-04",
+  "shared_path": "C:\\Users\\<seu-user>\\sprint-dispatcher\\dev-fixtures\\shared",
+  "polling_interval_seconds": 3,
+  "som_notificacao": true,
+  "log_level": "info",
+  "minimize_after_seconds": 30
+}

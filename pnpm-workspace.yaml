@@ -1,0 +1,4 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+  - 'scripts' # @sprint/release-tools — code signing + helpers de CI (BL-C0-008)

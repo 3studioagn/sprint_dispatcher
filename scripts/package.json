@@ -1,0 +1,16 @@
+{
+  "name": "@sprint/release-tools",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Scripts de build/release do Sprint Dispatcher (code signing + helpers de CI). Workspace privado, nunca publicado.",
+  "scripts": {
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^1.6.0",
+    "vitest": "^1.6.0"
+  }
+}

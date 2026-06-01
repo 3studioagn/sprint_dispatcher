@@ -1,0 +1,7 @@
+.themeProvider {
+  font-family: var(--sprint-font-family-sans);
+  font-size: var(--sprint-font-size-base);
+  line-height: var(--sprint-line-height-normal);
+  color: var(--sprint-color-text);
+  background: var(--sprint-color-background);
+}

@@ -1,0 +1,104 @@
+name: Release (signed)
+
+# Caminho de RELEASE: builda e ASSINA (Authenticode) os 2 instaladores num runner
+# Windows limpo. Diferente de ci.yml (PR/branch, sem assinar) e dos build-*.yml
+# (push em develop, sem assinar). Aqui a assinatura é obrigatória — o .pfx vem do
+# Secret WINDOWS_CERT_PFX_BASE64; PRs nunca veem os Secrets (BL-C0-008, ADR-024).
+#
+# Contrato de Secrets (cadastrar em Settings > Secrets and variables > Actions):
+#   WINDOWS_CERT_PFX_BASE64  -> o .pfx (chave privada) em base64
+#   WINDOWS_CERT_PASSWORD    -> a senha do .pfx
+# Runbook: docs/guides/code-signing.md.
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false # nunca cancelar um release pela metade
+
+permissions:
+  contents: read # TODO(BL-C0-009): elevar para `write` ao publicar GitHub Releases
+
+env:
+  TURBO_TELEMETRY_DISABLED: 1
+  # Sem cert, nada de auto-discovery no store. O passo "Prepare signing cert"
+  # seta CSC_LINK via $GITHUB_ENV; com CSC_LINK presente o electron-builder
+  # assina mesmo com auto-discovery desligado.
+  CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+jobs:
+  release:
+    name: Build assinado (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # O Agent consome @sprint/ui-kit via dist/ (Vite library mode) e o `make`
+      # não dispara o ^build do Turbo — gera o dist antes (espelha build-agent.yml).
+      - name: Build @sprint/ui-kit (consumido pelo Agent)
+        run: pnpm --filter @sprint/ui-kit build
+
+      # Decodifica o Secret PFX -> $RUNNER_TEMP/codesign.pfx e exporta
+      # CSC_LINK via $GITHUB_ENV para os passos de build assinarem. Falha o job
+      # se o Secret estiver ausente (não produz release não-assinado por engano).
+      - name: Prepare signing cert (decode PFX -> CSC_LINK)
+        env:
+          WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+        run: node scripts/prepare-signing-cert.mjs
+
+      - name: Build + sign Leader (portable + NSIS)
+        env:
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: pnpm --filter sprint-leader run make
+
+      - name: Build + sign Operator Agent (portable + NSIS)
+        env:
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: pnpm --filter sprint-operator-agent run make
+
+      # Falha o job se algum artefato não estiver assinado. "Assinado mas
+      # não-confiável" não ocorre aqui se o .cer já estiver no runner; fora do
+      # domínio é só aviso (o runner não tem o trust store da GPO da fábrica).
+      - name: Verify Authenticode signatures
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-signature.ps1
+
+      - name: Upload signed installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: sprint-dispatcher-signed-windows
+          path: |
+            apps/leader/release/*.exe
+            apps/operator-agent/release/*.exe
+          if-no-files-found: error
+          retention-days: 30
+
+      # TODO(BL-C0-009): a partir daqui entram, em PROMPT SEPARADO e DEPOIS de
+      # BL-C5-005 (nomeação de artefatos): (1) bump de versão via Changesets
+      # (`changeset version`), (2) publicação em GitHub Releases (privado),
+      # (3) notificação Slack/Discord. NÃO implementar nesta entrega.
+
+      # Limpeza do PFX temporário — SEMPRE, inclusive se um passo acima falhou,
+      # para o segredo não persistir no runner (BL-C0-008 §5.5).
+      - name: Cleanup PFX
+        if: always()
+        run: node scripts/prepare-signing-cert.mjs cleanup

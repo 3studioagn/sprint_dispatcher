@@ -1,0 +1,1 @@
+export { Acompanhamento } from './Acompanhamento';

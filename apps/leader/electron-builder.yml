@@ -1,0 +1,89 @@
+appId: br.com.artflexiveis.metas.lideranca
+productName: Metas - Liderança
+
+# Versão lida do package.json automaticamente. Nome de artefato (instalador)
+# normalizado p/ ASCII sem espaços (URL/CI/release-safe); o productName acima
+# carrega o nome de exibição com acentos/espaços (Start Menu, exe, pasta).
+artifactName: Metas-Lideranca-${version}-${arch}.${ext}
+
+# Diretórios
+directories:
+  buildResources: build
+  output: release
+
+# O que entra no pacote final
+# node_modules/**/* é necessário porque jsdom/canvas são externalizados no
+# vite.config (G-020) — eles ficam em node_modules em runtime. Sem este pattern
+# o app crasha com "Cannot find module 'tough-cookie'" (subdep do jsdom).
+# Electron-builder aplica filtro automático de production deps via package.json.
+files:
+  - 'dist/**/*'
+  - 'dist-electron/**/*'
+  - 'package.json'
+  - 'node_modules/**/*'
+  - '!**/.{eslintrc,prettierrc}*'
+  - '!**/tsconfig*.json'
+  - '!**/vite.config.*'
+  - '!**/vitest.config.*'
+  - '!**/*.{ts,tsx,map}'
+  - '!**/*.test.*'
+  - '!**/*.md'
+  - '!**/CHANGELOG.md'
+  - '!**/LICENSE*'
+  - '!**/.bin'
+  - '!**/.cache'
+
+# Compilação do main process (e preload) já feita pelo Vite — não recompile
+asar: true
+asarUnpack: []
+
+# Plataforma Windows
+win:
+  target:
+    - target: portable
+      arch:
+        - x64
+    - target: nsis
+      arch:
+        - x64
+  # Ícone: TODO em sessão de polish (W3) — usar default do Electron por enquanto
+  # icon: build/icon.ico
+  publisherName: ARTFLEXÍVEIS
+  # Code signing (BL-C0-008, ADR-024). O .pfx e a senha vêm do AMBIENTE via
+  # CSC_LINK / CSC_KEY_PASSWORD (lidos nativamente pelo electron-builder) —
+  # NUNCA hardcoded aqui. A assinatura só ocorre quando há certificado:
+  #   - release.yml (tag v*): decodifica o Secret, seta CSC_LINK → assina.
+  #   - PR/branch/local sem cert (CSC_IDENTITY_AUTO_DISCOVERY=false): pula.
+  # Timestamping RFC 3161 mantém a assinatura válida após o cert expirar.
+  # electron-builder 24.x usa chaves top-level em `win` (não `signtoolOptions`,
+  # que é da linha 25.x). Runbook: docs/guides/code-signing.md.
+  rfc3161TimeStampServer: http://timestamp.digicert.com
+  signingHashAlgorithms:
+    - sha256
+
+# NSIS installer
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: Metas-Lideranca-Setup-${version}.${ext}
+  installerLanguages:
+    - pt_BR
+  language: '1046' # pt-BR
+  shortcutName: Metas - Liderança
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  runAfterFinish: false
+  deleteAppDataOnUninstall: false
+
+# Portable
+portable:
+  artifactName: Metas-Lideranca-${version}-portable.${ext}
+  requestExecutionLevel: user # NÃO admin — operação no contexto do usuário (R-03)
+
+# Metadata
+extraMetadata:
+  homepage: https://artflexiveis.com.br
+  author:
+    name: 3Studio
+    email: contato@3studio.com.br

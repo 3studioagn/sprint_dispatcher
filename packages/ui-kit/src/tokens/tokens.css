@@ -1,0 +1,189 @@
+/**
+ * @sprint/ui-kit — Design tokens (DARK theme)
+ *
+ * Single source of truth para identidade visual do Sprint Dispatcher.
+ * Todas as variáveis usam prefixo --sprint- para evitar colisão com
+ * estilos de host (Electron renderer, Vite dev server).
+ *
+ * **Tema dark** — extraído da imagem 'Hora do Rush!' anexada à sessão
+ * de implementação do C9. Identidade visual ARTFLEXÍVEIS centrada em
+ * card de fundo quase-preto (#1A1A1A), tipografia grande em branco
+ * puro, accent único em laranja warm (#F5A557).
+ *
+ * Para revisão visual: abrir packages/ui-kit/dev/palette-preview.html
+ *
+ * Convenções:
+ *   --sprint-color-*           cores semânticas
+ *   --sprint-color-neutral-*   paleta neutra contínua 100..900
+ *   --sprint-space-*           espaçamentos em escala 4px (8 níveis)
+ *   --sprint-font-*            tipografia (família + 8 sizes + 4 weights + 3 line-heights)
+ *   --sprint-shadow-*          sombras de elevação + glow expressivo
+ *   --sprint-radius-*          border-radius (4 escalas: sm/md/lg/pill)
+ *
+ * Fonte: Inter via Google Fonts (4 weights: 400/500/600/700). Carregada
+ * em todo consumidor automaticamente ao importar tokens.css. Em produção
+ * offline (LAN da fábrica sem internet), considerar self-host com
+ * @font-face em sessão futura (W3).
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+  /* ============================================================
+   * CORES SEMÂNTICAS — extraídas da imagem 'Hora do Rush!'
+   * Identidade: card escuro + laranja warm como accent único
+   * ============================================================ */
+
+  /* Primária — laranja warm do botão "Recebido" e do ícone status */
+  --sprint-color-primary: #f5a557;
+  --sprint-color-primary-hover: #e8943c;
+  --sprint-color-primary-active: #d27f26;
+  --sprint-color-primary-on: #ffffff;
+  /* Glow do botão primário — composição expressiva do design */
+  --sprint-color-primary-glow: rgba(245, 165, 87, 0.55);
+
+  /* Secundária — alias da primária (design tem apenas um accent) */
+  --sprint-color-secondary: var(--sprint-color-primary);
+  --sprint-color-secondary-hover: var(--sprint-color-primary-hover);
+  --sprint-color-secondary-on: var(--sprint-color-primary-on);
+
+  /* Status — sucesso (não presente na imagem, default seguro em dark) */
+  --sprint-color-success: #22c55e;
+  --sprint-color-success-bg: #052e16;
+  --sprint-color-success-on: #ffffff;
+
+  /* Status — alerta (amarelo, diferenciado da laranja primária) */
+  --sprint-color-warning: #fbbf24;
+  --sprint-color-warning-bg: #422006;
+  --sprint-color-warning-on: #111827;
+
+  /* Status — erro/perigo */
+  --sprint-color-danger: #ef4444;
+  --sprint-color-danger-bg: #450a0a;
+  --sprint-color-danger-on: #ffffff;
+
+  /* ============================================================
+   * PALETA NEUTRA — 100 (claro) .. 900 (escuro)
+   * Escala Tailwind gray (referência setorial) — mantida estável
+   * ============================================================ */
+
+  --sprint-color-neutral-100: #f3f4f6;
+  --sprint-color-neutral-200: #e5e7eb;
+  --sprint-color-neutral-300: #d1d5db;
+  --sprint-color-neutral-400: #9ca3af;
+  --sprint-color-neutral-500: #6b7280;
+  --sprint-color-neutral-600: #4b5563;
+  --sprint-color-neutral-700: #374151;
+  --sprint-color-neutral-800: #1f2937;
+  --sprint-color-neutral-900: #111827;
+
+  /* ============================================================
+   * ALIASES SEMÂNTICOS — uso preferencial em componentes
+   * Mapeamento DARK theme: card = surface escuro, texto = branco
+   * ============================================================ */
+
+  /* Fundo do card principal (extraído: ~#1A1A1A da imagem) */
+  --sprint-color-background: #1a1a1a;
+  /* Fundo "deep" — preto puro, reservado para superfícies que ficam
+   * sobre backdrop translúcido onde o card precisa de máximo contraste
+   * com o app de trabalho abaixo (Pill standalone do Agent — Sessão 29). */
+  --sprint-color-background-deep: #000000;
+  /* Surface "subtle" — apenas um tom acima do preto puro (Sessão 32).
+   * Reservado para áreas que devem se diferenciar SUTILMENTE do
+   * background-deep sem chamar atenção (header bar do Overlay sobre
+   * card preto). Entre `background-deep` (#000) e `surface` (#222).
+   * Sessão 37: #111 → #0a0a0a — Renan reportou que o header ainda
+   * estava visivelmente mais claro que o design alvo; diferenciação
+   * ainda mais sutil (~4% brightness vs preto puro). */
+  --sprint-color-surface-subtle: #0a0a0a;
+  /* Surface intermediária (entre background e elevated) */
+  --sprint-color-surface: #222222;
+  /* Surface elevada (badge "27/05" da imagem, modais sobre cards) */
+  --sprint-color-surface-elevated: #2a2a2a;
+  /* Bordas para uso pontual em dark theme */
+  --sprint-color-border: #2a2a2a;
+  --sprint-color-border-strong: #3a3a3a;
+  /* Texto principal — branco puro (título, métricas, deadline) */
+  --sprint-color-text: #ffffff;
+  /* Texto muted — cinza médio (labels "Artes", "Até", "Suas metas") */
+  --sprint-color-text-muted: #a0a0a0;
+  /* Texto invertido — uso raro neste design (badges sobre cores claras) */
+  --sprint-color-text-inverse: #1a1a1a;
+
+  /* Backdrop — área escurecida atrás do card em overlay fullscreen.
+   * Discreto (alpha 0.3) para deixar contexto do app de trabalho
+   * visível, alinhado com a sensação "dim the desktop" da imagem. */
+  --sprint-color-backdrop: rgba(0, 0, 0, 0.3);
+
+  /* ============================================================
+   * ESPAÇAMENTOS — escala 4px (8 níveis) — convenção
+   * ============================================================ */
+
+  --sprint-space-1: 4px;
+  --sprint-space-2: 8px;
+  --sprint-space-3: 12px;
+  --sprint-space-4: 16px;
+  --sprint-space-5: 20px;
+  --sprint-space-6: 24px;
+  --sprint-space-7: 28px;
+  --sprint-space-8: 32px;
+  /* Tiers estendidos (Sessão 42) — paddings generosos para chrome de
+   * overlay e seções com bastante respiração. Continuação da escala
+   * 4px monotônica. */
+  --sprint-space-9: 36px;
+  --sprint-space-10: 40px;
+
+  /* ============================================================
+   * TIPOGRAFIA — Inter com fallbacks de sistema
+   * Sizes em rem (base 16px). Tier 4xl (120px) reservado para a
+   * meta gigante "20" da imagem — consumido pelo Agent (BL-C3-015).
+   * ============================================================ */
+
+  --sprint-font-family-sans:
+    'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+  /* Sizes — escala progressiva (xs..4xl) */
+  --sprint-font-size-xs: 0.75rem; /* 12px — caption */
+  --sprint-font-size-sm: 0.875rem; /* 14px — auxiliar */
+  --sprint-font-size-base: 1rem; /* 16px — corpo */
+  --sprint-font-size-lg: 1.125rem; /* 18px — corpo realçado */
+  --sprint-font-size-xl: 1.5rem; /* 24px — labels grandes ("Artes", "Suas metas") */
+  --sprint-font-size-2xl: 2rem; /* 32px — título de overlay ("Hora do Rush!") */
+  --sprint-font-size-3xl: 3rem; /* 48px — deadline destaque ("18:00h") */
+  --sprint-font-size-4xl: 7.5rem; /* 120px — métrica gigante ("20") */
+
+  /* Weights */
+  --sprint-font-weight-light: 300;
+  --sprint-font-weight-regular: 400;
+  --sprint-font-weight-medium: 500;
+  --sprint-font-weight-semibold: 600;
+  --sprint-font-weight-bold: 700;
+
+  /* Line-heights */
+  --sprint-line-height-tight: 1.2;
+  --sprint-line-height-normal: 1.5;
+  --sprint-line-height-relaxed: 1.75;
+
+  /* ============================================================
+   * SOMBRAS — 3 níveis de elevação + glow expressivo
+   * Ajustadas para dark theme (alpha mais alto que light theme).
+   * ============================================================ */
+
+  --sprint-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+  --sprint-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  --sprint-shadow-lg: 0 10px 25px -3px rgba(0, 0, 0, 0.6), 0 4px 10px -4px rgba(0, 0, 0, 0.4);
+
+  /* Glow expressivo do botão primário — composição visual da imagem */
+  --sprint-shadow-primary-glow: 0 0 40px var(--sprint-color-primary-glow);
+
+  /* ============================================================
+   * BORDER RADIUS — 4 escalas
+   * `pill` adicionado para badges ("27/05") e botões full-rounded
+   * (botão "Recebido" da imagem).
+   * ============================================================ */
+
+  --sprint-radius-sm: 6px;
+  --sprint-radius-md: 12px;
+  --sprint-radius-lg: 24px;
+  --sprint-radius-pill: 9999px;
+}

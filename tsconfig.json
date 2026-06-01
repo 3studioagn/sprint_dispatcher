@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    "baseUrl": ".",
+    "paths": {
+      "@sprint/contracts": ["packages/contracts/src/index.ts"],
+      "@sprint/contracts/*": ["packages/contracts/src/*"],
+      "@sprint/fs-adapter": ["packages/fs-adapter/src/index.ts"],
+      "@sprint/fs-adapter/*": ["packages/fs-adapter/src/*"],
+      "@sprint/logger": ["packages/logger/src/index.ts"],
+      "@sprint/logger/*": ["packages/logger/src/*"]
+    }
+  },
+  "include": [],
+  "exclude": ["node_modules", "dist", "out", ".turbo"]
+}

@@ -1,0 +1,6 @@
+.logo {
+  height: 24px;
+  width: auto;
+  color: var(--color-text);
+  display: block;
+}

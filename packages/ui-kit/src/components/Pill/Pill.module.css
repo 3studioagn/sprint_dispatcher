@@ -1,0 +1,293 @@
+/**
+ * <Pill> — styling standalone (sem bar full-width).
+ *
+ * Topo reto + cantos inferiores arredondados — encaixa visualmente sob o
+ * topo do monitor, simulando "pendurada" do borda. Sombra projeta para
+ * baixo destacando a saliência. Background preto puro
+ * (`--sprint-color-background-deep`, Sessão 29).
+ *
+ * **Transição compact ↔ expanded** (Sessão 30, "linear/se extendendo"):
+ * animação em três dimensões simultâneas — `padding`, `min-width` e
+ * `max-height` — com Material standard easing single-rate. Sessões
+ * 27/28/29 só animavam `padding` + `min-width`; o conteúdo (que vai
+ * de `inline-flex row` a `flex column`) reflowava INSTANTANEAMENTE
+ * quando o React trocava `CompactContent` por `ExpandedContent`,
+ * causando o jump "primeiro pra baixo, depois pro lado". A Sessão 30
+ * adiciona `max-height` à transição com `overflow: hidden` no `.pill`
+ * clipando o conteúdo enquanto o container cresce — ambas dimensões
+ * crescem em paralelo, sensação de "se extendendo" sem salto.
+ *
+ * Magnitudes EXCLUSIVAMENTE via tokens `--sprint-*` (zero hex/px
+ * hardcoded fora de tokens). Exceção documentada: `max-height` usa
+ * pixels literais (56px/200px) porque dependem do conteúdo renderizado;
+ * não há token semântico apropriado.
+ */
+
+/**
+ * Wrapper externo controlado por inline style — define position absolute,
+ * top:0, left:N%, transform:translateX(-N%) (Sessão 25). Mantém o
+ * contexto de posicionamento separado da animação de entrance interna.
+ */
+.pillPositioner {
+  display: inline-block;
+}
+
+/**
+ * Wrapper intermediário — owns a entrance animation (slide do topo +
+ * fade). Separado do `.pill` (button) para não conflitar com o
+ * transform inline do `.pillPositioner` (que faz centralização
+ * horizontal via translateX percentual).
+ */
+.pillEntrance {
+  display: inline-block;
+  animation: pill-enter 480ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes pill-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.pill {
+  background: var(--sprint-color-background-deep);
+  color: var(--sprint-color-text);
+  font-family: inherit;
+  border: none;
+  cursor: pointer;
+  overflow: hidden;
+  pointer-events: auto;
+  /* `touch-action: none` permite que o host capture pointer events para
+   * drag sem o browser interferir com gestos default (scroll, zoom,
+   * etc.) — necessário para drag horizontal do pill (Sessão 26). */
+  touch-action: none;
+  /* Hints para o compositor — pill anima padding/min-width/max-height
+   * durante o expand. `will-change` avisa o browser para promover a
+   * layer GPU, resultando em animação mais suave (Sessão 27 refine;
+   * `max-height` adicionado na Sessão 30). */
+  will-change: padding, min-width, max-height;
+
+  /* Topo reto + cantos inferiores arredondados — "saída do topo do monitor" */
+  border-radius: 0 0 var(--sprint-radius-md) var(--sprint-radius-md);
+
+  /* Sombra desce — reforça a sensação de "pendurada" */
+  box-shadow: 0 6px 16px -2px rgba(0, 0, 0, 0.55);
+
+  /* Transição compact ↔ expanded (Sessão 30 — Renan: "ainda dá um salto
+   * crescendo primeiro pra baixo e depois pras laterais; preciso que
+   * seja mais linear e fluida, como se fosse um efeito de se extendendo
+   * mesmo, sem dar esse salto"). Root cause das sessões 27-29: só
+   * `padding` + `min-width` animavam, mas o reflow do conteúdo
+   * (`inline-flex row` → `flex column`) era INSTANTÂNEO no DOM swap
+   * (CompactContent vs ExpandedContent), causando jump de altura.
+   *
+   * Solução: animar TAMBÉM `max-height`. Com `overflow: hidden` no .pill,
+   * o conteúdo expanded é clipado durante o crescimento — pill cresce
+   * suavemente em ambas direções, conteúdo emerge "naturalmente" de
+   * dentro da pill que se expande.
+   *
+   * - Easing: cubic-bezier(0.4, 0, 0.2, 1) Material standard. Mantida.
+   * - Duração: 480ms uniforme em padding/min-width/max-height. Single
+   *   rate = sem ordem perceptível, todas as dimensões caminham juntas.
+   * - `transform` separado para o `:active` scale (140ms). */
+  transition:
+    padding 480ms cubic-bezier(0.4, 0, 0.2, 1),
+    min-width 480ms cubic-bezier(0.4, 0, 0.2, 1),
+    max-height 480ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 140ms ease-out;
+}
+
+/* Feedback tátil no click — pill encolhe sutilmente quando pressionada
+ * (Sessão 27 refine). Volta ao tamanho normal ao soltar. Combina com
+ * a animação de expand/collapse sem interferir (transform separado de
+ * padding/min-width). */
+.pill:active {
+  transform: scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pillEntrance {
+    animation: none;
+  }
+
+  .pill {
+    transition: none;
+    will-change: auto;
+  }
+
+  /* :active scale também desligado em prefers-reduced-motion para
+   * consistência (Sessão 27). */
+  .pill:active {
+    transform: none;
+  }
+}
+
+.pill:hover {
+  background: var(--sprint-color-surface);
+}
+
+.pill:focus-visible {
+  outline: 2px solid var(--sprint-color-primary);
+  outline-offset: 3px;
+}
+
+/* Reservado — variant urgent (W4 polish) */
+.pill--urgent {
+  /* TODO(W4): borda ou pulse laranja para urgência. */
+}
+
+/* ============================================================
+ * Modo COMPACT — linha única horizontal, densidade alta
+ * ============================================================ */
+
+.pill--compact {
+  /* Sessão 29 — Renan: "A badge é um pouco mais larga para as laterais,
+   * com a altura um pouco menor". Padding vertical space-3 → space-2
+   * (12 → 8px); horizontal space-5 → space-6 (20 → 24px). */
+  padding: var(--sprint-space-2) var(--sprint-space-6);
+  min-width: 0;
+  /* Sessão 30: max-height clipa o conteúdo expanded durante a transição
+   * compact ← expanded. 56px = padding-top 8 + padding-bottom 8 + content
+   * ~40px (icon + texto Inter base) com folga. */
+  max-height: 56px;
+}
+
+.compactLayout {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sprint-space-3);
+}
+
+/* ============================================================
+ * Modo EXPANDED — grid 2×2, métrica grande + deadline + data
+ * ============================================================ */
+
+.pill--expanded {
+  /* Sessão 29 — Renan: "Quando estiver extendida, ela ficar mais igual à
+   * segunda imagem". Padding vertical reduzido (space-3 / space-4 era
+   * space-4 / space-5) — menos altura, badge mais "horizontal". Padding
+   * horizontal mantido em space-6. min-width 320px (era 280px) para a
+   * imagem-alvo mais ampla. */
+  padding: var(--sprint-space-3) var(--sprint-space-6) var(--sprint-space-4);
+  min-width: 320px;
+  /* Sessão 30: max-height generoso para acomodar o layout 2-rows com
+   * folga (metricRow ~52px + gap 12 + footerRow ~24px + paddings 12+16 =
+   * ~116px; 200px protege contra crescimento futuro de tipografia ou
+   * conteúdo). Durante a transição compact → expanded, max-height anima
+   * 56 → 200 em paralelo com padding e min-width — pill cresce
+   * smoothly em ambas direções sem reflow visível. */
+  max-height: 200px;
+}
+
+.expandedLayout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sprint-space-3);
+}
+
+.metricRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--sprint-space-5);
+}
+
+.metricGroup {
+  /* Sessão 29 — Renan: layout expanded deve matchar imagem 2 ("20 Artes"
+   * em linha, não empilhado). Row + baseline alignment para que o "Artes"
+   * sm fique ancorado à base do "20" 3xl em vez de centralizado. */
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: var(--sprint-space-2);
+}
+
+.valueBig {
+  font-size: var(--sprint-font-size-3xl);
+  font-weight: var(--sprint-font-weight-bold);
+  line-height: var(--sprint-line-height-tight);
+  color: var(--sprint-color-text);
+  font-feature-settings: 'tnum';
+}
+
+.unit {
+  /* Sessão 29: sem margin-top (era space-1) — agora é row com baseline,
+   * o gap do flex já dá espaço horizontal entre "20" e "Artes". */
+  font-size: var(--sprint-font-size-sm);
+  color: var(--sprint-color-text-muted);
+}
+
+.deadlineGroup {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.deadlineLabel {
+  font-size: var(--sprint-font-size-xs);
+  color: var(--sprint-color-text-muted);
+}
+
+.deadlineValue {
+  font-size: var(--sprint-font-size-lg);
+  font-weight: var(--sprint-font-weight-bold);
+  color: var(--sprint-color-text);
+  font-feature-settings: 'tnum';
+}
+
+.footerRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--sprint-space-3);
+}
+
+.labelGroup {
+  display: flex;
+  align-items: center;
+  gap: var(--sprint-space-2);
+}
+
+.dateBadge {
+  font-size: var(--sprint-font-size-xs);
+  color: var(--sprint-color-text-muted);
+  background: var(--sprint-color-surface);
+  padding: var(--sprint-space-1) var(--sprint-space-2);
+  border-radius: var(--sprint-radius-sm);
+  font-feature-settings: 'tnum';
+}
+
+/* ============================================================
+ * Conteúdo compartilhado entre compact e expanded
+ * ============================================================ */
+
+.label {
+  font-size: var(--sprint-font-size-sm);
+  color: var(--sprint-color-text-muted);
+  font-weight: var(--sprint-font-weight-regular);
+  /* Sessão 26 fix: Renan reportou "Suas metas" quebrando linha no
+   * compact (label vinha em duas linhas: "Suas / metas"). nowrap
+   * mantém em linha única; pill expande horizontalmente conforme
+   * necessário (compact tem min-width: 0; expanded tem min-width
+   * suficiente para deadline+date row). */
+  white-space: nowrap;
+}
+
+.value {
+  font-size: var(--sprint-font-size-xl);
+  font-weight: var(--sprint-font-weight-bold);
+  color: var(--sprint-color-text);
+  font-feature-settings: 'tnum';
+}
+
+.icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--sprint-color-primary);
+}
