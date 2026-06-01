@@ -1,0 +1,153 @@
+/*
+ * SetupWizard — estilos do wizard de first-run (BL-C5-006).
+ * Tokens --sprint-* do @sprint/ui-kit (sem hex/px hardcoded — BL-C3-016).
+ */
+
+.wizard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sprint-space-6);
+  width: 100%;
+  height: 100%;
+  padding: var(--sprint-space-8);
+  background: var(--sprint-color-background);
+  color: var(--sprint-color-text);
+  overflow-y: auto;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sprint-space-1);
+}
+
+.title {
+  font-size: var(--sprint-font-size-2xl);
+  font-weight: var(--sprint-font-weight-bold);
+  line-height: var(--sprint-line-height-tight);
+}
+
+.subtitle {
+  font-size: var(--sprint-font-size-lg);
+  color: var(--sprint-color-text-muted);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sprint-space-5);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sprint-space-2);
+}
+
+.labelText {
+  font-size: var(--sprint-font-size-sm);
+  font-weight: var(--sprint-font-weight-medium);
+  color: var(--sprint-color-text-muted);
+}
+
+.input {
+  width: 100%;
+  padding: var(--sprint-space-3) var(--sprint-space-4);
+  font-size: var(--sprint-font-size-base);
+  font-family: var(--sprint-font-family-sans);
+  color: var(--sprint-color-text);
+  background: var(--sprint-color-surface);
+  border: 1px solid var(--sprint-color-border-strong);
+  border-radius: var(--sprint-radius-md);
+  outline: none;
+}
+
+.input:focus {
+  border-color: var(--sprint-color-primary);
+}
+
+.input:disabled {
+  opacity: 0.6;
+}
+
+.hint {
+  font-size: var(--sprint-font-size-xs);
+  color: var(--sprint-color-text-muted);
+}
+
+.probeRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sprint-space-4);
+  flex-wrap: wrap;
+}
+
+.probeOk {
+  font-size: var(--sprint-font-size-sm);
+  color: var(--sprint-color-success);
+}
+
+.probeFail {
+  font-size: var(--sprint-font-size-sm);
+  color: var(--sprint-color-danger);
+}
+
+.error {
+  padding: var(--sprint-space-3) var(--sprint-space-4);
+  font-size: var(--sprint-font-size-sm);
+  color: var(--sprint-color-danger-on);
+  background: var(--sprint-color-danger-bg);
+  border-radius: var(--sprint-radius-sm);
+}
+
+.success {
+  padding: var(--sprint-space-3) var(--sprint-space-4);
+  font-size: var(--sprint-font-size-sm);
+  color: var(--sprint-color-success-on);
+  background: var(--sprint-color-success-bg);
+  border-radius: var(--sprint-radius-sm);
+}
+
+.primaryButton {
+  margin-top: var(--sprint-space-2);
+  padding: var(--sprint-space-4) var(--sprint-space-6);
+  font-size: var(--sprint-font-size-lg);
+  font-weight: var(--sprint-font-weight-semibold);
+  font-family: var(--sprint-font-family-sans);
+  color: var(--sprint-color-primary-on);
+  background: var(--sprint-color-primary);
+  border: none;
+  border-radius: var(--sprint-radius-pill);
+  cursor: pointer;
+}
+
+.primaryButton:hover:not(:disabled) {
+  background: var(--sprint-color-primary-hover);
+}
+
+.primaryButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.secondaryButton {
+  padding: var(--sprint-space-2) var(--sprint-space-4);
+  font-size: var(--sprint-font-size-sm);
+  font-weight: var(--sprint-font-weight-medium);
+  font-family: var(--sprint-font-family-sans);
+  color: var(--sprint-color-text);
+  background: var(--sprint-color-surface-elevated);
+  border: 1px solid var(--sprint-color-border-strong);
+  border-radius: var(--sprint-radius-md);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.secondaryButton:hover:not(:disabled) {
+  border-color: var(--sprint-color-primary);
+}
+
+.secondaryButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

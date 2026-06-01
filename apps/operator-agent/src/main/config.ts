@@ -1,9 +1,12 @@
 /**
- * Loader de config.json do Sprint Operator Agent (W1).
+ * Loader de config.json do Operator Agent ("Metas - Desenhistas").
  *
- * Localização: `app.getPath('userData')/config.json`, resolvendo para
- * `%APPDATA%\sprint-operator-agent\config.json` em Windows dev e
- * `%APPDATA%\Sprint Operator Agent\config.json` em build.
+ * Localização (ADR-028, BL-C5-006): `getAgentDataDir()/config.json`, que em
+ * Windows resolve para `C:\ProgramData\Metas - Desenhistas\config.json`
+ * (machine-wide, criado no first-run pelo wizard) e, fora de Windows (dev/CI),
+ * cai para `app.getPath('userData')/config.json`. Ver `main/paths.ts`. Isto
+ * supersede o `app.getPath('userData')` do W1 (ADR-012) — o data root migrou
+ * para `ProgramData` por coerência com Anexo B / Stack §15.3.
  *
  * Schema canônico: `agentConfigSchema` de `@sprint/contracts` (strict).
  * **Extensão local W1**: campo opcional `minimize_after_seconds` (1-300s,
@@ -46,10 +49,11 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
 import { safeParseAgentConfig, type AgentConfig } from '@sprint/contracts';
-import { app } from 'electron';
 import { z } from 'zod';
 
 import type { ConfigErrorCode } from '../shared/ipc-types';
+
+import { getAgentDataDir } from './paths';
 
 const CONFIG_FILENAME = 'config.json';
 
@@ -179,13 +183,15 @@ export class ConfigInaccessibleError extends ConfigError {
 // =============================================================================
 
 /**
- * Caminho absoluto do `config.json` no sistema atual.
+ * Caminho absoluto do `config.json` no sistema atual — `getAgentDataDir()` +
+ * `config.json` (ADR-028).
  *
- * Em testes do main process com `vi.mock('electron', ...)` o
- * `app.getPath('userData')` é stubado para um tmp dir.
+ * Em testes, a env `SPRINT_AGENT_DATA_DIR` (ver `main/paths.ts`) aponta o data
+ * root para um tmp dir, tornando o caminho determinístico independente da
+ * plataforma do runner.
  */
 export function getConfigPath(): string {
-  return path.join(app.getPath('userData'), CONFIG_FILENAME);
+  return path.join(getAgentDataDir(), CONFIG_FILENAME);
 }
 
 /**

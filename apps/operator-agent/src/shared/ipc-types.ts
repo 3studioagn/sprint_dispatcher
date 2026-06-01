@@ -194,6 +194,47 @@ export interface AcknowledgeSprintResponse {
 }
 
 // =============================================================================
+// Setup wizard (BL-C5-006) — first-run: coleta user_id + shared_path
+// =============================================================================
+
+/** Pedido de sondagem de conexão à pasta compartilhada ("Testar conexão"). */
+export interface SetupProbeRequest {
+  /** UNC ou caminho da pasta compartilhada a sondar. */
+  shared_path: string;
+}
+
+/**
+ * Resultado da sondagem — `reachable` + mensagem human-readable pt-BR.
+ * Reaproveita o classificador `isConnectivityError` (BL-C3-013) no main; o
+ * renderer apenas exibe. Erros inesperados viram `reachable: false`.
+ */
+export interface SetupProbeResult {
+  reachable: boolean;
+  message: string;
+}
+
+/**
+ * Entrada do wizard. `user_nome_exibicao` é opcional — o main usa `user_id`
+ * como default quando ausente/vazio. Os demais campos do `AgentConfig`
+ * (`schema_version`, `hostname`, `polling_interval_seconds`, `som_notificacao`,
+ * `log_level`) são derivados/default no MAIN — o renderer NÃO os envia.
+ */
+export interface SetupSaveInput {
+  user_id: string;
+  shared_path: string;
+  user_nome_exibicao?: string;
+}
+
+/**
+ * Resultado do save. Sucesso traz o caminho do `config.json` gravado (o
+ * renderer pode exibir). Falha discrimina entre validação (Zod), escrita (I/O)
+ * e inesperado.
+ */
+export type SetupSaveResult =
+  | { ok: true; configPath: string }
+  | { ok: false; code: 'VALIDATION' | 'WRITE' | 'UNKNOWN'; message: string };
+
+// =============================================================================
 // Api — superfície exposta pelo preload via contextBridge
 // =============================================================================
 
@@ -329,5 +370,26 @@ export interface Api {
     readonly beginDrag: (screenX: number) => Promise<void>;
     readonly dragTo: (screenX: number) => Promise<void>;
     readonly endDrag: () => Promise<void>;
+  };
+
+  /**
+   * API do wizard de configuração inicial (BL-C5-006) — usado pela janela de
+   * setup (`?setup` no URL) que aparece no first-run quando o `config.json`
+   * está ausente/inválido. Inputs validados no MAIN (Zod/AgentConfig); o
+   * renderer não toca em `fs`.
+   */
+  readonly setup: {
+    /**
+     * Sonda a pasta compartilhada informada (botão "Testar conexão"). Reusa o
+     * `listPending` do C4 + `isConnectivityError` do C3-013. Não persiste nada.
+     */
+    readonly probe: (req: SetupProbeRequest) => Promise<SetupProbeResult>;
+
+    /**
+     * Valida o input (Zod/AgentConfig), deriva `hostname` + defaults, grava o
+     * `config.json` em `ProgramData` e destrava a operação normal (rebuildDeps
+     * + fecha o wizard). Retorna o caminho gravado em caso de sucesso.
+     */
+    readonly save: (input: SetupSaveInput) => Promise<SetupSaveResult>;
   };
 }

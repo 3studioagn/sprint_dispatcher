@@ -32,6 +32,10 @@ import type {
   PillCurrentInfo,
   PillUpdateEvent,
   QueueUpdatedEvent,
+  SetupProbeRequest,
+  SetupProbeResult,
+  SetupSaveInput,
+  SetupSaveResult,
   Unsubscribe,
 } from '../shared/ipc-types';
 
@@ -102,6 +106,13 @@ const api: Api = {
     dragTo: (screenX: number): Promise<void> =>
       ipcRenderer.invoke('pill:drag-to', screenX) as Promise<void>,
     endDrag: (): Promise<void> => ipcRenderer.invoke('pill:end-drag') as Promise<void>,
+  },
+
+  setup: {
+    probe: (req: SetupProbeRequest): Promise<SetupProbeResult> =>
+      ipcRenderer.invoke('setup:probe', req) as Promise<SetupProbeResult>,
+    save: (input: SetupSaveInput): Promise<SetupSaveResult> =>
+      ipcRenderer.invoke('setup:save', input) as Promise<SetupSaveResult>,
   },
 };
 

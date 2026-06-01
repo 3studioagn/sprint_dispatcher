@@ -63,6 +63,12 @@ if (typeof window !== 'undefined') {
       dragTo: vi.fn(() => Promise.resolve()),
       endDrag: vi.fn(() => Promise.resolve()),
     },
+    setup: {
+      probe: vi.fn(() =>
+        Promise.resolve({ reachable: true, message: 'Conexão OK — a pasta está acessível.' }),
+      ),
+      save: vi.fn(() => Promise.resolve({ ok: true as const, configPath: '/test/config.json' })),
+    },
   };
   Object.defineProperty(window, 'api', {
     configurable: true,
@@ -85,6 +91,12 @@ beforeEach(() => {
   vi.mocked(window.api.pill.beginDrag).mockReset().mockResolvedValue(undefined);
   vi.mocked(window.api.pill.dragTo).mockReset().mockResolvedValue(undefined);
   vi.mocked(window.api.pill.endDrag).mockReset().mockResolvedValue(undefined);
+  vi.mocked(window.api.setup.probe)
+    .mockReset()
+    .mockResolvedValue({ reachable: true, message: 'Conexão OK — a pasta está acessível.' });
+  vi.mocked(window.api.setup.save)
+    .mockReset()
+    .mockResolvedValue({ ok: true, configPath: '/test/config.json' });
 });
 
 afterEach(() => {
