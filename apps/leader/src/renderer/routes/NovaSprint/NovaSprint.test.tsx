@@ -276,9 +276,20 @@ describe('NovaSprint — dispatch real (BL-C2-007)', () => {
 
 describe('NovaSprint — surfacing de erro de carregamento (regressão F-025)', () => {
   beforeEach(() => {
+    // Estes testes verificam o ErrorBanner via role="alert". O DeadlineInput
+    // também emite role="alert" quando o horário padrão (18:00) já passou — o
+    // que tornava o teste dependente da hora do relógio (falhava no CI rodando
+    // após as 18h, ex.: 18:17 UTC). Fixa SÓ o Date (timers reais → findBy /
+    // userEvent intactos) numa manhã: o único alert presente é o ErrorBanner.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-06-01T08:00:00'));
     useOperatorsStore.getState().reset();
     useSprintComposerStore.getState().reset();
     useDispatchStore.getState().reset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('regressão F-025: listOperators falha → ErrorBanner é renderizado com mensagem técnica e instrução para TI', async () => {
