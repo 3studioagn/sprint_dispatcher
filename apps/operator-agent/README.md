@@ -49,14 +49,35 @@ Localização: `%APPDATA%\Roaming\sprint-operator-agent\config.json`
 Schema validado por `@sprint/contracts` via `safeParseAgentConfig`. Veja Anexo F
 do doc de Requisitos para exemplo.
 
-Comportamento na inicialização:
+Comportamento na inicialização (fail-soft desde W1):
 
-- Config existe e válido → app inicia, tray aparece
-- Config ausente → diálogo com path e instrução, quit
-- Config inválido (JSON quebrado ou schema violado) → diálogo com erro
-  específico, quit
+- Config existe e válido → app inicia, tray aparece, polling começa
+- Config ausente / inválido → tray vermelho + balloon de erro (NÃO encerra; o
+  operador corrige e o app "destrava" sem reiniciar)
+- **`shared_path` inacessível NÃO é mais erro de config (W3, ADR-027)** — virou
+  condição de runtime: o app sobe, entra em "sem conexão" (tray vermelho) e
+  reconecta sozinho quando o servidor volta (ver abaixo)
 
-Veja `DECISIONS.md` ADR-012.
+Campos relevantes do `config.json` (Anexo F): `polling_interval_seconds` (1–60,
+default 3), `som_notificacao` (boolean, default `true` — ver abaixo).
+
+Veja `DECISIONS.md` ADR-012 (fail-soft) e ADR-027 (reconexão).
+
+## Reconexão resiliente e som (W3 — BL-C3-013 / BL-C3-014)
+
+**Reconexão com backoff (BL-C3-013):** se a pasta compartilhada SMB cair, o
+Agent detecta (classificando o erro do `listPending`), pinta o tray de
+**vermelho** ("sem conexão" + última conexão no tooltip/menu) e faz **backoff
+exponencial** (5s → 10s → 30s → 60s, cap 60s). Ao reconectar, o tray volta a
+**verde** e a fila acumulada é processada. O Agent **sobe mesmo com o servidor
+fora** e conecta sozinho quando ele volta. Reconexão ≠ watchdog de processo
+(BL-C5-004).
+
+**Som de notificação (BL-C3-014):** com `"som_notificacao": true` (default), um
+tom curto toca ao exibir o overlay (exibição inicial; não toca ao reabrir pela
+tray). Defina `false` para silenciar. O som é fail-safe (se o áudio falhar, o
+overlay funciona normalmente) e usa Web Audio — para trocar pelo seu
+`.wav`/`.ogg`, veja o seam em `renderer/sound/notificationSound.ts`.
 
 ## Segurança
 

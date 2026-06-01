@@ -9,6 +9,42 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Added — Sessão 48 (2026-06-01) — W3 · C3 (Operator Agent) CONCLUÍDO — BL-C3-013 + BL-C3-014
+
+Fecha o componente C3 (Operator Agent) — seus 2 itens restantes da Wave 3. C3
+100% concluído (sem itens em W4). Decisão em [ADR-027](DECISIONS.md).
+
+**BL-C3-013 — Reconexão à pasta compartilhada com backoff (`apps/operator-agent`):**
+
+- O Agent sobrevive à queda temporária do servidor de arquivos. Máquina de
+  estados de conexão no MAIN sobre o polling: classifica o throw do `listPending`
+  (via `cause.code`, **sem método novo no C4**) como queda de conectividade; em
+  queda entra em `disconnected` com **backoff exponencial 5s → 10s → 30s → 60s**
+  (cap 60s, +jitter ±10%), sonda o share a cada tick e, ao reconectar, retoma o
+  intervalo normal e processa a fila acumulada. Desambiguação de
+  `DirectoryNotFound` sondando a raiz do share (`adapter.exists`).
+- **Tray vermelho/verde** + tooltip + item "Status da conexão" (última conexão
+  HH:MM). Ícones de status gerados sem dependências
+  (`scripts/generate-tray-icons.mjs` → `build/tray-{gray,yellow,red,green}.png`).
+- **Boot resiliente:** o Agent sobe mesmo com o share fora e conecta sozinho
+  quando ele volta — `loadConfig` deixou de validar a acessibilidade do
+  `shared_path` (virou condição de runtime).
+- Transições logadas via `@sprint/logger` (1º uso no Agent): warn na borda,
+  debug nos retries, info ao reconectar.
+
+**BL-C3-014 — Som de notificação opcional (`apps/operator-agent`):**
+
+- Ao exibir o overlay (exibição inicial), toca um tom curto (~480ms) via Web
+  Audio se `config.som_notificacao === true`. Não toca na reabertura via tray;
+  **fail-safe** (falha de áudio não afeta o overlay). Seam documentado para
+  trocar por um asset `.wav`/`.ogg` próprio.
+
+**Infra:** `@sprint/logger` adicionado ao Agent;
+`pino`/`pino-pretty`/`thread-stream` externalizados no build do main (G-020).
+
+**Testes:** Agent 297 → **354**. Gates verdes
+(format/type-check/lint/test/build). Changeset criado.
+
 ### Added — Sessão 47 (2026-06-01) — W3 · C2 (Leader) CONCLUÍDO — BL-C2-010 + BL-C2-012
 
 Fecha o componente C2 (Leader) — seus 2 itens restantes da Wave 3. C2 100%

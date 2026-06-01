@@ -66,6 +66,89 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 48 — 2026-06-01 — Wave 3 · Componente C3 (Operator Agent) CONCLUÍDO — BL-C3-013 + BL-C3-014
+
+**Wave atual:** W3 (Production Readiness) **Itens:** [BL-C3-013, BL-C3-014]
+**Branch:** `feature/C3-wave3-resilience-sound` **Status:** ✅ Concluído (DoD
+atendido) — **C3 100% concluído** (sem itens em W4).
+
+### Objetivo
+
+Concluir o componente Operator Agent (`apps/operator-agent`, C3) entregando seus
+2 itens restantes de W3: BL-C3-013 (reconexão à pasta compartilhada com backoff)
+
+- BL-C3-014 (som de notificação opcional). Padrão EXECUTAR → AUDITAR → REMEDIAR.
+
+### O que foi feito
+
+- **BL-C3-013 — Reconexão com backoff:** módulo puro `connectivity.ts`
+  (`isConnectivityError` por `cause.code`; `BACKOFF_SCHEDULE_MS` 5/10/30/60 cap
+  60; `nextBackoffDelayMs` com jitter ±10% via RNG injetável). `PollingService`
+  virou máquina de estados conectado/desconectado: `listPending` é o sinal
+  (sucesso=conectado; throw classificado=desconectado), com desambiguação do
+  `DirectoryNotFoundError` sondando a raiz do share via `adapter.exists` (sem
+  método novo no C4). Scheduler usa `polling_interval` quando conectado e a
+  agenda de backoff quando desconectado; single-flight preservado (`setTimeout`
+  recursivo). Transições → `onConnectionChange` → tray vermelho/verde +
+  tooltip + item "Status da conexão" (última conexão HH:MM). Logging via
+  `@sprint/logger` (1º uso no Agent): warn na borda, debug nos retries, info ao
+  reconectar.
+- **Boot resiliente:** `loadConfig` deixou de validar a acessibilidade do
+  `shared_path` (virou condição de runtime). Agent sobe com share fora →
+  `disconnected` → backoff → conecta sozinho. `ConfigInaccessibleError` cobre só
+  I/O do `config.json`.
+- **BL-C3-014 — Som opcional:** `RuntimeConfig.somNotificacao` threadado;
+  `OverlayService` propaga `playSound` no `sprint:incoming` (exibição inicial e
+  no pull `getCurrentEvent`; `false` na reabertura). Renderer:
+  `sound/notificationSound.ts` (tom Web Audio ~480ms, fail-safe, seam p/ asset);
+  `useIncomingSprint` toca na exibição inicial, dedup por `sprint_id`, nunca em
+  reabertura.
+- **Tray vermelho/verde:** `TrayIconColor` ganhou `green`; `trayStateService`
+  ganhou dimensão de conexão (puro, testável). Ícones gerados por
+  `scripts/generate-tray-icons.mjs` (PNG sem deps) →
+  `build/tray-{gray,yellow, red,green}.png`, empacotados (`build/**`). Fallback
+  p/ `tray.ico` (G-023).
+- **Docs/infra:** ADR-027; changeset (`sprint-operator-agent` minor);
+  `@sprint/logger` adicionado ao Agent + `pino`/`pino-pretty`/`thread-stream`
+  externalizados no main (G-020). CLAUDE/CHANGELOG/README atualizados.
+
+### Validação
+
+- Gates verdes: `format:check` · `type-check` (10/10) · `lint` (7/7) · `test`
+  (11/11 — Agent **297 → 354**) · `build` (6/6). Build local do `.exe` segue
+  bloqueado pelo ESET (G-009) — esperado, sai no CI windows.
+- Cobertura código novo: `connectivity.ts` 100/100/100/100; `notificationSound`
+  100; `useIncomingSprint` 100; `pollingService` 98.8/86/85/98.8; thresholds do
+  Agent (70/65) atendidos com folga (96.7/88.7/94.9/96.7).
+
+### Decisões
+
+- **ADR-027:** detecção por throw do `listPending` classificado em C3 (sem
+  método novo no C4); backoff fixo + jitter; estado no MAIN; som no renderer.
+- **Desvios do prompt (repo é fonte de verdade):** (1) **ADR-027**, não "008"
+  (ocupado por Electron — mesma situação das S45-47); (2) **`@sprint/logger`
+  adotado agora** para as transições (C6 é import permitido p/ C3) — a
+  integração ampla dos `console.*` restantes segue **BL-C6-002**; (3)
+  **`config.ts` relaxado** (shared_path não é mais erro de boot) — requerido
+  pela AC "boot resiliente", confirmado por Renan via AskUserQuestion; (4) tray
+  **verde no idle conectado** e **jitter ±10%** — ambos confirmados por Renan.
+
+### Próximo passo
+
+C5 (BL-C5-003 auto-start HKCU + BL-C5-005 nomeação de artefatos + BL-C5-006
+wizard) — destrava C7-002 **e** o C0-009 pendente; OU C6 (BL-C6-002/003 logging)
+— destrava C7-006. Depois C7 (docs) e C8 (E2E/smoke, inclui BL-C8-004 "retry
+após queda").
+
+### Observações para a próxima sessão
+
+- Confirmar/produzir o **asset de som definitivo** (hoje é tom Web Audio
+  sintetizado; seam pronto em `playNotificationSound(source?)`).
+- **Watchdog/auto-restart (BL-C5-004, W4)** ≠ reconexão (entregue aqui). Não
+  confundir.
+- `@sprint/logger` agora é dep do Agent — BL-C6-002 será trocar os `console.*`
+  remanescentes (handleAck, reopen-last, ackService) pelo logger já disponível.
+
 ## Sessão 47 — 2026-06-01 — Wave 3 · Componente C2 (Leader) CONCLUÍDO — BL-C2-010 + BL-C2-012
 
 **Wave atual:** W3 (Production Readiness) **Itens:** [BL-C2-010, BL-C2-012]

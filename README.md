@@ -92,7 +92,7 @@ do repositório**, gerenciados externamente por Renan.
 | C0  | Foundation & Infrastructure                | Infra         | ✅ Wave 0                             |
 | C1  | Shared Contracts (`@sprint/contracts`)     | Library       | ✅ Wave 0                             |
 | C2  | Leader Application                         | Desktop App   | ✅ Concluído (W3 — histórico + gate)  |
-| C3  | Operator Agent                             | Desktop App   | ✅ W1 MVP (Sessão 16)                 |
+| C3  | Operator Agent                             | Desktop App   | ✅ Concluído (W3 — reconexão + som)   |
 | C4  | Filesystem Adapter (`@sprint/fs-adapter`)  | Library       | ✅ Concluído (W3 — arquivo + limpeza) |
 | C5  | Installer & Deployment                     | Package       | ✅ Config validada                    |
 | C6  | Observability & Logging (`@sprint/logger`) | Library       | ✅ W1 (Sessão 17)                     |
@@ -209,7 +209,10 @@ iniciada** (2026-06-01) com **BL-C0-008 (code signing)** — ver
 - ✅ Leader (C2 **concluído**) — composer + dispatch + acompanhamento de acks +
   cancelamento + **histórico compartilhado** (filtros/detalhe) + **gate de
   permissão** do líder antes do dispatch (probe NTFS via adapter C4)
-- ✅ Operator Agent (W1.C3) — polling + overlay TOPMOST + tray + ack
+- ✅ Operator Agent (C3 **concluído**) — polling + overlay TOPMOST + tray + ack
+  - fila + cancelamento + **reconexão resiliente com backoff** (tray
+    vermelho/verde quando o servidor cai/volta) + **som de notificação
+    opcional** (Web Audio, configurável via `som_notificacao` no `config.json`)
 - ✅ Testes ampliados (W1.C8) — production-grade (**1069 testes** no monorepo)
 - ✅ Auditoria pré-W2 + correções (Sessão 19): 5 findings RESOLVED, 20 DEFERRED
   catalogados em [`TECH_DEBT.md`](./TECH_DEBT.md).

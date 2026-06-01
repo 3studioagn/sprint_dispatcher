@@ -791,6 +791,84 @@ apps/operator-agent/src/
 >
 > **Total testes:** Agent 283 → 297 (+14 drag); ui-kit 60 estável.
 
+> **Atualização W3 — BL-C3-013 + BL-C3-014 (Sessão 48) — C3 CONCLUÍDO:**
+>
+> Fecha o componente C3 (Operator Agent) — **sem itens em W4**. Decisões em
+> **ADR-027**. C3 importa só de C1/C4/C6/C9; **proibido C2**.
+>
+> **BL-C3-013 — Reconexão com backoff (máquina de estados no MAIN):**
+>
+> - **`main/services/connectivity.ts` (novo, puro):** `isConnectivityError(err)`
+>   classifica `err.cause?.code` (o `FilesystemError` do C4 preserva o
+>   `ErrnoException` em `cause`) contra `CONNECTIVITY_ERROR_CODES`
+>   (ENOENT/ENOTFOUND/ETIMEDOUT/EHOSTUNREACH/EHOSTDOWN/ENETUNREACH/ENETDOWN/
+>   ECONNREFUSED/ECONNRESET/ECONNABORTED/EBUSY). `BACKOFF_SCHEDULE_MS`
+>   `[5000,10000,30000,60000]` (cap no último);
+>   `nextBackoffDelayMs(falhas, rng)` aplica jitter ±10% (`BACKOFF_JITTER`).
+>   `ConnectionStatus { online, lastConnectedAt }`.
+> - **`PollingService` virou máquina de estados** `connected`/`disconnected`. O
+>   **`listPending` é o sinal** (sucesso, mesmo `[]` = conectado; throw
+>   classificado = desconectado). `DirectoryNotFoundError` (ENOENT em
+>   `pending/`) é **ambíguo** → sonda a **raiz** do share com
+>   `adapter.exists(sharedPath)` (raiz no ar = `pending/` só não foi criada →
+>   conectado ocioso; raiz ausente = desconectado). **Novos deps em
+>   `PollingDeps`:** `adapter`, `sharedPath`, `onConnectionChange?`, `rng?`;
+>   `PollingLogger` ganhou `debug?`/`info?`. O scheduler usa `pollingIntervalMs`
+>   quando conectado e a agenda de backoff quando desconectado — **single-flight
+>   preservado** (`setTimeout` recursivo). Anti-flap leve: desconecta no 1º
+>   erro. Reconexão reseta o backoff e o mesmo ciclo processa a fila acumulada.
+>   Erro AO PROCESSAR entry (≠ listPending) loga e **não** muda a conexão.
+> - **Tray vermelho/verde:** `TrayIconColor` ganhou `green`; `trayStateService`
+>   (puro) recebe um 2º arg `ConnectionStatus | null` em
+>   `computeTrayIconColor`/`Tooltip`/`Menu` + `formatConnectionStatusLabel`.
+>   Precedência de cor: `config_error`→vermelho; sem conexão→vermelho
+>   (sobrepõe); `sprint_active`→amarelo; **idle conectado→verde**; idle
+>   desconhecido→cinza. Menu ganhou item **"Status da conexão"** (desabilitado,
+>   com "última: HH:MM"). `trayService.setConnection(status)` recompõe
+>   ícone/tooltip/menu. `resolveIconPath` mapeia cor→`build/tray-<cor>.png` com
+>   **fallback p/ `tray.ico`** (G-023). Ícones gerados por
+>   `scripts/generate-tray-icons.mjs` (PNG sem deps, fora do asar; rodar via
+>   `pnpm --filter sprint-operator-agent gen:tray-icons`).
+> - **Boot resiliente:** `loadConfig` **não valida mais a acessibilidade do
+>   `shared_path`** (virou condição de runtime). Agent sobe com share fora →
+>   `disconnected` → backoff → conecta sozinho. `ConfigInaccessibleError` cobre
+>   só I/O do próprio `config.json` (EISDIR/EACCES).
+> - **Logging:** **1º uso de `@sprint/logger` no Agent** —
+>   `createLogger('polling-service', { destination: process.stdout })` (JSON
+>   síncrono, sem worker; `pino`/`pino-pretty`/`thread-stream` externalizados no
+>   main do Agent — G-020). `disconnected`=warn (borda), retries=debug (sem
+>   spam), `reconnected`=info. **Integração ampla dos `console.*` restantes
+>   segue BL-C6-002.**
+>
+> **BL-C3-014 — Som de notificação opcional:**
+>
+> - `RuntimeConfig.somNotificacao` (de `agentConfigSchema.som_notificacao`,
+>   default `true`). `OverlayServiceDeps.somNotificacao`; o push
+>   `sprint:incoming` e o pull `getCurrentEvent` carregam
+>   `playSound: somNotificacao` na **exibição inicial**; `reopenFromHistory`
+>   sempre `playSound: false`. `IncomingSprintEvent.playSound?` (opcional).
+> - **Renderer `sound/notificationSound.ts`:** `playNotificationSound(source?)`
+>   — tom Web Audio ~480ms (arpejo A5→D6, envelope anti-click), **fail-safe**
+>   (qualquer erro de áudio é engolido). **Seam documentado** p/ trocar por
+>   asset `.wav`/`.ogg` (`{ url }`). `useIncomingSprint` toca na exibição
+>   inicial (pull/push com `playSound`), **dedup por `sprint_id`** (ref),
+>   **nunca em reabertura**.
+>
+> **Invariantes a NÃO violar** (futuras sessões):
+>
+> - Detecção de conectividade por **classificação do erro do `listPending`** —
+>   **sem método novo no C4** (só `exists`, primitiva já existente). C4
+>   intocado.
+> - **Sem novas deps de terceiros** no C3 (`@sprint/logger` é C6, permitido; sem
+>   `date-fns`). Som no **renderer/Web Audio** (compatível com sandbox).
+> - **Reconexão (este item) ≠ watchdog/auto-restart (BL-C5-004, W4)** ≠
+>   diagnostic snapshot (BL-C6-004, W4). E2E "retry após queda" = BL-C8-004
+>   (C8).
+>
+> **Testes:** Agent **297 → 354** (+57: connectivity, máquina de estados/backoff
+> com fake timers, desambiguação share-root, som no renderer + wiring, tray
+> connection, config boot-resiliente + somNotificacao).
+
 > **Atualização W2 — Canvas transparentes + animações fluidas (Sessão 25):**
 >
 > Sessão 25 atende 3 issues visuais reportadas por Renan após validar a Sessão
@@ -985,29 +1063,28 @@ packages/logger/src/
 **Pendência conhecida da W3 (BL-C6-002):**
 
 Integração nos apps fica para W3 — refactor sistemático de `console.*` no Agent
-e adição de logging onde o Leader hoje lança silenciosamente. Locais exatos
-apurados na Sessão 17:
+e adição de logging onde o Leader hoje lança silenciosamente. Locais
+remanescentes (parcialmente endereçado: Leader em S47, Agent/polling em S48):
 
-- `apps/operator-agent/src/renderer/hooks/useIncomingSprint.ts:39` —
-  console.warn
-- `apps/operator-agent/src/main/index.ts:75-77` — console.error
-  (uncaughtException)
-- `apps/operator-agent/src/main/index.ts:88` — console.error
-  (unhandledRejection)
-- `apps/operator-agent/src/main/index.ts:171, 204` — console.warn (handleAck
-  deps)
-- `apps/operator-agent/src/main/index.ts:216, 219` — console.warn/error (polling
-  deps)
-- `apps/operator-agent/src/main/index.ts:319` — console.error (handleAck
-  fallback)
+- `apps/operator-agent/src/renderer/hooks/useIncomingSprint.ts` — console.warn
+  (pull falhou)
+- `apps/operator-agent/src/main/index.ts` — console.error
+  (uncaughtException/unhandledRejection), console.warn (handleAck/ack deps),
+  console.error (handleAck fallback + reopen-last). **O wrapper de polling JÁ
+  migrou** (ver abaixo).
 
-O `PollingService` já tem o slot de injeção pronto (`PollingLogger` interface
-com `SILENT_LOG` default) — refactor BL-C6-002 será literalmente trocar o
-wrapper inline `{warn: console.warn, error: console.error}` por wrapper
-construído a partir do `createLogger`. **Leader** tem ZERO `console.*` hoje, mas
-ganha logging onde só lança erro silenciosamente (`dispatchService.dispatch`
-try/catch isolado por operador, `loadLeaderConfig` 5 ConfigError,
-`OperatorsService.list`).
+> **Parcialmente feito (Sessão 48, BL-C3-013):** o `PollingService` **já**
+> consome `@sprint/logger` em produção — o `pollLog` no `main/index.ts` é um
+> wrapper sobre
+> `createLogger('polling-service', { destination: process.stdout })` (1º uso do
+> logger no Agent), não mais `console.*`. O `PollingLogger` ganhou
+> `debug?`/`info?` para as transições de conexão. **BL-C6-002** resta trocar os
+> `console.*` ainda presentes em `index.ts` (handleAck/ackService/ uncaught
+> handlers/reopen-last) pelo mesmo padrão.
+
+O **Leader** (S47) já usa `@sprint/logger` no `PermissionService`; resta logar
+onde ainda lança silenciosamente (`dispatchService.dispatch` try/catch isolado
+por operador, `loadLeaderConfig` 5 ConfigError, `OperatorsService.list`).
 
 Pendências adicionais (W3+): BL-C6-003 (file transport com `pino-roll` e rotação
 diária em `<userData>/logs/`), BL-C6-004 (Sentry / serviço externo — W4+).

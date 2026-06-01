@@ -3006,3 +3006,117 @@ mensagem + "Verificar novamente"). **Não consultamos o AD.**
 - ADR-013 (port-and-adapter), ADR-009 (IPC contract-first), ADR-020
   (`@sprint/logger`).
 - Backlog v1.1 BL-C2-012; Requisitos RN-01, US-04.02, RNF-19.
+
+---
+
+## ADR-027: Estratégia de reconexão e resiliência do Agent
+
+- **Status:** Accepted
+- **Data:** 2026-06-01
+- **Decisores:** Renan (3Studio)
+- **Endereça:** BL-C3-013 (reconexão com backoff) — encerra o componente C3
+
+> **Nota de numeração:** o prompt da sessão pediu "ADR-008", mas esse número já
+> está ocupado (Electron/runtime desktop). Seguindo a regra "numeração
+> sequencial e única", esta decisão é **ADR-027** — mesma situação das Sessões
+> 45-47.
+
+### Contexto
+
+O Agent é residente e faz polling de `<shared>/pending/` numa pasta SMB
+(`\\srv-alpha\TEMP\Metas_3Studio`). O servidor de arquivos cai eventualmente
+(manutenção, rede), e ~50 agentes voltam a acessá-lo ao mesmo tempo. Os
+requisitos exigem: **RNF-07** (sobreviver à queda do servidor sem crashar),
+**RNF-06** (estações ligadas durante a queda processam ao reconectar), **RI-03**
+(SLA + retry com backoff sem sobrecarregar o file server), e **RNF-03/04** (CPU
+< 1%, tráfego < 10 KB/min — o backoff deve _reduzir_ a carga durante a queda).
+Até aqui o `pollOnce` tinha apenas um try/catch que logava e seguia; não havia
+estado de conexão, sinalização visual, nem backoff. Pior: `loadConfig` validava
+`fs.stat(shared_path)` no boot e, com o share fora, o Agent ficava preso em
+`config_error` (vermelho permanente, sem auto-recuperação).
+
+A questão: como detectar a queda, fazer backoff e auto-reconectar **sem reabrir
+o C4** e sem violar os NFRs?
+
+### Decisão
+
+Construir uma **máquina de estados de conexão no MAIN**, sobre o loop de polling
+existente, usando o **throw do `listPending` como sinal** (não há método novo no
+C4). O `FilesystemError` do C4 já preserva o `NodeJS.ErrnoException` original em
+`error.cause` — basta classificar o `cause.code`.
+
+- **Classificador (`isConnectivityError`, em C3):** módulo puro
+  `main/services/connectivity.ts`. `cause.code` ∈ {`ENOENT`, `ENOTFOUND`,
+  `ETIMEDOUT`, `EHOSTUNREACH`, `EHOSTDOWN`, `ENETUNREACH`, `ENETDOWN`,
+  `ECONNREFUSED`, `ECONNRESET`, `ECONNABORTED`, `EBUSY`} = queda do share.
+  `EACCES`/`EPERM`/`ENOSPC` **não** entram (problema de permissão/disco, não de
+  conectividade — backoff não resolveria).
+- **Desambiguação do `ENOENT`/`DirectoryNotFoundError`:** ENOENT em `pending/` é
+  ambíguo — ou a subpasta ainda não foi criada (share no ar, cold start) ou o
+  share caiu (UNC fora no Windows aparece como ENOENT). O `PollingService` sonda
+  a **raiz** do share com `adapter.exists(sharedPath)` (primitiva existente):
+  raiz acessível → conectado ocioso (benigno); raiz ausente → desconectado.
+- **Backoff fixo (spec):** `5s → 10s → 30s → 60s`, cap 60s, com **jitter ±10%**
+  (RI-03 — evita ~50 agentes reconectando em sincronia). `Math.random` injetável
+  para testes determinísticos. Cada tick de backoff é um `pollOnce` real (a
+  sondagem _é_ o `listPending`); ao reconectar, o mesmo ciclo já processa a fila
+  acumulada e o scheduler volta ao `polling_interval`.
+- **Single-flight preservado:** `setTimeout` recursivo (não `setInterval`); o
+  próximo tick só é agendado após o atual terminar — sem timers sobrepostos.
+- **Estado no MAIN, sinalização na tray:** `connected` ↔ `disconnected` com
+  anti-flap leve (declara `disconnected` no 1º erro — o 1º passo é 5s, tolera
+  blips). Transições disparam `onConnectionChange`, que pinta o tray
+  **vermelho** (sem conexão; sobrepõe os demais) / **verde** (conectado ocioso)
+  / amarelo (sprint pendente) / cinza (boot), atualiza o tooltip e o item
+  "Status da conexão" (com "última conexão HH:MM"). O renderer/overlay **não**
+  conhece o estado de conexão.
+- **Boot resiliente:** `loadConfig` **deixou de validar a acessibilidade do
+  `shared_path`** — virou condição de runtime da máquina de reconexão.
+  `ConfigInaccessibleError` agora cobre só o I/O do próprio `config.json`
+  (EISDIR/EACCES). O Agent sobe mesmo com o share fora → `disconnected` →
+  backoff → conecta sozinho.
+- **Logging via `@sprint/logger`** (1º uso no Agent; C6 é import permitido para
+  C3): `disconnected` (warn, na borda), retries (debug, sem spam), `reconnected`
+  (info). `createLogger('polling-service', { destination: process.stdout })` —
+  JSON síncrono, sem worker (padrão G-020 do Leader);
+  `pino`/`pino-pretty`/`thread-stream` externalizados no build do main.
+
+### Alternativas consideradas
+
+| Alternativa                                      | Por que rejeitada                                                                                                                   |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| **`fs.watch`/chokidar**                          | Pastas SMB não disparam eventos de filesystem confiáveis (ADR-004) — base de todo o design de polling.                              |
+| **Health-check dedicado no C4**                  | Desnecessário — o throw do `listPending` já é o sinal. Reabriria o C4 (que foi concluído). Possível refino futuro p/ migração HTTP. |
+| **Retry sem backoff (intervalo fixo)**           | Viola RNF-03/04 e RI-03 — ~50 agentes martelariam o file server no mesmo instante quando ele voltasse.                              |
+| **Manter `config_error` no boot com share fora** | Falha a AC "boot resiliente" — vermelho permanente sem auto-recuperação (não há renderer aberto no boot do Agent para destravar).   |
+| **Som no MAIN / via `electron`**                 | (BL-C3-014) Web Audio no renderer é compatível com sandbox e não exige asset; o MAIN só decide _se_ toca via flag no evento.        |
+
+### Consequências
+
+- **`config.ts` mudou de contrato** (supersede parcialmente o fail-soft do W1):
+  reachability do share não é mais erro de boot. Testes ajustados; débito
+  documentado.
+- **C4 intocado** — nenhum método novo no port nem nos adapters; a invariante
+  "operações de domínio fora do port" segue válida (só usamos `exists`,
+  primitiva já existente).
+- **`EBUSY` é tratado como conectividade** — em raras situações um arquivo
+  travado individualmente pode disparar `disconnected`; aceitável porque o 1º
+  backoff é curto (5s) e o ciclo seguinte reconecta se foi pontual.
+- **E2E do cenário "retry após queda"** fica para **BL-C8-004** (C8). Aqui só
+  testes unitários (fake timers + RNG injetável + classificador).
+- **Watchdog/auto-restart do processo (BL-C5-004, W4)** é item **separado** —
+  reconexão (recuperar o link) ≠ watchdog (ressuscitar o processo morto). Idem
+  diagnostic snapshot (BL-C6-004, W4).
+
+### Referências
+
+- `apps/operator-agent/src/main/services/connectivity.ts` (classificador +
+  backoff), `pollingService.ts` (máquina de estados), `trayStateService.ts` +
+  `trayService.ts` (sinalização), `config.ts` (boot resiliente).
+- `apps/operator-agent/src/renderer/sound/notificationSound.ts` +
+  `hooks/useIncomingSprint.ts` (BL-C3-014).
+- `scripts/generate-tray-icons.mjs` (ícones de status).
+- ADR-004 (polling, não watch), ADR-011 (tray-resident), ADR-012/D3 (fail-soft),
+  ADR-020 (`@sprint/logger`), G-020 (externalizar pino).
+- Backlog v1.1 BL-C3-013, BL-C3-014; Requisitos RNF-07, RNF-06, RI-03,
+  RNF-03/04, RF-14, US-02.01.
