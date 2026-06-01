@@ -55,6 +55,13 @@ export type OverlayState = 'hidden' | 'showing' | 'minimized';
 export interface OverlayServiceDeps {
   /** Timer de auto-minimize em ms. Default 30000 (D2 do Gate 1). */
   minimizeAfterMs: number;
+  /**
+   * Espelha `config.som_notificacao` (BL-C3-014). Quando `true`, o push de
+   * exibição (`showSprint` / pull `getCurrentEvent`) carrega `playSound: true`
+   * — o renderer toca o som curto ao montar. Reaberturas via tray
+   * (`reopenFromHistory`) sempre enviam `playSound: false`. Default `true`.
+   */
+  somNotificacao?: boolean;
 }
 
 export type OverlayStateUnsubscribe = () => void;
@@ -74,10 +81,13 @@ export class OverlayService {
   private reopenedMode = false;
 
   private readonly minimizeAfterMs: number;
+  /** BL-C3-014 — som de notificação habilitado via config (default true). */
+  private readonly somNotificacao: boolean;
   private readonly emitter = new EventEmitter();
 
   constructor(deps: OverlayServiceDeps) {
     this.minimizeAfterMs = deps.minimizeAfterMs;
+    this.somNotificacao = deps.somNotificacao ?? true;
   }
 
   /**
@@ -98,10 +108,12 @@ export class OverlayService {
       this.window = this.createWindow();
     } else {
       // Janela já existe (ack de sprint anterior + próxima na fila,
-      // OU restoreCurrent + nova sprint). Push direto.
+      // OU restoreCurrent + nova sprint). Push direto. BL-C3-014: exibição
+      // inicial desta sprint → toca som se habilitado.
       this.window.webContents.send('sprint:incoming', {
         sprint: item.payload,
         queueLength,
+        playSound: this.somNotificacao,
       } satisfies IncomingSprintEvent);
       if (!this.window.isVisible()) this.window.show();
       this.window.focus();
@@ -174,10 +186,12 @@ export class OverlayService {
     // Push direto: renderer recebe sprint + reopened flag. Não usa
     // pull pattern (`getCurrentEvent` retorna null porque currentItem
     // permanece null) — push é a fonte autoritativa em reopen.
+    // BL-C3-014: reabertura via tray NUNCA toca som (sprint já foi vista).
     this.window.webContents.send('sprint:incoming', {
       sprint: payload,
       queueLength: 0,
       reopened: true,
+      playSound: false,
     } satisfies IncomingSprintEvent);
     if (!this.window.isVisible()) this.window.show();
     this.window.focus();
@@ -222,9 +236,14 @@ export class OverlayService {
    */
   getCurrentEvent(): IncomingSprintEvent | null {
     if (this.currentItem === null) return null;
+    // BL-C3-014: o pull no mount inicial (1ª exibição da sprint, quando o
+    // renderer perdeu o push por ainda não estar ouvindo) também deve tocar
+    // o som. `currentItem` só é não-nulo no fluxo normal de fila (reopen
+    // preserva null), então isto nunca dispara som em reabertura.
     return {
       sprint: this.currentItem.payload,
       queueLength: this.currentQueueLength,
+      playSound: this.somNotificacao,
     };
   }
 

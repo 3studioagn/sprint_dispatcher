@@ -3,8 +3,9 @@
  *
  * Mocka `app.getPath('userData')` para um tmp dir único da run. Cada
  * teste cria/destrói o config dentro desse tmp. O `shared_path` aponta
- * para outro tmp dir (também por run) — necessário porque o loader agora
- * valida que o `shared_path` existe e é diretório.
+ * para outro tmp dir por conveniência, mas a partir de ADR-027 o loader
+ * NÃO valida mais a acessibilidade do `shared_path` (virou condição de
+ * runtime da máquina de reconexão — ver `boot resiliente` abaixo).
  *
  * Cobertura alvo: 100% lines/branches/funcs em `config.ts`.
  */
@@ -187,45 +188,65 @@ describe('loadConfig — INVALID', () => {
   });
 });
 
-describe('loadConfig — INACCESSIBLE', () => {
-  it('lança ConfigInaccessibleError se shared_path não existe', async () => {
-    const cfg = { ...VALID_CONFIG, shared_path: path.join(mockTmpRoot, 'nao-existe') };
-    await fs.writeFile(configFile, JSON.stringify(cfg), 'utf-8');
-    await expect(loadConfig()).rejects.toBeInstanceOf(ConfigInaccessibleError);
-  });
-
-  it('lança ConfigInaccessibleError se shared_path é arquivo (não diretório)', async () => {
-    const filePath = path.join(mockTmpRoot, 'not-a-dir.txt');
-    await fs.writeFile(filePath, 'hello', 'utf-8');
-    const cfg = { ...VALID_CONFIG, shared_path: filePath };
-    await fs.writeFile(configFile, JSON.stringify(cfg), 'utf-8');
-    await expect(loadConfig()).rejects.toMatchObject({
-      name: 'ConfigInaccessibleError',
-      code: 'INACCESSIBLE',
-    });
-    await fs.rm(filePath, { force: true });
-  });
-
-  it('ConfigInaccessibleError carrega inaccessiblePath = shared_path', async () => {
-    const bogusShared = path.join(mockTmpRoot, 'fantasma');
-    const cfg = { ...VALID_CONFIG, shared_path: bogusShared };
-    await fs.writeFile(configFile, JSON.stringify(cfg), 'utf-8');
-    let caught: unknown;
-    try {
-      await loadConfig();
-    } catch (err) {
-      caught = err;
-    }
-    expect(caught).toBeInstanceOf(ConfigInaccessibleError);
-    expect((caught as ConfigInaccessibleError).inaccessiblePath).toBe(bogusShared);
-  });
-
+describe('loadConfig — INACCESSIBLE (apenas I/O do próprio config.json)', () => {
   it('lança ConfigInaccessibleError em I/O EISDIR (config.json é diretório)', async () => {
     // Remove o tmp do beforeEach e cria como diretório para forçar EISDIR
     await fs.rm(configFile, { force: true });
     await fs.mkdir(configFile, { recursive: true });
     await expect(loadConfig()).rejects.toBeInstanceOf(ConfigInaccessibleError);
     await fs.rmdir(configFile);
+  });
+});
+
+describe('loadConfig — boot resiliente: shared_path NÃO é validado (ADR-027)', () => {
+  // BL-C3-013: a acessibilidade da pasta compartilhada virou condição de
+  // runtime (máquina de reconexão do PollingService). loadConfig não deve
+  // mais falhar por shared_path inexistente/inacessível — o Agent sobe e
+  // tenta reconectar com backoff (RNF-07).
+  it('carrega normalmente mesmo com shared_path inexistente', async () => {
+    const cfg = { ...VALID_CONFIG, shared_path: path.join(mockTmpRoot, 'nao-existe-no-boot') };
+    await fs.writeFile(configFile, JSON.stringify(cfg), 'utf-8');
+    const rt = await loadConfig();
+    expect(rt.sharedPath).toBe(path.join(mockTmpRoot, 'nao-existe-no-boot'));
+  });
+
+  it('carrega normalmente mesmo se shared_path aponta para um arquivo', async () => {
+    const filePath = path.join(mockTmpRoot, 'not-a-dir.txt');
+    await fs.writeFile(filePath, 'hello', 'utf-8');
+    const cfg = { ...VALID_CONFIG, shared_path: filePath };
+    await fs.writeFile(configFile, JSON.stringify(cfg), 'utf-8');
+    const rt = await loadConfig();
+    expect(rt.sharedPath).toBe(filePath);
+    await fs.rm(filePath, { force: true });
+  });
+});
+
+describe('loadConfig — som_notificacao (BL-C3-014)', () => {
+  it('propaga som_notificacao=true do config', async () => {
+    await fs.writeFile(
+      configFile,
+      JSON.stringify({ ...VALID_CONFIG, som_notificacao: true }),
+      'utf-8',
+    );
+    const rt = await loadConfig();
+    expect(rt.somNotificacao).toBe(true);
+  });
+
+  it('propaga som_notificacao=false do config', async () => {
+    await fs.writeFile(
+      configFile,
+      JSON.stringify({ ...VALID_CONFIG, som_notificacao: false }),
+      'utf-8',
+    );
+    const rt = await loadConfig();
+    expect(rt.somNotificacao).toBe(false);
+  });
+
+  it('aplica o default true do schema quando o campo está ausente', async () => {
+    const { som_notificacao: _omit, ...partial } = VALID_CONFIG;
+    await fs.writeFile(configFile, JSON.stringify(partial), 'utf-8');
+    const rt = await loadConfig();
+    expect(rt.somNotificacao).toBe(true);
   });
 });
 

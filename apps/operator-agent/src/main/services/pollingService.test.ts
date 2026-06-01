@@ -19,14 +19,28 @@ import {
   parseSprintPayload,
   type SprintPayload,
 } from '@sprint/contracts';
-import { MemoryFilesystemAdapter, PendingStore, type PendingEntry } from '@sprint/fs-adapter';
+import {
+  DirectoryNotFoundError,
+  FilesystemIOError,
+  MemoryFilesystemAdapter,
+  PendingStore,
+  type PendingEntry,
+} from '@sprint/fs-adapter';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
 import type { QueueItem } from '../../shared/types/queue';
 
+import type { ConnectionStatus } from './connectivity';
 import { HistoryService } from './historyService';
 import { PollingService, type PollingDeps } from './pollingService';
 import { QueueService } from './queueService';
+
+/** Constrói um ErrnoException cru com `code` — espelha o que `fs` lança. */
+function errno(code: string): NodeJS.ErrnoException {
+  const e = new Error(`boom ${code}`) as NodeJS.ErrnoException;
+  e.code = code;
+  return e;
+}
 
 const SHARED_PATH = '/test/shared';
 const USER_ID = 'joao';
@@ -42,7 +56,14 @@ interface TestKit {
   queueService: QueueService;
   historyService: HistoryService;
   pollingService: PollingService;
-  log: { warn: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
+  log: {
+    debug: ReturnType<typeof vi.fn>;
+    info: ReturnType<typeof vi.fn>;
+    warn: ReturnType<typeof vi.fn>;
+    error: ReturnType<typeof vi.fn>;
+  };
+  /** Eventos de transição de conexão capturados (BL-C3-013). */
+  connectionEvents: ConnectionStatus[];
 }
 
 function makeKit(opts: { now?: Date } = {}): TestKit {
@@ -50,7 +71,9 @@ function makeKit(opts: { now?: Date } = {}): TestKit {
   const pendingStore = new PendingStore(adapter, SHARED_PATH);
   const queueService = new QueueService();
   const historyService = new HistoryService('/test/userData');
-  const log: { warn: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> } = {
+  const log = {
+    debug: vi.fn(),
+    info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
   };
@@ -59,16 +82,30 @@ function makeKit(opts: { now?: Date } = {}): TestKit {
   // a assinatura `() => Date` da PollingDeps quebra type-check estrito.
   // Nenhum teste atual precisa do callcount de `now`.
   const now: () => Date = () => fixedNow;
+  const connectionEvents: ConnectionStatus[] = [];
   const pollingService = new PollingService({
     pendingStore,
+    adapter,
+    sharedPath: SHARED_PATH,
     queueService,
     historyService,
     userId: USER_ID,
     pollingIntervalMs: POLLING_INTERVAL_MS,
     now,
+    // RNG fixo no meio → fator de jitter 1.0 (atrasos = agenda base exata).
+    rng: () => 0.5,
+    onConnectionChange: (status) => connectionEvents.push(status),
     log,
   });
-  return { adapter, pendingStore, queueService, historyService, pollingService, log };
+  return {
+    adapter,
+    pendingStore,
+    queueService,
+    historyService,
+    pollingService,
+    log,
+    connectionEvents,
+  };
 }
 
 function makePayload(
@@ -389,6 +426,8 @@ describe('PollingService — detecção de cancelamento (BL-C3-011)', () => {
     // Recria pollingService com overlayService injetado.
     const ps = new PollingService({
       pendingStore: kit.pendingStore,
+      adapter: kit.adapter,
+      sharedPath: SHARED_PATH,
       queueService: kit.queueService,
       historyService: kit.historyService,
       overlayService: mockOverlayService as unknown as NonNullable<PollingDeps['overlayService']>,
@@ -514,6 +553,8 @@ describe('PollingService — detecção de cancelamento (BL-C3-011)', () => {
     );
     const ps = new PollingService({
       pendingStore: kit.pendingStore,
+      adapter: kit.adapter,
+      sharedPath: SHARED_PATH,
       queueService: kit.queueService,
       historyService: kit.historyService,
       overlayService: mockOverlayService as unknown as NonNullable<PollingDeps['overlayService']>,
@@ -597,6 +638,8 @@ describe('PollingService — detecção de cancelamento (BL-C3-011)', () => {
     // Reproduz cenário sem overlayService — branches defensivos.
     const psSemOverlay = new PollingService({
       pendingStore: kit.pendingStore,
+      adapter: kit.adapter,
+      sharedPath: SHARED_PATH,
       queueService: kit.queueService,
       historyService: kit.historyService,
       // overlayService omitido (?:)
@@ -684,8 +727,15 @@ describe('PollingService — resiliência', () => {
 describe('PollingService — loop com fake timers', () => {
   let kit: TestKit;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     kit = makeKit();
+    // Marca a raiz do share como existente (em produção `shared_path` é um
+    // diretório real do servidor). Sem isso o MemoryAdapter trata a pasta
+    // vazia como inexistente (G-019) e o 1º ciclo viraria "desconectado",
+    // mudando o agendamento de pollingIntervalMs para o backoff — estes
+    // testes exercitam a cadência NORMAL. O `.keep` é ignorado pelo
+    // listPending (safeParseFilename não casa o padrão de sprint).
+    await kit.adapter.writeFileAtomic(`${SHARED_PATH}/pending/.keep`, '');
     vi.useFakeTimers();
   });
 
@@ -754,6 +804,8 @@ describe('PollingService — loop com fake timers', () => {
     const pendingStore = new PendingStore(adapter, SHARED_PATH);
     const service = new PollingService({
       pendingStore,
+      adapter,
+      sharedPath: SHARED_PATH,
       queueService: new QueueService(),
       historyService: new HistoryService('/test'),
       userId: USER_ID,
@@ -762,5 +814,189 @@ describe('PollingService — loop com fake timers', () => {
     });
     vi.spyOn(pendingStore, 'listPending').mockRejectedValueOnce(new Error('x'));
     await expect(service.pollOnce()).resolves.toBeUndefined();
+  });
+});
+
+describe('PollingService — reconexão com backoff (BL-C3-013)', () => {
+  let kit: TestKit;
+
+  /** Erro de conectividade espelhando o que o C4 lança em queda de SMB. */
+  function connErr(code = 'ETIMEDOUT'): FilesystemIOError {
+    return new FilesystemIOError(`${SHARED_PATH}/pending`, `falha ${code}`, errno(code));
+  }
+
+  beforeEach(() => {
+    kit = makeKit();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    kit.pollingService.stop();
+    vi.useRealTimers();
+  });
+
+  it('erro de conectividade → desconectado + onConnectionChange(offline) + warn', async () => {
+    vi.spyOn(kit.pendingStore, 'listPending').mockRejectedValueOnce(connErr());
+
+    await kit.pollingService.pollOnce();
+
+    expect(kit.pollingService.getConnection().online).toBe(false);
+    expect(kit.connectionEvents.at(-1)?.online).toBe(false);
+    expect(kit.log.warn).toHaveBeenCalledWith(
+      expect.stringContaining('conexão com a pasta compartilhada perdida'),
+      expect.any(Object),
+    );
+  });
+
+  it('DirectoryNotFound + raiz do share acessível → conectado (pending/ ainda não criada)', async () => {
+    vi.spyOn(kit.pendingStore, 'listPending').mockRejectedValueOnce(
+      new DirectoryNotFoundError(`${SHARED_PATH}/pending`, errno('ENOENT')),
+    );
+    const existsSpy = vi.spyOn(kit.adapter, 'exists').mockResolvedValue(true);
+
+    await kit.pollingService.pollOnce();
+
+    expect(existsSpy).toHaveBeenCalledWith(SHARED_PATH);
+    expect(kit.pollingService.getConnection().online).toBe(true);
+    expect(kit.log.warn).not.toHaveBeenCalled();
+  });
+
+  it('DirectoryNotFound + raiz do share inacessível → desconectado', async () => {
+    vi.spyOn(kit.pendingStore, 'listPending').mockRejectedValueOnce(
+      new DirectoryNotFoundError(`${SHARED_PATH}/pending`, errno('ENOENT')),
+    );
+    vi.spyOn(kit.adapter, 'exists').mockResolvedValue(false);
+
+    await kit.pollingService.pollOnce();
+
+    expect(kit.pollingService.getConnection().online).toBe(false);
+    expect(kit.connectionEvents.at(-1)?.online).toBe(false);
+  });
+
+  it('erro NÃO-conectividade (EACCES) → NÃO desconecta (loga error, mantém estado)', async () => {
+    // Conecta primeiro — `.keep` faz a raiz do share existir e o listPending
+    // retornar [] (no Memory, dir vazio = inexistente, G-019).
+    await kit.adapter.writeFileAtomic(`${SHARED_PATH}/pending/.keep`, '');
+    await kit.pollingService.pollOnce();
+    expect(kit.pollingService.getConnection().online).toBe(true);
+    const eventsBefore = kit.connectionEvents.length;
+
+    vi.spyOn(kit.pendingStore, 'listPending').mockRejectedValueOnce(connErr('EACCES'));
+    await kit.pollingService.pollOnce();
+
+    // EACCES não é conectividade — permanece online, sem novo evento de conexão.
+    expect(kit.pollingService.getConnection().online).toBe(true);
+    expect(kit.connectionEvents.length).toBe(eventsBefore);
+    expect(kit.log.error).toHaveBeenCalledWith(
+      expect.stringContaining('não-conectividade'),
+      expect.any(Object),
+    );
+  });
+
+  it('reconexão: ciclo bem-sucedido processa o que acumulou + onConnectionChange(online) + info', async () => {
+    // Acumula uma sprint enquanto "fora do ar".
+    const payload = makePayload();
+    await kit.pendingStore.writePendingSprint(payload);
+
+    // 1º ciclo: queda de conectividade.
+    const spy = vi.spyOn(kit.pendingStore, 'listPending').mockRejectedValueOnce(connErr());
+    await kit.pollingService.pollOnce();
+    expect(kit.pollingService.getConnection().online).toBe(false);
+    expect(kit.queueService.length()).toBe(0);
+
+    // 2º ciclo: o spy esgotou o `once` → chama o listPending real (share voltou).
+    spy.mockRestore();
+    await kit.pollingService.pollOnce();
+
+    expect(kit.pollingService.getConnection().online).toBe(true);
+    expect(kit.queueService.length()).toBe(1); // fila acumulada processada
+    expect(kit.log.info).toHaveBeenCalledWith(
+      expect.stringContaining('restabelecida'),
+      expect.any(Object),
+    );
+    expect(kit.connectionEvents.map((e) => e.online)).toEqual([false, true]);
+  });
+
+  it('anti-spam: queda + N retries → 1 warn na borda, retries em debug', async () => {
+    vi.spyOn(kit.pendingStore, 'listPending').mockRejectedValue(connErr());
+
+    await kit.pollingService.pollOnce(); // borda connected→disconnected
+    await kit.pollingService.pollOnce(); // retry
+    await kit.pollingService.pollOnce(); // retry
+
+    expect(kit.log.warn).toHaveBeenCalledTimes(1);
+    expect(kit.log.debug).toHaveBeenCalledTimes(2);
+    // Um único evento de transição (não um por ciclo).
+    expect(kit.connectionEvents.filter((e) => !e.online).length).toBe(1);
+  });
+
+  it('scheduler usa a agenda de backoff 5/10/30/60 (cap 60) enquanto desconectado', async () => {
+    const spy = vi.spyOn(kit.pendingStore, 'listPending').mockRejectedValue(connErr());
+
+    await kit.pollingService.start(); // poll imediato → falha #1
+    expect(spy).toHaveBeenCalledTimes(1);
+
+    // rng fixo 0.5 → sem jitter → atrasos exatos da agenda.
+    await vi.advanceTimersByTimeAsync(4999);
+    expect(spy).toHaveBeenCalledTimes(1); // ainda não (backoff = 5000)
+    await vi.advanceTimersByTimeAsync(1);
+    expect(spy).toHaveBeenCalledTimes(2); // 5s
+
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(spy).toHaveBeenCalledTimes(3); // 10s
+
+    await vi.advanceTimersByTimeAsync(30000);
+    expect(spy).toHaveBeenCalledTimes(4); // 30s
+
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(spy).toHaveBeenCalledTimes(5); // 60s
+
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(spy).toHaveBeenCalledTimes(6); // cap 60s
+  });
+
+  it('reconexão reseta o backoff: próximo ciclo volta ao intervalo normal', async () => {
+    const spy = vi.spyOn(kit.pendingStore, 'listPending').mockRejectedValue(connErr());
+
+    await kit.pollingService.start(); // falha #1 → backoff 5s agendado
+    await vi.advanceTimersByTimeAsync(5000); // falha #2 → backoff 10s agendado
+    expect(spy).toHaveBeenCalledTimes(2);
+
+    // Share volta — próximo ciclo (em 10s) terá sucesso.
+    spy.mockResolvedValue([]);
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(spy).toHaveBeenCalledTimes(3);
+    expect(kit.pollingService.getConnection().online).toBe(true);
+
+    // Agora o agendamento volta ao intervalo NORMAL (3s), não ao backoff.
+    await vi.advanceTimersByTimeAsync(POLLING_INTERVAL_MS - 1);
+    expect(spy).toHaveBeenCalledTimes(3);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(spy).toHaveBeenCalledTimes(4);
+  });
+
+  it('boot resiliente: start() com share fora não joga e sobe desconectado', async () => {
+    vi.spyOn(kit.pendingStore, 'listPending').mockRejectedValue(connErr('ENOTFOUND'));
+
+    await expect(kit.pollingService.start()).resolves.toBeUndefined();
+    expect(kit.pollingService.getConnection().online).toBe(false);
+    expect(kit.connectionEvents.at(-1)?.online).toBe(false);
+  });
+
+  it('erro AO PROCESSAR entry (não no listPending) NÃO afeta conexão: loga error, segue conectado', async () => {
+    // listPending teve sucesso (share OK) → conectado. Um erro inesperado ao
+    // processar a entry é logado mas não deve marcar "sem conexão".
+    await kit.pendingStore.writePendingSprint(makePayload());
+    vi.spyOn(kit.queueService, 'enqueue').mockImplementationOnce(() => {
+      throw new Error('falha inesperada de domínio');
+    });
+
+    await expect(kit.pollingService.pollOnce()).resolves.toBeUndefined();
+
+    expect(kit.pollingService.getConnection().online).toBe(true);
+    expect(kit.log.error).toHaveBeenCalledWith(
+      expect.stringContaining('processar entries'),
+      expect.any(Object),
+    );
   });
 });

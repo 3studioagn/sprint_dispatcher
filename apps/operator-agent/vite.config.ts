@@ -41,7 +41,14 @@ export default defineConfig(({ command }) => ({
               // Em produção, node_modules é incluído pelo electron-builder, então
               // `require('jsdom')` em runtime tem acesso ao pacote. Mesma decisão do
               // Leader (G-020, ADR-017).
-              external: ['electron', 'jsdom', 'canvas'],
+              //
+              // pino/pino-pretty/thread-stream externalizados (BL-C3-013): o
+              // PollingService loga transições de conexão via @sprint/logger (pino).
+              // Bundlar os requires dinâmicos/worker do pino quebra sob
+              // vite-plugin-electron + asar. Externalizado, resolve de node_modules
+              // em runtime. O pollingLogger usa `destination: process.stdout`
+              // (JSON síncrono, sem worker) — mesmo padrão do Leader (G-020).
+              external: ['electron', 'jsdom', 'canvas', 'pino', 'pino-pretty', 'thread-stream'],
             },
           },
         },

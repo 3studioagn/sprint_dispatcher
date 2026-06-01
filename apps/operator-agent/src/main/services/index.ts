@@ -11,6 +11,7 @@ export {
   computeTrayIconColor,
   computeTrayMenu,
   computeTrayTooltip,
+  formatConnectionStatusLabel,
   type TrayIconColor,
   type TrayMenuAction,
   type TrayMenuItem,
@@ -18,6 +19,17 @@ export {
 } from './trayStateService';
 
 export { TrayService, type TrayActionHandler } from './trayService';
+
+// Reconexão com backoff — BL-C3-013 (W3)
+export {
+  BACKOFF_JITTER,
+  BACKOFF_SCHEDULE_MS,
+  CONNECTIVITY_ERROR_CODES,
+  isConnectivityError,
+  nextBackoffDelayMs,
+  type ConnectionStatus,
+  type RandomFn,
+} from './connectivity';
 
 // Domain — Gate 3 (BL-C3-003) + Gate 6 (BL-C3-008 archive)
 export { QueueService, type QueueUnsubscribe } from './queueService';

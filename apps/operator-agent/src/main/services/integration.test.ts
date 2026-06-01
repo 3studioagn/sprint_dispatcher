@@ -158,6 +158,8 @@ async function makeHarness(): Promise<Harness> {
 
   const pollingService = new PollingService({
     pendingStore,
+    adapter,
+    sharedPath: SHARED_PATH,
     queueService,
     historyService,
     userId: USER_ID,

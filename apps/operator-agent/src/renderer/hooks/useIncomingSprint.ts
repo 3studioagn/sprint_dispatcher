@@ -12,20 +12,39 @@
  * - `useCurrentSprintStore.setCurrent` (sprint payload).
  * - `useQueueStore.setLength` (total na fila, inclui a atual).
  *
+ * **BL-C3-014 — som de notificação:** ao receber um evento com
+ * `playSound === true` (exibição inicial; nunca reabertura), toca o som curto
+ * via {@link playNotificationSound} (fail-safe). Deduplica por `sprint_id`
+ * (ref local) para não tocar duas vezes a mesma sprint quando pull e push
+ * coincidem.
+ *
  * Cleanup: cancela pull em vôo (via flag `cancelled`) + unsubscribe do push.
  */
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
+import type { IncomingSprintEvent } from '../../shared/ipc-types';
+import { playNotificationSound } from '../sound/notificationSound';
 import { useCurrentSprintStore } from '../stores/useCurrentSprintStore';
 import { useQueueStore } from '../stores/useQueueStore';
 
 export function useIncomingSprint(): void {
   const setCurrent = useCurrentSprintStore((s) => s.setCurrent);
   const setLength = useQueueStore((s) => s.setLength);
+  // Último sprint_id que disparou som — evita tocar de novo quando pull e
+  // push trazem a MESMA sprint (cenário comum no mount inicial da janela).
+  const lastPlayedSprintId = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+
+    function maybePlaySound(event: IncomingSprintEvent): void {
+      // Só na exibição inicial (playSound) e nunca em reabertura via tray.
+      if (event.playSound !== true || event.reopened === true) return;
+      if (lastPlayedSprintId.current === event.sprint.sprint_id) return;
+      lastPlayedSprintId.current = event.sprint.sprint_id;
+      playNotificationSound();
+    }
 
     async function pullInitial(): Promise<void> {
       try {
@@ -35,6 +54,7 @@ export function useIncomingSprint(): void {
         // fila, nunca reopen (reopen não toca em currentItem).
         setCurrent(current.sprint, current.reopened ?? false);
         setLength(current.queueLength);
+        maybePlaySound(current);
       } catch (err) {
         // Falha no pull não bloqueia o renderer — o push via onIncoming
         // ainda pode disparar. Logamos para diagnose.
@@ -48,6 +68,7 @@ export function useIncomingSprint(): void {
       // (BL-C3-009 — botão "Fechar" em vez de "Recebi").
       setCurrent(event.sprint, event.reopened ?? false);
       setLength(event.queueLength);
+      maybePlaySound(event);
     });
 
     return () => {

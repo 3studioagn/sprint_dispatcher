@@ -7,10 +7,12 @@
 
 import { describe, expect, it } from 'vitest';
 
+import type { ConnectionStatus } from './connectivity';
 import {
   computeTrayIconColor,
   computeTrayMenu,
   computeTrayTooltip,
+  formatConnectionStatusLabel,
   type TrayState,
 } from './trayStateService';
 
@@ -19,6 +21,13 @@ const IDLE: TrayState = { kind: 'idle' };
 const SPRINT_1: TrayState = { kind: 'sprint_active', queueLength: 1 };
 const SPRINT_3: TrayState = { kind: 'sprint_active', queueLength: 3 };
 const CONFIG_ERROR: TrayState = { kind: 'config_error', reason: 'config ausente' };
+
+const ONLINE: ConnectionStatus = { online: true, lastConnectedAt: new Date('2026-06-01T13:05:00') };
+const OFFLINE_WITH_LAST: ConnectionStatus = {
+  online: false,
+  lastConnectedAt: new Date('2026-06-01T13:05:00'),
+};
+const OFFLINE_NEVER: ConnectionStatus = { online: false, lastConnectedAt: null };
 
 describe('computeTrayIconColor', () => {
   it('loading → gray', () => {
@@ -156,5 +165,102 @@ describe('computeTrayMenu', () => {
       expect(reopen?.enabled).toBe(false);
       expect(reopen?.action).toBeNull();
     });
+  });
+});
+
+// =============================================================================
+// BL-C3-013 — dimensão de conexão (vermelho/verde + tooltip + "Status da conexão")
+// =============================================================================
+
+describe('computeTrayIconColor — dimensão de conexão (BL-C3-013)', () => {
+  it('idle conectado → verde', () => {
+    expect(computeTrayIconColor(IDLE, ONLINE)).toBe('green');
+  });
+
+  it('idle com conexão desconhecida (null) → cinza', () => {
+    expect(computeTrayIconColor(IDLE, null)).toBe('gray');
+  });
+
+  it('sem conexão → vermelho (sobrepõe idle e sprint_active)', () => {
+    expect(computeTrayIconColor(IDLE, OFFLINE_WITH_LAST)).toBe('red');
+    expect(computeTrayIconColor(SPRINT_1, OFFLINE_WITH_LAST)).toBe('red');
+    expect(computeTrayIconColor(SPRINT_3, OFFLINE_NEVER)).toBe('red');
+  });
+
+  it('sprint_active conectado permanece amarelo (pendência preservada)', () => {
+    expect(computeTrayIconColor(SPRINT_1, ONLINE)).toBe('yellow');
+  });
+
+  it('config_error é vermelho mesmo se a conexão estiver online', () => {
+    expect(computeTrayIconColor(CONFIG_ERROR, ONLINE)).toBe('red');
+  });
+
+  it('loading permanece cinza quando online', () => {
+    expect(computeTrayIconColor(LOADING, ONLINE)).toBe('gray');
+  });
+});
+
+describe('computeTrayTooltip — dimensão de conexão (BL-C3-013)', () => {
+  it('sem conexão com última conexão conhecida inclui HH:MM', () => {
+    const tip = computeTrayTooltip(IDLE, OFFLINE_WITH_LAST);
+    expect(tip).toContain('sem conexão');
+    expect(tip).toContain('última conexão 13:05');
+  });
+
+  it('sem conexão e nunca conectou omite o HH:MM', () => {
+    const tip = computeTrayTooltip(IDLE, OFFLINE_NEVER);
+    expect(tip).toContain('sem conexão');
+    expect(tip).not.toContain('última conexão');
+  });
+
+  it('idle conectado prefixa "conectado ·"', () => {
+    expect(computeTrayTooltip(IDLE, ONLINE)).toContain('conectado · aguardando sprints');
+  });
+
+  it('config_error ignora conexão (mostra a razão)', () => {
+    expect(computeTrayTooltip(CONFIG_ERROR, OFFLINE_WITH_LAST)).toContain('config ausente');
+  });
+});
+
+describe('formatConnectionStatusLabel (BL-C3-013)', () => {
+  it('null → verificando…', () => {
+    expect(formatConnectionStatusLabel(null)).toBe('Conexão: verificando…');
+  });
+
+  it('online → conectado', () => {
+    expect(formatConnectionStatusLabel(ONLINE)).toBe('Conexão: conectado');
+  });
+
+  it('offline com última conexão → inclui (última: HH:MM)', () => {
+    expect(formatConnectionStatusLabel(OFFLINE_WITH_LAST)).toBe(
+      'Conexão: sem conexão (última: 13:05)',
+    );
+  });
+
+  it('offline e nunca conectou → sem sufixo', () => {
+    expect(formatConnectionStatusLabel(OFFLINE_NEVER)).toBe('Conexão: sem conexão');
+  });
+});
+
+describe('computeTrayMenu — item "Status da conexão" (BL-C3-013)', () => {
+  it('insere item de status (desabilitado) refletindo a conexão', () => {
+    const menu = computeTrayMenu(IDLE, OFFLINE_WITH_LAST);
+    const status = menu.find((i) => i.label.startsWith('Conexão:'));
+    expect(status).toBeDefined();
+    expect(status?.enabled).toBe(false);
+    expect(status?.action).toBeNull();
+    expect(status?.label).toContain('sem conexão');
+  });
+
+  it('sem connection (null) mostra "verificando…"', () => {
+    const menu = computeTrayMenu(IDLE);
+    const status = menu.find((i) => i.label.startsWith('Conexão:'));
+    expect(status?.label).toBe('Conexão: verificando…');
+  });
+
+  it('header continua em menu[0] (item de status vem depois)', () => {
+    const menu = computeTrayMenu(IDLE, ONLINE);
+    expect(menu[0]?.label).toBe('Sprint Operator Agent');
+    expect(menu[1]?.label).toBe('Conexão: conectado');
   });
 });

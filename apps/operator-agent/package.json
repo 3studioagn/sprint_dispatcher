@@ -16,11 +16,13 @@
     "package": "pnpm build && electron-builder --dir",
     "make": "pnpm build && electron-builder",
     "make:portable": "pnpm build && electron-builder --win portable",
-    "make:installer": "pnpm build && electron-builder --win nsis"
+    "make:installer": "pnpm build && electron-builder --win nsis",
+    "gen:tray-icons": "node scripts/generate-tray-icons.mjs"
   },
   "dependencies": {
     "@sprint/contracts": "workspace:*",
     "@sprint/fs-adapter": "workspace:*",
+    "@sprint/logger": "workspace:*",
     "@sprint/ui-kit": "workspace:*",
     "date-fns": "^3.6.0",
     "lucide-react": "^0.380.0",

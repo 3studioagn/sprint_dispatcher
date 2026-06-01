@@ -112,6 +112,14 @@ export interface IncomingSprintEvent {
    * Opcional — ausente em pushes normais (fluxo de fila padrão).
    */
   reopened?: boolean;
+  /**
+   * `true` quando o renderer deve tocar o som de notificação ao exibir esta
+   * sprint (BL-C3-014). Computado pelo main como
+   * `som_notificacao && exibição inicial && !reabertura`. Ausente/`false` →
+   * silêncio (reabertura via tray, ou som desabilitado no `config.json`).
+   * O som no renderer é fail-safe — falha de áudio não afeta o overlay.
+   */
+  playSound?: boolean;
 }
 
 // =============================================================================

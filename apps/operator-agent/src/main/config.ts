@@ -19,6 +19,14 @@
  * operador pode criar/corrigir o config e o agente "destrava" via
  * próxima chamada de `config:get` sem precisar reiniciar.
  *
+ * **Acessibilidade do `shared_path` NÃO é mais validada aqui (ADR-027,
+ * BL-C3-013).** A reachability da pasta compartilhada virou uma condição de
+ * *runtime* — propriedade da máquina de reconexão do {@link PollingService}
+ * (tray vermelho + backoff + retomada automática), e não mais um erro de
+ * boot permanente. Assim o Agent **sobe mesmo com o share fora** (boot
+ * resiliente — RNF-07) e auto-conecta quando o servidor volta. `loadConfig`
+ * agora valida apenas a forma do `config.json` (e o I/O do próprio arquivo).
+ *
  * Os 3 códigos de erro mapeiam 1-para-1 ao `ConfigErrorCode` do IPC:
  *
  * | Cenário                                | Erro                     | code            |
@@ -26,11 +34,11 @@
  * | Arquivo ausente (ENOENT)               | ConfigNotFoundError      | NOT_FOUND       |
  * | JSON malformado, schema violado,       | ConfigInvalidError       | INVALID         |
  * | minimize_after_seconds fora de [1,300] |                          |                 |
- * | shared_path inacessível,               | ConfigInaccessibleError  | INACCESSIBLE    |
- * | I/O EISDIR / EACCES no read            |                          |                 |
+ * | I/O no config.json (EISDIR / EACCES)   | ConfigInaccessibleError  | INACCESSIBLE    |
  *
  * @see DECISIONS.md ADR-012 (fail-fast precedent — superseded por fail-soft em W1)
  * @see DECISIONS.md ADR-017 (rebuildDeps callback no Leader)
+ * @see DECISIONS.md ADR-027 (reachability do share virou estado de runtime)
  * @see Requisitos Anexo F
  */
 
@@ -81,6 +89,12 @@ export interface RuntimeConfig {
   readonly pollingIntervalMs: number;
   /** Em millissegundos. Default 30000ms. */
   readonly minimizeAfterMs: number;
+  /**
+   * Espelha `agentConfigSchema.som_notificacao` (default `true`). Controla
+   * se o overlay toca o som curto ao ser exibido (BL-C3-014). Consumido pelo
+   * `OverlayService`, que repassa ao renderer no push de exibição inicial.
+   */
+  readonly somNotificacao: boolean;
 }
 
 // =============================================================================
@@ -186,9 +200,9 @@ export function getConfigPath(): string {
  *     valida via `minimizeAfterSecondsSchema`. Falha → `ConfigInvalidError`.
  *  4. Strip do campo extra + `safeParseAgentConfig` no resto. Falha →
  *     `ConfigInvalidError`.
- *  5. `fs.stat(shared_path)` — não existe / não é diretório / erro de I/O
- *     → `ConfigInaccessibleError(shared_path)`.
- *  6. Retorna `RuntimeConfig` com defaults aplicados.
+ *  5. Retorna `RuntimeConfig` com defaults aplicados. A acessibilidade do
+ *     `shared_path` NÃO é verificada aqui (ADR-027) — é a máquina de
+ *     reconexão do `PollingService` que cuida disso em runtime.
  */
 export async function loadConfig(): Promise<RuntimeConfig> {
   const configPath = getConfigPath();
@@ -242,22 +256,13 @@ export async function loadConfig(): Promise<RuntimeConfig> {
   }
   const config: AgentConfig = canonical.data;
 
-  // 5. Valida shared_path acessível
-  try {
-    const stats = await fs.stat(config.shared_path);
-    if (!stats.isDirectory()) {
-      throw new ConfigInaccessibleError(
-        configPath,
-        config.shared_path,
-        new Error('Path existe mas não é diretório'),
-      );
-    }
-  } catch (err) {
-    if (err instanceof ConfigInaccessibleError) throw err;
-    throw new ConfigInaccessibleError(configPath, config.shared_path, err as Error);
-  }
-
-  // 6. Resolve millis + retorna RuntimeConfig
+  // 5. Resolve millis + retorna RuntimeConfig.
+  //
+  // NÃO validamos a acessibilidade do `shared_path` aqui (ADR-027): a
+  // reachability da pasta compartilhada é condição de runtime, tratada pela
+  // máquina de reconexão do PollingService (tray vermelho + backoff). Isso
+  // torna o boot resiliente — o Agent sobe mesmo com o servidor fora e
+  // conecta sozinho quando ele voltar (RNF-07, BL-C3-013).
   return {
     userId: config.user_id,
     userNomeExibicao: config.user_nome_exibicao,
@@ -265,5 +270,6 @@ export async function loadConfig(): Promise<RuntimeConfig> {
     sharedPath: config.shared_path,
     pollingIntervalMs: config.polling_interval_seconds * 1000,
     minimizeAfterMs: minimizeAfterSeconds * 1000,
+    somNotificacao: config.som_notificacao,
   };
 }

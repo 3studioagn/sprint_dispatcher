@@ -26,6 +26,7 @@
 import path from 'node:path';
 
 import { NodeFilesystemAdapter, AckStore, PendingStore } from '@sprint/fs-adapter';
+import { createLogger } from '@sprint/logger';
 import { app, dialog, ipcMain, shell } from 'electron';
 
 import type {
@@ -46,12 +47,39 @@ import {
   PollingService,
   QueueService,
   TrayService,
+  type PollingLogger,
   type TrayActionHandler,
 } from './services';
 import { acquireSingleInstanceLock } from './single-instance';
 
 const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
 const IS_DEV = Boolean(DEV_SERVER_URL);
+
+// =============================================================================
+// Logger — BL-C3-013 (1º uso de @sprint/logger no Agent)
+// =============================================================================
+//
+// `destination: process.stdout` → JSON síncrono, sem worker do pino-pretty
+// (quebraria sob asar/vite-plugin-electron — padrão G-020 do Leader). Usado
+// para as transições de conexão do PollingService. A integração ampla
+// (substituir os console.* restantes) permanece BL-C6-002.
+const pollingLogger = createLogger('polling-service', { destination: process.stdout });
+
+/** Adapta o `Logger` (@sprint/logger, obj-first) à interface `PollingLogger` (msg-first). */
+const pollLog: PollingLogger = {
+  debug: (msg, ctx) => {
+    pollingLogger.debug(ctx ?? {}, msg);
+  },
+  info: (msg, ctx) => {
+    pollingLogger.info(ctx ?? {}, msg);
+  },
+  warn: (msg, ctx) => {
+    pollingLogger.warn(ctx ?? {}, msg);
+  },
+  error: (msg, ctx) => {
+    pollingLogger.error(ctx ?? {}, msg);
+  },
+};
 
 // =============================================================================
 // Crash visibility — uncaughtException global (G-023)
@@ -242,6 +270,8 @@ async function rebuildDeps(): Promise<RuntimeConfig> {
     const historyLocal = new HistoryService(app.getPath('userData'));
     const overlayLocal = new OverlayService({
       minimizeAfterMs: config.minimizeAfterMs,
+      // BL-C3-014: som ao exibir overlay (exibição inicial), configurável.
+      somNotificacao: config.somNotificacao,
     });
     const pillLocal = new PillService();
     const ackLocal = new AckService({
@@ -256,6 +286,11 @@ async function rebuildDeps(): Promise<RuntimeConfig> {
     });
     const pollingLocal = new PollingService({
       pendingStore: pendingStoreLocal,
+      // BL-C3-013: adapter + sharedPath para sondar a raiz do share e
+      // desambiguar DirectoryNotFound de `pending/` (share fora vs. pasta
+      // ainda não criada). Sem método novo no C4 (ADR-027).
+      adapter,
+      sharedPath: config.sharedPath,
       queueService: queueLocal,
       historyService: historyLocal,
       // BL-C3-011: overlayService injetado para cancels poderem fechar
@@ -267,14 +302,12 @@ async function rebuildDeps(): Promise<RuntimeConfig> {
       ackService: ackLocal,
       userId: config.userId,
       pollingIntervalMs: config.pollingIntervalMs,
-      log: {
-        warn: (msg, ctx) => {
-          console.warn(`[polling] ${msg}`, ctx ?? '');
-        },
-        error: (msg, ctx) => {
-          console.error(`[polling] ${msg}`, ctx ?? '');
-        },
+      // BL-C3-013: transições de conexão pintam o tray (vermelho/verde) +
+      // atualizam tooltip e o item "Status da conexão".
+      onConnectionChange: (status) => {
+        trayService.setConnection(status);
       },
+      log: pollLog,
     });
 
     // Wire queueService → overlayService + ack + tray refresh + pill hide.

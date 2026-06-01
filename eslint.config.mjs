@@ -162,7 +162,7 @@ export default tseslint.config(
   // project service", G-010). `console` liberado: são CLIs de release que
   // reportam progresso no stdout/stderr.
   {
-    files: ['scripts/**/*.{js,cjs,mjs}'],
+    files: ['scripts/**/*.{js,cjs,mjs}', 'apps/*/scripts/**/*.{js,cjs,mjs}'],
     ...tseslint.configs.disableTypeChecked,
     rules: {
       ...tseslint.configs.disableTypeChecked.rules,

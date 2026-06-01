@@ -615,3 +615,65 @@ describe('OverlayService — reopenFromHistory + closeReopened (BL-C3-009)', () 
     expect(service.isReopened()).toBe(false);
   });
 });
+
+describe('OverlayService — som de notificação (BL-C3-014)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    mockBrowserWindow.mockClear();
+    mockBrowserWindowInstances.length = 0;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('getCurrentEvent inclui playSound=true por default (som habilitado)', () => {
+    const service = new OverlayService({ minimizeAfterMs: MINIMIZE_AFTER_MS });
+    service.showSprint(makeItem(), 1);
+    expect(service.getCurrentEvent()?.playSound).toBe(true);
+    service.destroy();
+  });
+
+  it('push sprint:incoming (janela existente) carrega playSound=true', () => {
+    const service = new OverlayService({ minimizeAfterMs: MINIMIZE_AFTER_MS });
+    service.showSprint(makeItem({ sprintId: SPRINT_ID_1 }), 1);
+    const w = lastWindow();
+    w.webContents.send.mockClear();
+    service.showSprint(makeItem({ sprintId: SPRINT_ID_2 }), 2);
+    const [, payload] = w.webContents.send.mock.calls[0] as [string, { playSound?: boolean }];
+    expect(payload.playSound).toBe(true);
+    service.destroy();
+  });
+
+  it('som_notificacao=false → playSound=false no pull e no push', () => {
+    const service = new OverlayService({
+      minimizeAfterMs: MINIMIZE_AFTER_MS,
+      somNotificacao: false,
+    });
+    service.showSprint(makeItem({ sprintId: SPRINT_ID_1 }), 1);
+    expect(service.getCurrentEvent()?.playSound).toBe(false);
+
+    const w = lastWindow();
+    w.webContents.send.mockClear();
+    service.showSprint(makeItem({ sprintId: SPRINT_ID_2 }), 2);
+    const [, payload] = w.webContents.send.mock.calls[0] as [string, { playSound?: boolean }];
+    expect(payload.playSound).toBe(false);
+    service.destroy();
+  });
+
+  it('reopenFromHistory NUNCA toca som (playSound=false) mesmo com som habilitado', () => {
+    const service = new OverlayService({
+      minimizeAfterMs: MINIMIZE_AFTER_MS,
+      somNotificacao: true,
+    });
+    service.reopenFromHistory(makeItem().payload);
+    const w = lastWindow();
+    const [, payload] = w.webContents.send.mock.calls[0] as [
+      string,
+      { playSound?: boolean; reopened?: boolean },
+    ];
+    expect(payload.reopened).toBe(true);
+    expect(payload.playSound).toBe(false);
+    service.destroy();
+  });
+});

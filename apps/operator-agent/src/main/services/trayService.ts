@@ -20,11 +20,13 @@
  * @see ./trayStateService.ts (lógica pura)
  */
 
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 
 import { Menu, Tray, app, dialog } from 'electron';
 import type { MenuItemConstructorOptions } from 'electron';
 
+import type { ConnectionStatus } from './connectivity';
 import {
   computeTrayIconColor,
   computeTrayMenu,
@@ -42,19 +44,29 @@ import {
  */
 export type TrayActionHandler = (action: Exclude<TrayMenuAction, null>) => void;
 
+/** Nome do arquivo PNG por cor lógica (gerados em `build/` — ver scripts/generate-tray-icons.mjs). */
+const ICON_FILE_BY_COLOR: Record<TrayIconColor, string> = {
+  gray: 'tray-gray.png',
+  yellow: 'tray-yellow.png',
+  red: 'tray-red.png',
+  green: 'tray-green.png',
+};
+
 /**
- * Resolve o path absoluto do ícone do tray para uma cor lógica.
+ * Resolve o path absoluto do ícone do tray para uma cor lógica (BL-C3-013).
  *
- * **TODO (Gate 5/8 polish):** gerar `build/tray-gray.ico`,
- * `build/tray-yellow.ico`, `build/tray-red.ico` distintos. Por ora todos
- * resolvem para o `build/tray.ico` único do W0 — sinalização visual
- * principal vai via tooltip + balloon + menu degradado.
+ * Os PNGs coloridos (32×32, downscale nítido pelo Tray) vivem em `build/`
+ * e são empacotados via `electron-builder.yml#files` (`build/**`). Se um
+ * asset de cor faltar no asar por qualquer motivo, cai para o `tray.ico`
+ * do W0 (sempre presente) — defesa em profundidade contra o boot do `Tray`
+ * sem imagem (G-023).
  */
 function resolveIconPath(color: TrayIconColor): string {
   // `__dirname` em runtime do main aponta para `dist-electron/main/`.
-  // `tray.ico` foi gerado em `apps/operator-agent/build/tray.ico` (W0).
-  void color; // futuro: colorVariants[color] ?? defaultPath
-  return path.join(__dirname, '../../build/tray.ico');
+  const buildDir = path.join(__dirname, '../../build');
+  const candidate = path.join(buildDir, ICON_FILE_BY_COLOR[color]);
+  if (existsSync(candidate)) return candidate;
+  return path.join(buildDir, 'tray.ico');
 }
 
 /**
@@ -62,8 +74,12 @@ function resolveIconPath(color: TrayIconColor): string {
  * Cliques são roteados via `onAction(action)` — itens sem `action` (null)
  * viram itens informativos (sem `click`).
  */
-function buildContextMenu(state: TrayState, onAction: TrayActionHandler): Menu {
-  const items = computeTrayMenu(state);
+function buildContextMenu(
+  state: TrayState,
+  connection: ConnectionStatus | null,
+  onAction: TrayActionHandler,
+): Menu {
+  const items = computeTrayMenu(state, connection);
   const template: MenuItemConstructorOptions[] = items.map((item) => {
     const opts: MenuItemConstructorOptions = {
       label: item.label,
@@ -87,6 +103,12 @@ function buildContextMenu(state: TrayState, onAction: TrayActionHandler): Menu {
 export class TrayService {
   private tray: Tray | null = null;
   private currentState: TrayState = { kind: 'loading' };
+  /**
+   * Estado de conexão com a pasta compartilhada (BL-C3-013). `null` até o
+   * primeiro ciclo de polling sondar (boot). Dimensão ortogonal ao
+   * `currentState` — compõe cor/tooltip/menu via {@link trayStateService}.
+   */
+  private currentConnection: ConnectionStatus | null = null;
   private actionHandler: TrayActionHandler = () => {
     // Default noop — caller deve substituir via boot({ onAction })
   };
@@ -121,6 +143,19 @@ export class TrayService {
       return;
     }
     this.applyState(state);
+  }
+
+  /**
+   * Atualiza a dimensão de **conexão** (BL-C3-013). Chamado pelo
+   * composition root quando a máquina de reconexão do `PollingService`
+   * transiciona (conectado ↔ sem conexão). Recompõe o ícone/tooltip/menu
+   * preservando o `currentState` (sprint/config). Idempotente; seguro antes
+   * do `boot` (apenas guarda o valor).
+   */
+  setConnection(connection: ConnectionStatus): void {
+    this.currentConnection = connection;
+    if (this.tray === null) return;
+    this.applyState(this.currentState);
   }
 
   /**
@@ -189,9 +224,10 @@ export class TrayService {
   private applyState(state: TrayState): void {
     if (this.tray === null) return;
     this.currentState = state;
-    const iconPath = resolveIconPath(computeTrayIconColor(state));
+    const connection = this.currentConnection;
+    const iconPath = resolveIconPath(computeTrayIconColor(state, connection));
     this.tray.setImage(iconPath);
-    this.tray.setToolTip(computeTrayTooltip(state));
-    this.tray.setContextMenu(buildContextMenu(state, this.actionHandler));
+    this.tray.setToolTip(computeTrayTooltip(state, connection));
+    this.tray.setContextMenu(buildContextMenu(state, connection, this.actionHandler));
   }
 }
