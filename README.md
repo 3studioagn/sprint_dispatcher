@@ -124,6 +124,23 @@ Detalhes operacionais de cada componente: ver os `README.md` em
 | `pnpm --filter sprint-leader run make:portable` | Empacota Leader como portable `.exe` (Windows local) |
 | `pnpm --filter sprint-operator-agent run make`  | Empacota Agent (NSIS + portable, Windows local)      |
 
+### Code signing (W3 · BL-C0-008)
+
+Assinatura Authenticode dos instaladores. Runbook completo (cert + GPO +
+Secrets): [`docs/guides/code-signing.md`](./docs/guides/code-signing.md).
+Estratégia: cert auto-assinado da ARTFLEXÍVEIS + distribuição via GPO
+([ADR-024](./DECISIONS.md)).
+
+| Comando                 | O que faz                                                        |
+| ----------------------- | ---------------------------------------------------------------- |
+| `pnpm cert:gen`         | Gera `./.certs/artflexiveis-codesign.{pfx,cer}` (Windows)        |
+| `pnpm sign:local`       | Cert DEV + build assinado + verificação (validação local)        |
+| `pnpm build:signed`     | Build assinado (usa `CSC_LINK` / `CSC_KEY_PASSWORD` do ambiente) |
+| `pnpm verify:signature` | `Get-AuthenticodeSignature` nos `release/*.exe`                  |
+
+> A assinatura real roda só no `release.yml` (tag `v*.*.*`, `windows-latest`);
+> PR/branch builds não assinam. O `.pfx`/senha nunca entram no Git.
+
 ## Padrões obrigatórios
 
 Toda contribuição deve seguir os padrões definidos em
@@ -156,15 +173,16 @@ Toda contribuição deve seguir os padrões definidos em
 
 ## Status do projeto
 
-**Wave atual:** W1 fechada (Sessão 18 — 2026-05-27); auditoria pré-W2 aplicada
-(Sessão 19 — 2026-05-27) — veredito ✅ **PRONTO PARA W2**
+**Wave atual:** W2 fechada (Gate W2→W3 = GO, Sessão 44 — 2026-05-29). **W3
+iniciada** (2026-06-01) com **BL-C0-008 (code signing)** — ver
+[`docs/guides/code-signing.md`](./docs/guides/code-signing.md).
 
 | Wave | Foco                                            | Status                                     |
 | ---- | ----------------------------------------------- | ------------------------------------------ |
 | W0   | Foundation, contracts, scaffolds dos apps       | ✅ Concluída                               |
 | W1   | MVP Core (fluxo ponta-a-ponta dispatch → ack)   | ✅ **Concluída + correções pós-auditoria** |
-| W2   | Refinement (ack tracking, cancelamento, polish) | ⏸️ Próxima                                 |
-| W3   | Production readiness (installer, logs, E2E)     | ⏸️                                         |
+| W2   | Refinement (ack tracking, cancelamento, polish) | ✅ Concluída (Gate→W3 GO)                  |
+| W3   | Production readiness (signing, installer, E2E)  | 🔄 Em curso (BL-C0-008)                    |
 | W4   | Hardening (watchdog, perf, futuro-proof)        | ⏸️                                         |
 
 ### Wave 1 — MVP Core (fechada na Sessão 18, refinada na Sessão 19)

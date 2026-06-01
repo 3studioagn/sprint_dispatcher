@@ -66,6 +66,86 @@ não funcionaram, atalhos descobertos, cuidados a tomar. Use sem culpa.>
 
 <!-- Adicione novas entradas ABAIXO desta linha, mais recente NO TOPO da lista (ordem reversa cronológica). -->
 
+## Sessão 45 — 2026-06-01 — Wave 3 · BL-C0-008 — Code Signing
+
+**Wave atual:** W3 (Production Readiness) — **iniciada** **Itens:** [BL-C0-008]
+**Branch:** `feature/BL-C0-008-code-signing` **Status:** ✅ Concluído (DoD
+atendido)
+
+### Objetivo
+
+Entregar BL-C0-008 (code signing) — primeiro item da W3: infra de assinatura
+Authenticode + verificação para `SprintLeader.exe` e `SprintAgent.exe`, robusta
+e à prova de futuro. Padrão EXECUTAR → AUDITAR → REMEDIAR.
+
+### O que foi feito
+
+- **electron-builder** (ambos `apps/*/electron-builder.yml`, `win:`):
+  `rfc3161TimeStampServer` (RFC 3161) + `signingHashAlgorithms: [sha256]`.
+  Chaves **top-level** (electron-builder **24.13.3** — não
+  `signtoolOptions`/25.x). `CSC_LINK`/`CSC_KEY_PASSWORD` do ambiente, zero
+  hardcode.
+- **Workspace novo `@sprint/release-tools` (`scripts/`)** — adicionado a
+  `pnpm-workspace.yaml` + override ESLint (disableTypeChecked + `no-console:off`
+  só em `scripts/**`). `pfx-secret.mjs` (decode/cleanup do PFX, **100% cov**),
+  `prepare-signing-cert.mjs` (glue CI), `generate-signing-cert.ps1`/`.sh`,
+  `verify-signature.ps1`, `sign-local.ps1`. 20 testes (12 helper + 8 config).
+- **`.github/workflows/release.yml`** (novo) — tag `v*.*.*`+dispatch,
+  windows-latest: build → decode Secret → assina → verifica → upload → cleanup
+  `if: always()`. `# TODO(BL-C0-009)`. `CSC_IDENTITY_AUTO_DISCOVERY=false` em
+  ci/build-leader/build-agent.
+- **Scripts npm:** `cert:gen`, `build:signed`, `sign:local`, `verify:signature`.
+- **Runbook** `docs/guides/code-signing.md` (GPO $0 principal, AD CS opção, CA
+  paga nota), **ADR-024**, **G-027** (chaves 24.x), changeset
+  `c0-008-code-signing.md`.
+
+### Validação
+
+- Gates verdes: `format:check` · `lint` (7/7, incl. release-tools) ·
+  `type-check` (9/9) · `test:coverage` (10/10; pfx-secret.mjs
+  **100/100/100/100**) · `build` (6/6; warning de `@sprint/logger#build` é
+  pré-existente).
+- **Smoke real:** `generate-signing-cert.ps1` gerou cert válido (CN
+  ARTFLEXÍVEIS, EKU Code Signing, **sha256RSA**), store limpo pós-export.
+- **CI glue:** simulei o runner (`RUNNER_TEMP`/`GITHUB_ENV`/Secret) — `prepare`
+  decodifica → `codesign.pfx` (bytes batem) + `CSC_LINK`; `cleanup` remove;
+  Secret vazio → exit 1.
+- Nenhum `.pfx`/`.certs/` rastreado (`.gitignore` cobre).
+
+### AUDITAR + REMEDIAR
+
+- **Auditoria adversarial multi-agente (workflow, 4 dimensões em paralelo):**
+  segurança, robustez/simetria, integração, aderência ao backlog. **26 findings,
+  todos PASS.**
+- **1 finding low (status pass) remediado:** `generate-signing-cert.sh` passava
+  a senha via argv do openssl (`-passout pass:...`, visível em `ps`) → trocado
+  para `-passout env:PFX_PASS`. Script de fallback dev-only (nenhum CI o
+  invoca).
+
+### Decisões / divergências (registrar p/ Renan)
+
+- **ADR-024** (não "005" do prompt — 005 é o schema-first; 024 é o próximo
+  sequencial). Estratégia: cert auto-assinado ARTFLEXÍVEIS + GPO ($0); migração
+  p/ AD CS ou CA paga = troca de Secret.
+- **Changeset bumpa os 2 apps** (config tem `ignore: []`), mas **ADR-001** diz
+  que apps versionam pelo electron-builder. Deixei a decisão registrada no
+  próprio changeset — Renan decide manter o bump OU popular
+  `.changeset/config.json` `ignore` com os apps.
+- `scripts/` virou workspace (regenera `pnpm-lock.yaml`; install offline OK).
+
+### Próximo passo
+
+- **BL-C0-009** (publish/version/notify no release.yml) — **bloqueado por
+  BL-C5-005** (nomeação de artefatos). `release.yml` já é o ponto de extensão
+  (`# TODO`).
+
+### Questões abertas (ação operacional do TI — pré-requisito, não bloqueia código)
+
+- Usar cert **auto-assinado** distribuído via GPO **OU** emitir via **AD CS**
+  (ambos $0). Confirmar OU/escopo da GPO (Trusted Root + Trusted Publishers) e
+  quem guarda o `.pfx`. Cadastrar Secrets `WINDOWS_CERT_PFX_BASE64` +
+  `WINDOWS_CERT_PASSWORD`.
+
 ## Sessão 44 — 2026-05-29 — Remediação pós-auditoria W2 · R1+R2+R3
 
 **Tipo:** Remediação (correção de findings; sem novas features) **Auditoria de

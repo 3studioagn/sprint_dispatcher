@@ -21,6 +21,10 @@
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "turbo build && changeset publish",
+    "cert:gen": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate-signing-cert.ps1",
+    "build:signed": "pnpm --filter sprint-leader run make && pnpm --filter sprint-operator-agent run make",
+    "sign:local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/sign-local.ps1",
+    "verify:signature": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-signature.ps1",
     "prepare": "husky"
   },
   "lint-staged": {

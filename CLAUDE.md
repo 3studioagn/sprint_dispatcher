@@ -140,6 +140,7 @@ sprint-dispatcher/
 │
 ├── installer/                  # C5 — electron-builder config
 ├── tests/                      # C8 — E2E com Playwright
+├── scripts/                    # @sprint/release-tools — code signing + helpers CI (W3, BL-C0-008)
 ├── .github/workflows/          # CI/CD
 │
 ├── README.md
@@ -999,11 +1000,15 @@ Backlog (perguntar a Renan se necessário).
 | ---- | ------------------------ | ------------ | ------------ |
 | W0   | Foundation               | 1 semana     | ✅ concluída |
 | W1   | MVP Core                 | 2 semanas    | ✅ concluída |
-| W2   | Refinement + Design Sys  | 1 semana     | 🔄 em curso  |
-| W3   | Production Readiness     | 1 semana     | ⏸️           |
+| W2   | Refinement + Design Sys  | 1 semana     | ✅ concluída |
+| W3   | Production Readiness     | 1 semana     | 🔄 em curso  |
 | W4   | Hardening & Future-proof | 1 semana     | ⏸️           |
 
 > **Atualize esta tabela ao fim de cada wave.**
+
+> **W3 iniciada (2026-06-01)** — primeiro item: **BL-C0-008 (code signing)**.
+> Gate W2→W3 = GO (Sessão 44). Infra de assinatura: §8.5 +
+> `docs/guides/code-signing.md` (ADR-024).
 
 ### Wave 0 — Foundation (atual)
 
@@ -1228,6 +1233,43 @@ async function writeAtomic(filepath: string, content: string) {
   }
 }
 ```
+
+### 8.5. Code signing e release assinado (W3 · BL-C0-008 · ADR-024)
+
+Os dois EXEs são assinados via **Authenticode** com **timestamping RFC 3161** +
+**digest SHA-256**, usando o mecanismo **nativo do electron-builder**. Runbook
+completo: `docs/guides/code-signing.md`.
+
+- **Estratégia de confiança:** certificado **auto-assinado da ARTFLEXÍVEIS**,
+  distribuído pelo TI via **GPO** (Trusted Root + Trusted Publishers) — custo
+  zero, sem CA paga. Migração para CA interna (AD CS) ou cert público = **trocar
+  um Secret**, sem reescrita. Alternativa AD CS também $0 e recomendada se a
+  empresa já tiver Enterprise CA.
+- **Config** (em ambos `apps/*/electron-builder.yml`, bloco `win:`):
+  `rfc3161TimeStampServer` + `signingHashAlgorithms: [sha256]`. **Nada de
+  caminho/senha hardcoded** — vêm de `CSC_LINK` / `CSC_KEY_PASSWORD` (lidos
+  nativamente). electron-builder **24.x** usa chaves **top-level** em `win:`
+  (não `signtoolOptions`, que é 25.x — ver G-027).
+- **Contrato de Secrets (CI):** `WINDOWS_CERT_PFX_BASE64` (o `.pfx` em base64) +
+  `WINDOWS_CERT_PASSWORD`. O `.pfx` (privado) e a senha **nunca** entram no Git
+  (`.gitignore`: `.certs/`, `*.pfx`).
+- **Invariante:** **PRs/branches não assinam** e não veem Secrets. A assinatura
+  ocorre **só** no `.github/workflows/release.yml` (tag `v*.*.*`,
+  `windows-latest`). Builds não-release usam
+  `CSC_IDENTITY_AUTO_DISCOVERY=false`. **Timestamping é obrigatório**
+  (assinatura sobrevive à expiração do cert).
+- **Scripts npm** (raiz): `cert:gen` (gera `.pfx` + `.cer`), `build:signed`
+  (build com CSC\_\* do ambiente), `sign:local` (cert DEV + build + verify, em 1
+  processo), `verify:signature` (`Get-AuthenticodeSignature`; falha se
+  não-assinado; "não-confiável" fora do domínio é só aviso).
+- **Workspace `@sprint/release-tools`** (`scripts/`, privado) — abriga os
+  scripts de assinatura + o helper `pfx-secret.mjs` (decode/cleanup do PFX,
+  unit-testado 100%) + `prepare-signing-cert.mjs` (glue do release.yml). Coberto
+  por Turborepo (test/lint); cobertura mede só `pfx-secret.mjs`.
+- **Pendência (BL-C0-009, próximo):** publish/version/notify no `release.yml`
+  (marcado `# TODO(BL-C0-009)`) — **bloqueado por BL-C5-005** (nomeação de
+  artefatos). **Ação operacional do TI:** gerar cert, distribuir `.cer` via GPO,
+  cadastrar os 2 Secrets.
 
 ---
 
@@ -1895,6 +1937,31 @@ Descobertas durante o desenvolvimento que economizam tempo da próxima sessão.
 - **Descoberto em:** Sessão 42c (2026-05-28), após múltiplas iterações com
   `predev` no consumer e `dependsOn: ["^build"]` no turbo dev (cada uma falhando
   por motivos diferentes).
+
+### G-027: electron-builder 24.x usa chaves de code signing top-level em `win:` (não `signtoolOptions`)
+
+- **Sintoma:** prompts/docs mais novos mostram a config de assinatura aninhada
+  em `win.signtoolOptions.{certificateFile, rfc3161TimeStampServer, ...}`. No
+  electron-builder **24.13.3** (instalado) esse aninhamento é **ignorado** — as
+  chaves precisam ficar **top-level** em `win:`.
+- **Causa:** `signtoolOptions` foi introduzido na linha **25.x**. Em 24.x, as
+  chaves de assinatura (`rfc3161TimeStampServer`, `signingHashAlgorithms`,
+  `certificateFile`, `certificatePassword`, `publisherName`, …) ficam direto em
+  `win:`. O env `CSC_LINK` / `CSC_KEY_PASSWORD` é lido nativamente em ambas as
+  linhas.
+- **Solução:** em 24.x, top-level:
+  ```yaml
+  win:
+    rfc3161TimeStampServer: http://timestamp.digicert.com
+    signingHashAlgorithms:
+      - sha256
+  ```
+  `signingHashAlgorithms: [sha256]` sobrescreve o default `['sha1', 'sha256']`
+  (dual-sign) → assina **só** com SHA-256. Confirme a versão antes de escolher a
+  forma:
+  `node -e "console.log(require('electron-builder/package.json').version)"`.
+- **Descoberto em:** Sessão 45 (2026-06-01), BL-C0-008 — o comentário stale nos
+  `electron-builder.yml` citava `signtoolOptions`; a versão real é 24.x.
 
 ### Débitos técnicos pendentes
 

@@ -156,5 +156,18 @@ export default tseslint.config(
       '@typescript-eslint/no-require-imports': 'off',
     },
   },
+  // Scripts de build/release na raiz (@sprint/release-tools): JS puro (.mjs)
+  // executado por `node`, fora do programa TypeScript dos workspaces — sem
+  // type-checking (mesmo tratamento dos *.config.*, evita "not found by the
+  // project service", G-010). `console` liberado: são CLIs de release que
+  // reportam progresso no stdout/stderr.
+  {
+    files: ['scripts/**/*.{js,cjs,mjs}'],
+    ...tseslint.configs.disableTypeChecked,
+    rules: {
+      ...tseslint.configs.disableTypeChecked.rules,
+      'no-console': 'off',
+    },
+  },
   prettierConfig,
 );

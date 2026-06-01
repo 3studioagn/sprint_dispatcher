@@ -98,6 +98,12 @@ entradas em ordem cronológica crescente — mais recente no fim.
   `@sprint/logger` com Pino — wrapper enxuto (W1.C6)
 - [ADR-021](#adr-021-expansao-da-suite-de-testes-para-production-grade-na-w1c8)
   — Expansão da suíte de testes para production-grade na W1.C8
+- [ADR-022](#adr-022-adocao-do-sprintui-kit-c9-como-design-system-compartilhado)
+  — Adoção do `@sprint/ui-kit` (C9) como design system compartilhado
+- [ADR-023](#adr-023-nao-adocao-de-storybook-na-v10) — Não adoção de Storybook
+  na v1.0
+- [ADR-024](#adr-024-estrategia-de-assinatura-e-confianca-de-codigo-cert-auto-assinado--gpo)
+  — Estratégia de assinatura e confiança de código (cert auto-assinado + GPO)
 
 ---
 
@@ -2716,3 +2722,97 @@ já é coberta por:
 - `packages/ui-kit/README.md`, `packages/ui-kit/dev/palette-preview.html`
 - Backlog v1.1 §6/C7 (BL-C7-009), Gate W2→W3 critério 7
 - AUD-W2-002 (auditoria da W2 — origem desta formalização)
+
+---
+
+## ADR-024: Estratégia de assinatura e confiança de código (cert auto-assinado + GPO)
+
+- **Status:** Accepted
+- **Data:** 2026-06-01
+- **Decisores:** Renan (3Studio), Claude Opus 4.8
+
+> Primeiro ADR da Wave 3 (Production Readiness), escrito junto da entrega do
+> **BL-C0-008** (code signing). **Nota de numeração:** o prompt do item pedia
+> "ADR-005", mas esse número já pertence ao schema-first (registrado na W0). O
+> repositório é a fonte de verdade — esta decisão entra como **ADR-024**, o
+> próximo sequencial após ADR-023.
+
+### Contexto
+
+O Gate **W3→W4** exige instalador assinado (e o Gate W1→W2 já aceitava "EXEs
+assinados, mesmo com cert de teste" — precedente do projeto). **RI-01**:
+antivírus corporativo e o SmartScreen bloqueiam/avisam sobre EXE não assinado
+("editor desconhecido"), o que atrapalha o deploy nas estações da fábrica. A
+distribuição do Sprint Dispatcher é **100% interna**, em estações Windows
+gerenciadas via **Active Directory / GPO** (RNF-15/16, US-04.02) — não há
+distribuição fora do domínio. Logo, a confiança na assinatura **não** precisa
+vir de reputação de CA pública (SmartScreen); pode vir da própria TI,
+distribuindo a chave pública como raiz confiável.
+
+### Decisão
+
+Assinar os dois EXEs (`SprintLeader.exe`, `SprintAgent.exe`) com um
+**certificado de code signing auto-assinado da ARTFLEXÍVEIS**, cuja confiança é
+estabelecida pela **distribuição do `.cer` via GPO** (Trusted Root + Trusted
+Publishers) — **custo zero, sem CA paga**.
+
+Infraestrutura de assinatura **idiomática e estável**, idêntica
+independentemente da origem do certificado:
+
+- **electron-builder nativo** — `CSC_LINK` (caminho do `.pfx`) +
+  `CSC_KEY_PASSWORD` lidos do **ambiente**, nunca hardcoded no YAML. Chaves
+  top-level em `win:` (electron-builder **24.x** — `signtoolOptions` é da linha
+  25.x, não usada aqui).
+- **Timestamping RFC 3161** (`rfc3161TimeStampServer`) — a assinatura permanece
+  válida após o certificado expirar.
+- **Digest SHA-256** (`signingHashAlgorithms: [sha256]`), nunca SHA-1.
+- **Assinatura só no caminho de release** (`release.yml`, tag `v*.*.*`,
+  `windows-latest`). PR/branch builds **não** assinam nem expõem Secrets
+  (`CSC_IDENTITY_AUTO_DISCOVERY=false` nos builds não-release).
+- O `.pfx` (privado) e a senha **nunca** entram no Git (`.gitignore`: `.certs/`,
+  `*.pfx`); no CI vêm dos Secrets `WINDOWS_CERT_PFX_BASE64` +
+  `WINDOWS_CERT_PASSWORD`. **Trocar a origem do certificado = trocar um
+  Secret.**
+
+### Alternativas consideradas
+
+| Alternativa                               | Veredito                                                                                                                                                                                                                       |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **(a) CA interna AD CS (Enterprise CA)**  | **Equivalente e também $0.** A raiz da CA interna já é distribuída automaticamente a todo o domínio (sem empurrar o `.cer` manualmente). **Recomendada se a empresa já operar uma Enterprise CA.** Migração = trocar o Secret. |
+| **(b) Certificado público pago (OV/EV)**  | **Rejeitada para o MVP.** Custo recorrente + chave privada em HSM/token obrigatório desde jun/2023 (FIPS 140-2 L2+) + só necessário para distribuição **externa**, que está fora de escopo (sistema LAN-only).                 |
+| **(c) Whitelist por hash sem assinatura** | Mitiga o antivírus (Anexo G.8), mas deixa "editor desconhecido" e exige re-whitelist a cada versão. Mantida como **mitigação complementar**, não como estratégia principal.                                                    |
+
+### Consequências
+
+- **Confiança válida apenas dentro do domínio** — aceitável: o sistema é
+  LAN-only e todas as estações estão no AD da ARTFLEXÍVEIS. Fora do domínio, o
+  artefato fica "assinado mas não-confiável" (esperado; `verify-signature.ps1`
+  trata como aviso, não falha).
+- **Migração para CA interna ou cert público é troca de Secret**, sem reescrever
+  YAML, scripts ou workflow. (Cert EV/HSM, se um dia, exigiria um hook de
+  assinatura customizado no electron-builder — anotado no runbook.)
+- **`release.yml` é o ponto de extensão para BL-C0-009** (bump de versão via
+  Changesets, publicação em GitHub Releases, notificação) — marcado com
+  `# TODO(BL-C0-009)`; depende de BL-C5-005 (nomeação de artefatos).
+- **Ação operacional pendente do TI** (pré-requisito, não bloqueia o código):
+  gerar o cert, distribuir o `.cer` via GPO (Trusted Root + Trusted Publishers)
+  e cadastrar os 2 Secrets. Decisão cert auto-assinado **ou** AD CS fica com o
+  TI — ambos $0.
+- A parte sensível (decode do PFX + cleanup) é isolada em `pfx-secret.mjs`
+  (workspace `@sprint/release-tools`) e **unit-testada**; a
+  assinatura/verificação Authenticode real é validada via CI/integração (não há
+  unit test artificial sobre `signtool`).
+
+### Referências
+
+- `docs/guides/code-signing.md` — runbook (GPO $0 como principal, AD CS como
+  opção, CA paga como nota de evolução).
+- `apps/leader/electron-builder.yml`, `apps/operator-agent/electron-builder.yml`
+  (bloco `win:`); `.github/workflows/release.yml`;
+  `scripts/{generate-signing-cert.ps1,.sh,verify-signature.ps1,sign-local.ps1,prepare-signing-cert.mjs,pfx-secret.mjs}`.
+- Contrato de Secrets: `WINDOWS_CERT_PFX_BASE64`, `WINDOWS_CERT_PASSWORD`.
+- ADR-002/ADR-010 (Electron + electron-builder), ADR-001 (apps versionam pelo
+  electron-builder, não Changesets).
+- Backlog v1.1 BL-C0-008 (este item), BL-C0-009 (próximo, bloqueado por
+  BL-C5-005), §5 (Pipeline DevOps); Requisitos RI-01, RNF-15/16, US-04.02, Anexo
+  G.8.

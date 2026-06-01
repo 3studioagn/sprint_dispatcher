@@ -55,6 +55,12 @@ app-builds/
 *.app
 *.dmg
 
+# Code signing (BL-C0-008) — a chave privada NUNCA entra no Git.
+# `.certs/` é a saída de cert:gen; `*.pfx` em qualquer lugar fica de fora.
+# O `.cer` (chave pública) pode ser versionado se conveniente — não é ignorado.
+.certs/
+*.pfx
+
 # Misc
 .cache/
 .tmp/

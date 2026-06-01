@@ -27,6 +27,12 @@ concurrency:
   group: build-agent-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # Build de develop NÃO assina (assinatura só no release.yml). Garante que o
+  # electron-builder não tente assinar pelo store agora que o electron-builder.yml
+  # tem config de signing (BL-C0-008).
+  CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
 jobs:
   build:
     name: Build Sprint Operator Agent (Windows)

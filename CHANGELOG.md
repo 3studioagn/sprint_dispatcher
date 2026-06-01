@@ -9,6 +9,46 @@ e este projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Added — Sessão 45 (2026-06-01) — W3 · BL-C0-008 Code Signing
+
+Primeiro item da Wave 3 (Production Readiness): infraestrutura de assinatura
+Authenticode + verificação para os 2 EXEs. Estratégia de confiança: cert
+auto-assinado da ARTFLEXÍVEIS + distribuição via GPO ($0, sem CA paga) —
+[ADR-024](DECISIONS.md).
+
+**electron-builder (`apps/*/electron-builder.yml`, bloco `win:`):**
+
+- `rfc3161TimeStampServer` (timestamping RFC 3161) + `signingHashAlgorithms: [sha256]`
+  em **ambos** os apps. Chaves **top-level** (electron-builder 24.x, não
+  `signtoolOptions` — G-027). `CSC_LINK`/`CSC_KEY_PASSWORD` do ambiente — zero
+  segredo hardcoded.
+
+**Workspace `@sprint/release-tools` (`scripts/`, novo, privado):**
+
+- `pfx-secret.mjs` — decode base64 → arquivo + cleanup idempotente (helper puro,
+  **unit-testado 100%**); `prepare-signing-cert.mjs` — glue do `release.yml`
+  (`prepare`/`cleanup`).
+- `generate-signing-cert.ps1` (+ `.sh` openssl) — gera `.pfx` (privado) + `.cer`
+  (público/GPO); `verify-signature.ps1` — distingue _assinado_ vs _confiável_,
+  exit ≠ 0 se não-assinado; `sign-local.ps1` — validação local em 1 processo.
+- 20 testes (12 do helper + 8 de asserção de config dos YAML).
+
+**CI:**
+
+- `.github/workflows/release.yml` (novo) — tag `v*.*.*` + dispatch,
+  `windows-latest`: build → decode do Secret → assina → **verifica** → upload →
+  **cleanup do PFX em `if: always()`**. Pontos de `# TODO(BL-C0-009)`.
+- `CSC_IDENTITY_AUTO_DISCOVERY=false` nos builds não-release (ci/build-leader/
+  build-agent) — PR/branch builds não assinam nem veem Secrets.
+
+**Scripts npm (raiz):** `cert:gen`, `build:signed`, `sign:local`,
+`verify:signature`. **Docs:** `docs/guides/code-signing.md` (runbook GPO/AD CS),
+ADR-024, gotcha G-027.
+
+> **Contrato de Secrets:** `WINDOWS_CERT_PFX_BASE64` + `WINDOWS_CERT_PASSWORD`.
+> O `.pfx`/senha nunca entram no Git (`.gitignore`: `.certs/`, `*.pfx`).
+> **Pendente (BL-C0-009):** publish/version/notify — bloqueado por BL-C5-005.
+
 ### Added — Sessão 43 (2026-05-28) — Leader W2 + writeCancel
 
 Encerra o C2 (Leader) na Wave 2 com 4 BLs entregues em commits atômicos

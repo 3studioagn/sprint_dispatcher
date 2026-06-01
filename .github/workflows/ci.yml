@@ -12,6 +12,10 @@ concurrency:
 
 env:
   TURBO_TELEMETRY_DISABLED: 1
+  # ci.yml não empacota (só `pnpm build` = tsc + vite). Defensivo: se algum dia
+  # um passo de electron-builder entrar aqui, não tenta assinar pelo store —
+  # assinatura é exclusiva do release.yml (BL-C0-008). Comportamento inalterado.
+  CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
 jobs:
   ci:
