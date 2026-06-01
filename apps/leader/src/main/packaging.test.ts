@@ -6,14 +6,35 @@
  * Leader NÃO tem auto-start (RN-12: o Leader é aberto manualmente).
  */
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-// O vitest roda com cwd = raiz do workspace (apps/leader) — resolve o yml a
-// partir daí (env-agnóstico, ao contrário de import.meta.url sob jsdom).
-const yml = readFileSync(path.join(process.cwd(), 'electron-builder.yml'), 'utf-8');
+// Resolve robusto a env (jsdom) e a cwd (workspace vs raiz do monorepo) — o CI
+// roda em Linux e o cwd/URL podem diferir do dev local. Tenta: (1) relativo ao
+// arquivo de teste; (2) cwd (workspace); (3) cwd + apps/leader (raiz do mono).
+function readAppFile(relFromAppRoot: string): string {
+  const candidates: string[] = [];
+  try {
+    const here = path.dirname(fileURLToPath(import.meta.url)); // .../src/main
+    candidates.push(path.resolve(here, '..', '..', relFromAppRoot));
+  } catch {
+    /* jsdom: import.meta.url não é file:// — ignora e usa cwd */
+  }
+  candidates.push(path.resolve(process.cwd(), relFromAppRoot));
+  candidates.push(path.resolve(process.cwd(), 'apps', 'leader', relFromAppRoot));
+  const found = candidates.find((c) => existsSync(c));
+  if (found === undefined) {
+    throw new Error(
+      `packaging.test: não encontrei ${relFromAppRoot} (tentei: ${candidates.join(' | ')})`,
+    );
+  }
+  return readFileSync(found, 'utf-8');
+}
+
+const yml = readAppFile('electron-builder.yml');
 
 describe('electron-builder.yml (Leader) — rename + artifactName (BL-C5-005)', () => {
   it('productName e appId renomeados para "Metas - Liderança"', () => {

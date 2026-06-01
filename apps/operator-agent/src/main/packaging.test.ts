@@ -8,19 +8,40 @@
  * (divergir criaria DUAS entradas de auto-start; ver ADR-028).
  */
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
 import { AUTO_START_REGISTRY_VALUE } from '../shared/branding';
 
-// O vitest roda com cwd = raiz do workspace (apps/operator-agent), tanto via
-// `pnpm --filter` quanto via turbo — resolve os arquivos de empacotamento a
-// partir daí (env-agnóstico, ao contrário de import.meta.url sob jsdom).
-const appRoot = process.cwd();
-const yml = readFileSync(path.join(appRoot, 'electron-builder.yml'), 'utf-8');
-const nsh = readFileSync(path.join(appRoot, 'build', 'installer.nsh'), 'utf-8');
+// Resolve um arquivo do app de forma robusta a env (node/jsdom) e a cwd
+// (workspace vs raiz do monorepo) — o CI roda em Linux e o cwd/URL podem
+// diferir do dev local. Tenta: (1) relativo ao arquivo de teste (env node:
+// import.meta.url é file://); (2) cwd (workspace, sob turbo/pnpm); (3) cwd +
+// apps/operator-agent (caso o cwd seja a raiz do monorepo).
+function readAppFile(relFromAppRoot: string): string {
+  const candidates: string[] = [];
+  try {
+    const here = path.dirname(fileURLToPath(import.meta.url)); // .../src/main
+    candidates.push(path.resolve(here, '..', '..', relFromAppRoot));
+  } catch {
+    /* jsdom: import.meta.url não é file:// — ignora e usa cwd */
+  }
+  candidates.push(path.resolve(process.cwd(), relFromAppRoot));
+  candidates.push(path.resolve(process.cwd(), 'apps', 'operator-agent', relFromAppRoot));
+  const found = candidates.find((c) => existsSync(c));
+  if (found === undefined) {
+    throw new Error(
+      `packaging.test: não encontrei ${relFromAppRoot} (tentei: ${candidates.join(' | ')})`,
+    );
+  }
+  return readFileSync(found, 'utf-8');
+}
+
+const yml = readAppFile('electron-builder.yml');
+const nsh = readAppFile(path.join('build', 'installer.nsh'));
 
 describe('electron-builder.yml (Agent) — rename + artifactName (BL-C5-005)', () => {
   it('productName e appId renomeados para "Metas - Desenhistas"', () => {
