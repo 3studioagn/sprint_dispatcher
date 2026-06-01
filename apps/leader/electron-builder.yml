@@ -1,8 +1,10 @@
-appId: br.com.artflexiveis.sprintleader
-productName: Sprint Leader
+appId: br.com.artflexiveis.metas.lideranca
+productName: Metas - Liderança
 
-# Versão lida do package.json automaticamente
-artifactName: SprintLeader-${version}-${arch}.${ext}
+# Versão lida do package.json automaticamente. Nome de artefato (instalador)
+# normalizado p/ ASCII sem espaços (URL/CI/release-safe); o productName acima
+# carrega o nome de exibição com acentos/espaços (Start Menu, exe, pasta).
+artifactName: Metas-Lideranca-${version}-${arch}.${ext}
 
 # Diretórios
 directories:
@@ -64,11 +66,11 @@ nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
-  artifactName: SprintLeader-Setup-${version}.${ext}
+  artifactName: Metas-Lideranca-Setup-${version}.${ext}
   installerLanguages:
     - pt_BR
   language: '1046' # pt-BR
-  shortcutName: Sprint Leader
+  shortcutName: Metas - Liderança
   createDesktopShortcut: always
   createStartMenuShortcut: true
   runAfterFinish: false
@@ -76,7 +78,7 @@ nsis:
 
 # Portable
 portable:
-  artifactName: SprintLeader-${version}-portable.${ext}
+  artifactName: Metas-Lideranca-${version}-portable.${ext}
   requestExecutionLevel: user # NÃO admin — operação no contexto do usuário (R-03)
 
 # Metadata

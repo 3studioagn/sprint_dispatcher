@@ -101,7 +101,7 @@ function createMainWindow(): BrowserWindow {
     minWidth: 1024,
     minHeight: 600,
     show: false,
-    title: 'Sprint Leader',
+    title: 'Metas - Liderança',
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,

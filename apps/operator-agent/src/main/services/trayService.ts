@@ -26,6 +26,8 @@ import path from 'node:path';
 import { Menu, Tray, app, dialog } from 'electron';
 import type { MenuItemConstructorOptions } from 'electron';
 
+import { APP_DISPLAY_NAME } from '../../shared/branding';
+
 import type { ConnectionStatus } from './connectivity';
 import {
   computeTrayIconColor,
@@ -168,7 +170,7 @@ export class TrayService {
     // displayBalloon é Windows-only; em outras plataformas é no-op.
     if (process.platform === 'win32') {
       this.tray.displayBalloon({
-        title: 'Sprint Operator Agent — Configuração necessária',
+        title: `${APP_DISPLAY_NAME} — Configuração necessária`,
         content: message,
         iconType: 'warning',
       });
@@ -183,7 +185,7 @@ export class TrayService {
     if (this.tray === null) return;
     if (process.platform === 'win32') {
       this.tray.displayBalloon({
-        title: 'Sprint Operator Agent',
+        title: APP_DISPLAY_NAME,
         content: message,
         iconType: 'info',
       });
@@ -197,7 +199,7 @@ export class TrayService {
     void dialog.showMessageBox({
       type: 'info',
       title: 'Sobre',
-      message: 'Sprint Operator Agent',
+      message: APP_DISPLAY_NAME,
       detail: `Versão: ${app.getVersion()}\n3Studio · ARTFLEXÍVEIS`,
       buttons: ['OK'],
     });
