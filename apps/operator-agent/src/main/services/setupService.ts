@@ -72,7 +72,11 @@ export function buildAgentConfigFromInput(
 
   const result = safeParseAgentConfig(candidate);
   if (!result.success) {
-    return { ok: false, message: result.error.message };
+    // `.format()` lista `campo: mensagem` por issue (ex.: "user_id: user_id
+    // aceita apenas [a-z0-9_-]") — bem mais acionável que o `.message` genérico
+    // ("AgentConfig validation failed: N issue(s)"), que escondia qual campo
+    // falhou. O wizard exibe isto direto no alerta de erro.
+    return { ok: false, message: result.error.format() };
   }
   return { ok: true, config: result.data };
 }

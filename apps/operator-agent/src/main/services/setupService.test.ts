@@ -68,14 +68,17 @@ describe('buildAgentConfigFromInput', () => {
     expect(result.config.shared_path).toBe('Z:\\Metas');
   });
 
-  it('rejeita user_id inválido (regex) com mensagem', () => {
+  it('rejeita user_id inválido (regex) com mensagem que nomeia o campo', () => {
     const result = buildAgentConfigFromInput(
       { user_id: 'João Silva', shared_path: 'Z:\\Metas' },
       'PC4',
     );
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.message).toBeTruthy();
+    // A mensagem deve nomear o campo (via .format() — "user_id: ...") para o
+    // operador saber o que corrigir, não o genérico "N issue(s)".
+    expect(result.message).toContain('user_id');
+    expect(result.message).not.toContain('issue(s)');
   });
 
   it('rejeita user_id vazio', () => {

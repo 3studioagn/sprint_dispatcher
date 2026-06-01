@@ -98,6 +98,9 @@
   color: var(--sprint-color-danger-on);
   background: var(--sprint-color-danger-bg);
   border-radius: var(--sprint-radius-sm);
+  /* Mensagens de validação podem ter múltiplas issues separadas por \n
+     (ContractValidationError.format()) — preserva as quebras de linha. */
+  white-space: pre-line;
 }
 
 .success {
