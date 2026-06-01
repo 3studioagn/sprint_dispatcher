@@ -2050,6 +2050,18 @@ Descobertas durante o desenvolvimento que economizam tempo da próxima sessão.
      `files` — o default `**/*` é substituído quando `files` é especificado,
      então `node_modules/` precisa ser listado de novo (electron-builder aplica
      filtro automático de production deps via package.json).
+  3. **Deps externalizadas que são transitivas via um WORKSPACE package precisam
+     ser declaradas como deps DIRETAS do app.** `pino`/`pino-pretty` (do
+     `@sprint/logger`, externalizados no `vite.config` — BL-C3-013/S47/S49) NÃO
+     entravam no `.asar` mesmo com `shamefully-hoist`: o electron-builder não
+     traversa de forma confiável as deps de um `workspace:*` symlinkado.
+     Sintoma: `Cannot find module 'pino'` no boot de uma estação limpa (o dev
+     não vê porque roda via `pnpm dev` com o `node_modules` completo). Fix
+     (Sessão 49): adicionar `pino` + `pino-pretty` ao `dependencies` de
+     **`apps/operator-agent` E `apps/leader`** (mesmas versões do
+     `@sprint/logger`) — aí o electron-builder os empacota como production deps
+     diretas + puxa `thread-stream` por transitividade. Vale para qualquer dep
+     externalizada que chegue só via um `@sprint/*`.
 - **Descoberto em:** Sessão 15 (2026-05-26), Gate 3 do W1.C2 parte 2 — primeiro
   consumer real de `sanitizeBodyHtml` no main process do Leader (via
   `DispatchService` → `PendingStore` → `sanitizeBodyHtml`). Os 2 ajustes de
